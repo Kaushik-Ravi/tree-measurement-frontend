@@ -86,7 +86,6 @@ function App() {
             console.log(`EXIF GPS Found (Decimal): ${latDescription}, ${lngDescription}`);
             setCurrentLocation({ lat: latDescription, lng: lngDescription });
           } else if (typeof latDescription === 'string' && typeof lngDescription === 'string') {
-            // Fallback for string-based descriptions, ensuring they are parsed to numbers
             console.log(`EXIF GPS Found (String): "${latDescription}", "${lngDescription}"`);
             setCurrentLocation({ lat: parseFloat(latDescription), lng: parseFloat(lngDescription) });
           } else {
@@ -203,77 +202,114 @@ function App() {
 
   if (appStatus === 'CALIBRATION_AWAITING_INPUT') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
 
+  const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
+
   return (
     <div className="min-h-screen bg-white font-inter">
-      <div className="flex flex-col md:flex-row h-screen">
-        <div id="control-panel" className="w-full md:w-[35%] bg-gray-50 border-r border-gray-200 p-3 md:p-6 overflow-y-auto">
-          <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div></div>
-          <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{appStatus === 'ERROR' && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
-          {(appStatus === 'PROCESSING' || isCO2Calculating) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ isCO2Calculating && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">Calculating CO₂...</p>}</div> )}
+      <div className={`relative min-h-screen ${hasActiveMeasurement ? '' : 'md:flex md:flex-row'}`}>
+        {/* CONTROL PANEL / BOTTOM SHEET */}
+        <div id="control-panel" className={`
+          ${hasActiveMeasurement 
+            ? 'mobile-control-sheet' 
+            : 'w-full md:w-[35%] bg-gray-50 border-r border-gray-200 p-3 md:p-6 overflow-y-auto'
+          }
+        `}>
+          {/* This content is for the "List View" or non-measurement states */}
+          <div className={hasActiveMeasurement ? 'hidden' : 'block'}>
+            <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div></div>
+            <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{appStatus === 'ERROR' && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
+            <div><label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label><input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /><button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"><Upload className="w-5 h-5 text-gray-400" /><span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span></button></div>
+          </div>
           
-          {appStatus !== 'AUTO_RESULT_SHOWN' && (
-            <div className="space-y-4">
-              {appStatus !== 'AWAITING_REFINE_POINTS' && !isManualMode(appStatus) && (
-                <div className="space-y-6">
-                  {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && (
-                    <>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label><input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /><button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"><Upload className="w-5 h-5 text-gray-400" /><span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span></button></div>
-                    <div><label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label><div className="relative"><Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" /></div><ARLinks /></div>
-                    <button id="start-auto-btn" onClick={handleStartMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300 transition-all"><Zap className="w-5 h-5" />Prepare for Measurement</button>
-                    </>
+          {/* This content is for the "Focus View" bottom sheet */}
+          <div className={hasActiveMeasurement ? 'p-4 pt-2' : 'hidden'}>
+            <div className="mobile-sheet-handle-container"><div className="mobile-sheet-handle"></div></div>
+
+            {(appStatus === 'PROCESSING' || isCO2Calculating) && ( <div className="mb-2"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ isCO2Calculating && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">Calculating CO₂...</p>}</div> )}
+            
+            {appStatus !== 'AUTO_RESULT_SHOWN' && (
+              <div className="space-y-4">
+                  {appStatus === 'IMAGE_LOADED' && (
+                    <div className="mobile-input-bar">
+                      <div className="flex-grow"><label htmlFor="distance-input" className="block text-xs font-medium text-gray-500 mb-1">Distance to Tree (m)</label><div className="relative"><Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200 text-sm" /></div></div>
+                      <button id="start-auto-btn" onClick={handleStartMeasurement} disabled={!distance} className="flex items-center justify-center gap-2 px-4 py-2 mt-[18px] bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300 transition-all text-sm"><Zap className="w-4 h-4" />Prepare</button>
+                    </div>
                   )}
                   {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => setAppStatus('IMAGE_LOADED')} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)}
-                </div>
-              )}
-              {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={handleCancelRefinement} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )}
-              {isManualMode(appStatus) && (
-                <div className="pt-4 border-t">
-                    {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>}
-                    <button onClick={handleCancelManualMode} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {appStatus === 'AUTO_RESULT_SHOWN' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg border bg-white shadow-sm">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Measurements</h2>
-                  <div className="space-y-2">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
-                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
+                {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-2"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={handleCancelRefinement} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )}
+                {isManualMode(appStatus) && (
+                  <div className="pt-2">
+                      {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>}
+                      <button onClick={handleCancelManualMode} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button>
                   </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                  <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
-                  <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
+            )}
+
+            {appStatus === 'AUTO_RESULT_SHOWN' && (
+              <div className="mobile-tabs">
+                <input type="radio" id="tab-metrics" name="result-tabs" defaultChecked />
+                <label htmlFor="tab-metrics">Metrics</label>
+                <input type="radio" id="tab-enrich" name="result-tabs" />
+                <label htmlFor="tab-enrich">Enrich Data</label>
+                <input type="radio" id="tab-session" name="result-tabs" />
+                <label htmlFor="tab-session">Session</label>
+
+                <div className="tab-panel" id="panel-metrics">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
+                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                        <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
+                        <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="tab-panel" id="panel-enrich">
+                  <div className="space-y-4">
+                    <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
+                        <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'}
+                    </button>
+                    <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} />
+                    <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
+                    <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
+                  </div>
+                </div>
+                
+                <div className="tab-panel" id="panel-session">
+                   <div className="space-y-3">
+                    <button onClick={handleSaveToSession} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to Session</button>
+                    <button onClick={softReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button>
+                  </div>
+                </div>
               </div>
-              <div className="space-y-4 border-t pt-4">
-                <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
-                    <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'}
-                </button>
-                <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} />
-                <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
-                <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t">
-                <button onClick={softReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button>
-                <button onClick={handleSaveToSession} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to Session</button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
           
           <div className="border-t border-gray-200 mt-6 pt-6">
             <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} />
             {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear Session</button></div>)}
           </div>
         </div>
-        <div id="display-panel" className="flex-1 p-3 md:p-6 bg-gray-100 flex items-center justify-center">
+
+        {/* DISPLAY PANEL / FULL-SCREEN CANVAS */}
+        <div id="display-panel" className={`
+          ${hasActiveMeasurement 
+            ? 'fixed inset-0 bg-gray-100 flex items-center justify-center' 
+            : 'flex-1 p-6 bg-gray-100 hidden md:flex items-center justify-center'
+          }
+        `}>
             {isLocationPickerActive ? (
                 <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} />
             ) : (
                 <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`bg-white rounded-lg shadow-sm ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : 'cursor-default'}`} />
+            )}
+            {appStatus === 'AWAITING_INITIAL_CLICK' && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 p-3 bg-black/60 text-white rounded-lg text-sm font-medium z-20 pointer-events-none">
+                {instructionText}
+              </div>
             )}
         </div>
       </div>

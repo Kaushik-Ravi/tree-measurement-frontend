@@ -53,12 +53,12 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
 
   return (
     <div className="mt-8">
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 px-3 md:px-0">
         <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Session History</h2></div>
-        <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 text-sm"><Download className="w-4 h-4" /> Download CSV</button>
+        <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
       </div>
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200 md:border-0 md:rounded-none md:bg-transparent">
-        <table className="min-w-full text-sm divide-y divide-gray-200 mobile-cards-table">
+      <div className="md:overflow-x-auto md:bg-white md:rounded-lg md:border md:border-gray-200">
+        <table className="min-w-full text-sm md:divide-y md:divide-gray-200 mobile-cards-table">
           <thead className="bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
             <tr>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('fileName')} className="flex items-center gap-1">File Name {getSortIcon('fileName')}</button></th>
@@ -70,14 +70,14 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
               <th scope="col" className="px-4 py-3 text-center">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 md:divide-y-0">
+          <tbody className="md:divide-y md:divide-gray-200">
             {sortedResults.map((result) => (
-              <tr key={result.id} className="hover:bg-gray-50">
-                <td data-label="File" className="px-4 py-3 font-medium text-gray-900 truncate max-w-[150px]">{result.fileName}</td>
+              <tr key={result.id} className="md:hover:bg-gray-50">
+                <td data-label="File" className="px-4 py-3 font-medium text-gray-900">{result.fileName}</td>
                 <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</td>
                 <td data-label="Condition" className="px-4 py-3 text-gray-600">{result.condition || <span className="text-gray-400">N/A</span>}</td>
                 <td data-label="Ownership" className="px-4 py-3 text-gray-600">{result.ownership || <span className="text-gray-400">N/A</span>}</td>
-                <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono text-right font-semibold text-sky-800">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</td>
+                <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono font-semibold text-sky-800">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</td>
                 <td data-label="Location" className="px-4 py-3 font-mono">
                     {result.latitude && result.longitude ? (
                         <a href={`https://www.google.com/maps/search/?api=1&query=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
@@ -85,7 +85,7 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
                         </a>
                     ) : <span className="text-gray-400">N/A</span>}
                 </td>
-                <td data-label="Actions" className="px-4 py-3 text-center"><button onClick={() => onDeleteResult(result.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-md"><Trash2 className="w-4 h-4" /></button></td>
+                <td data-label="Actions" className="px-4 py-3"><button onClick={() => onDeleteResult(result.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-md w-full flex justify-end md:justify-center"><Trash2 className="w-5 h-5" /></button></td>
               </tr>
             ))}
           </tbody>
