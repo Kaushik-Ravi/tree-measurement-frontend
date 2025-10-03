@@ -160,6 +160,6 @@ body {
   /* Ensure long file names and species names can wrap */
   .mobile-cards-table td[data-label="File"],
   .mobile-cards-table td[data-label="Species"] {
-    @apply truncate-none whitespace-normal max-w-full;
+    @apply whitespace-normal max-w-full;
   }
 }
