@@ -97,8 +97,8 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
 
   return (
     <div className="min-h-screen bg-neutral-100 font-inter text-neutral-800">
-        <div className="flex flex-col lg:flex-row h-screen">
-            <div id="calibration-control-panel" className="w-full lg:w-[28rem] bg-neutral-50 border-r border-neutral-300 p-6 lg:p-8 flex flex-col">
+        <div className="flex flex-col md:flex-row h-screen">
+            <div id="calibration-control-panel" className="w-full md:w-[28rem] bg-neutral-50 border-r border-neutral-300 p-6 md:p-8 flex flex-col">
                 <header className="flex-shrink-0">
                     <div className="flex items-center gap-3 mb-8"><Settings className="w-8 h-8 text-accent" /><h1 className="text-2xl font-semibold text-neutral-800">Camera Calibration</h1></div>
                     <div className="p-4 rounded-xl mb-6 bg-accent/10 border border-accent/20 text-accent-dark">
@@ -112,7 +112,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <div><label className="block text-base font-medium text-neutral-700 mb-3">3. Object's Real Size (cm)</label><input type="number" value={realSize} onChange={e => setRealSize(e.target.value)} placeholder="e.g., 29.7 for A4 paper" className="w-full text-base px-4 py-3.5 border border-neutral-300 bg-white rounded-lg focus:ring-2 focus:ring-accent focus:border-accent transition-all"/></div>
                 </main>
             </div>
-            <div id="calibration-display-panel" className="flex-1 p-4 lg:p-6 bg-neutral-200 flex items-center justify-center">
+            <div id="calibration-display-panel" className="flex-1 p-4 md:p-6 bg-neutral-200 flex items-center justify-center">
                 <div className='w-full h-full flex items-center justify-center'>
                     <canvas ref={canvasRef} onClick={canSelectPoints ? handleCanvasClick : undefined} className={`bg-white rounded-2xl shadow-interactive ${canSelectPoints && points.length < 2 ? 'cursor-crosshair' : 'cursor-not-allowed'}`} />
                 </div>

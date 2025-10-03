@@ -22,8 +22,8 @@ export function CO2ResultCard({ co2Value, isLoading }: CO2ResultCardProps) {
 
   return (
     <div className="p-4 bg-sky-50 border-l-4 border-sky-500 rounded-lg">
-      <div className="flex items-start gap-3">
-        <Leaf className="w-6 h-6 text-sky-700 mt-1" />
+      <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3">
+        <Leaf className="w-6 h-6 text-sky-700 mt-1 flex-shrink-0" />
         <div>
           <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
             Estimated Carbon Sequestration

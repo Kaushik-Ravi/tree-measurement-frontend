@@ -77,29 +77,37 @@ function App() {
           setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
           const tags = await ExifReader.load(currentMeasurementFile);
           
-          // --- DEFINITIVE FIX & LOGGING ---
           console.log("--- FULL EXIF DATA ---", tags);
           
-          // Use the library's reliable pre-converted decimal values
-          const lat = tags.GPSLatitude?.description;
-          const lng = tags.GPSLongitude?.description;
+          const latDescription = tags.GPSLatitude?.description;
+          const lngDescription = tags.GPSLongitude?.description;
 
-          if (lat && lng) {
-            console.log(`EXIF GPS Found (Decimal): ${lat}, ${lng}`);
-            // The library returns negative for South/West, which is correct
-            setCurrentLocation({ lat: lat, lng: lng });
+          if (typeof latDescription === 'number' && typeof lngDescription === 'number') {
+            console.log(`EXIF GPS Found (Decimal): ${latDescription}, ${lngDescription}`);
+            setCurrentLocation({ lat: latDescription, lng: lngDescription });
+          } else if (typeof latDescription === 'string' && typeof lngDescription === 'string') {
+            // Fallback for string-based descriptions, ensuring they are parsed to numbers
+            console.log(`EXIF GPS Found (String): "${latDescription}", "${lngDescription}"`);
+            setCurrentLocation({ lat: parseFloat(latDescription), lng: parseFloat(lngDescription) });
           } else {
             console.log("No valid GPS tags found in EXIF data.");
           }
-          // --- END FIX ---
 
           const focalLengthValue = tags['FocalLengthIn35mmFilm']?.value;
           setResultImageSrc(tempImage.src);
-          if (focalLengthValue) {
-            setFocalLength(focalLengthValue); setAppStatus('IMAGE_LOADED'); setInstructionText("EXIF data found! Enter the distance to the tree base.");
+          
+          if (typeof focalLengthValue === 'number') {
+            setFocalLength(focalLengthValue); 
+            setAppStatus('IMAGE_LOADED'); 
+            setInstructionText("EXIF data found! Enter the distance to the tree base.");
           } else {
             setPendingTreeFile(currentMeasurementFile);
-            if (fovRatio) { setAppStatus('AWAITING_CALIBRATION_CHOICE'); setInstructionText("This image lacks EXIF data. Use the saved camera calibration?"); } else { setAppStatus('CALIBRATION_AWAITING_INPUT'); }
+            if (fovRatio) { 
+              setAppStatus('AWAITING_CALIBRATION_CHOICE'); 
+              setInstructionText("This image lacks EXIF data. Use the saved camera calibration?"); 
+            } else { 
+              setAppStatus('CALIBRATION_AWAITING_INPUT'); 
+            }
           }
         };
       } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); if (currentMeasurementFile) setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }
@@ -197,8 +205,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-white font-inter">
-      <div className="flex flex-col lg:flex-row h-screen">
-        <div id="control-panel" className="w-full lg:w-[35%] bg-gray-50 border-r border-gray-200 p-6 overflow-y-auto">
+      <div className="flex flex-col md:flex-row h-screen">
+        <div id="control-panel" className="w-full md:w-[35%] bg-gray-50 border-r border-gray-200 p-3 md:p-6 overflow-y-auto">
           <div className="flex justify-between items-center mb-6"><div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div></div>
           <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{appStatus === 'ERROR' && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
           {(appStatus === 'PROCESSING' || isCO2Calculating) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ isCO2Calculating && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">Calculating CO₂...</p>}</div> )}
@@ -229,15 +237,15 @@ function App() {
 
           {appStatus === 'AUTO_RESULT_SHOWN' && (
             <div className="space-y-4">
-              <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2>
-                  <div className="space-y-2 mt-2">
-                      <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
-                      <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
-                      <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
+              <div className="p-4 rounded-lg border bg-white shadow-sm">
+                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Measurements</h2>
+                  <div className="space-y-2">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
                   </div>
               </div>
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t">
+              <div className="grid grid-cols-2 gap-3">
                   <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
                   <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
               </div>
@@ -261,7 +269,7 @@ function App() {
             {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear Session</button></div>)}
           </div>
         </div>
-        <div id="display-panel" className="flex-1 p-6 bg-gray-100 flex items-center justify-center">
+        <div id="display-panel" className="flex-1 p-3 md:p-6 bg-gray-100 flex items-center justify-center">
             {isLocationPickerActive ? (
                 <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} />
             ) : (

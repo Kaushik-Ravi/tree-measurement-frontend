@@ -42,7 +42,7 @@ function LocateControl() {
   };
 
   return (
-    <div className="absolute bottom-[100px] right-4 z-[1000]">
+    <div className="absolute bottom-[170px] md:bottom-[100px] right-4 z-[1000]">
        <button
         onClick={handleLocateMe}
         className="p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
@@ -82,21 +82,21 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation }: Locatio
         )}
       </MapContainer>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-center z-[1000] pointer-events-none">
-        <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto">
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col md:flex-row justify-between items-center z-[1000] pointer-events-none gap-4">
+        <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto w-full text-center md:w-auto md:text-left">
             {pinnedPosition ? `Selected: ${pinnedPosition[0].toFixed(4)}, ${pinnedPosition[1].toFixed(4)}` : "Click on the map or use search"}
         </p>
-        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto">
+        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto w-full md:w-auto">
             <button
                 onClick={onCancel}
-                className="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300"
+                className="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 w-1/2 md:w-auto"
             >
                 Cancel
             </button>
             <button
                 onClick={() => { if(pinnedPosition) onConfirm({ lat: pinnedPosition[0], lng: pinnedPosition[1] }) }}
                 disabled={!pinnedPosition}
-                className="px-6 py-2 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed w-1/2 md:w-auto"
             >
                 Confirm Location
             </button>
