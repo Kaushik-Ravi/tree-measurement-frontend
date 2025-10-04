@@ -186,19 +186,48 @@ function App() {
       softReset();
     }
   };
-  const handleStartMeasurement = () => {
-    if (!distance || !currentMeasurementFile || !imageDimensions) return;
+
+  const prepareMeasurementSession = (): boolean => {
+    if (!distance || !currentMeasurementFile || !imageDimensions) return false;
     let cameraConstant: number | null = null;
-    if (focalLength) { cameraConstant = 36.0 / focalLength; } else if (fovRatio) { cameraConstant = fovRatio; } else { setAppStatus('ERROR'); setErrorMessage("Calibration data missing."); return; }
+    if (focalLength) {
+      cameraConstant = 36.0 / focalLength;
+    } else if (fovRatio) {
+      cameraConstant = fovRatio;
+    } else {
+      setAppStatus('ERROR');
+      setErrorMessage("Calibration data missing. Please calibrate your camera first.");
+      return false;
+    }
     const distMM = parseFloat(distance) * 1000;
     const horizontalPixels = Math.max(imageDimensions.w, imageDimensions.h);
     const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
-    setScaleFactor(finalScaleFactor); 
-    setAppStatus('AWAITING_INITIAL_CLICK'); 
-    setIsPanelOpen(false);
-    setInstructionText("Ready. Please click once on the main trunk of the tree.");
-    setShowInstructionToast(true);
+    setScaleFactor(finalScaleFactor);
+    return true;
   };
+  
+  const handleStartAutoMeasurement = () => {
+    if (prepareMeasurementSession()) {
+      setAppStatus('AWAITING_INITIAL_CLICK');
+      setIsPanelOpen(false);
+      setInstructionText("Ready. Please click once on the main trunk of the tree.");
+      setShowInstructionToast(true);
+    }
+  };
+  
+  const handleStartManualMeasurement = () => {
+    if (prepareMeasurementSession()) {
+      setResultImageSrc(URL.createObjectURL(currentMeasurementFile!));
+      setCurrentMetrics(null);
+      setDbhLine(null);
+      setRefinePoints([]);
+      setAppStatus('MANUAL_AWAITING_BASE_CLICK');
+      setIsPanelOpen(false);
+      setInstructionText("Manual Mode: Click the exact base of the tree trunk.");
+      setShowInstructionToast(true);
+    }
+  };
+
   const handleApplyRefinements = async () => { 
     if (refinePoints.length === 0) return; 
     try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics);
@@ -356,9 +385,48 @@ function App() {
                   <div className="space-y-6">
                     {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && (
                       <>
-                      <div><label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label><input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /><button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"><Upload className="w-5 h-5 text-gray-400" /><span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span></button></div>
-                      <div><label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label><div className="relative"><Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /><input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" /></div><ARLinks /></div>
-                      <button id="start-auto-btn" onClick={handleStartMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300 transition-all"><Zap className="w-5 h-5" />Prepare for Measurement</button>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label>
+                          <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                          <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50">
+                            <Upload className="w-5 h-5 text-gray-400" />
+                            <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span>
+                          </button>
+                        </div>
+                        <div>
+                          <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label>
+                          <div className="relative">
+                            <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" />
+                          </div>
+                          <ARLinks />
+                        </div>
+                        <div className="space-y-3 pt-2 border-t">
+                          <button
+                              id="start-auto-btn"
+                              onClick={handleStartAutoMeasurement}
+                              disabled={appStatus !== 'IMAGE_LOADED' || !distance}
+                              className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4"
+                          >
+                              <Zap className="w-6 h-6 flex-shrink-0" />
+                              <div>
+                                  <p className="font-semibold">Automatic Measurement</p>
+                                  <p className="text-xs text-green-200">Slower, more precise</p>
+                              </div>
+                          </button>
+                          <button
+                              id="start-manual-btn"
+                              onClick={handleStartManualMeasurement}
+                              disabled={appStatus !== 'IMAGE_LOADED' || !distance}
+                              className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"
+                          >
+                              <Ruler className="w-6 h-6 flex-shrink-0" />
+                              <div>
+                                  <p className="font-semibold">Manual Measurement</p>
+                                  <p className="text-xs text-amber-100">Faster, mark points yourself</p>
+                              </div>
+                          </button>
+                        </div>
                       </>
                     )}
                     {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); }} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)}
