@@ -117,10 +117,14 @@ function App() {
     const ctx = canvas.getContext('2d'); if (!ctx) return;
     const img = new Image(); img.src = resultImageSrc;
     img.onload = () => {
-      const maxWidth = canvas.parentElement?.clientWidth || 800;
-      const maxHeight = canvas.parentElement?.clientHeight || 600;
-      const ratio = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
-      canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const maxWidth = parent.clientWidth;
+      const maxHeight = parent.clientHeight;
+      const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
+      canvas.width = img.width * ratio;
+      canvas.height = img.height * ratio;
+      
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const scaleCoords = (p: Point): Point => !imageDimensions ? p : { x: (p.x / imageDimensions.w) * canvas.width, y: (p.y / imageDimensions.h) * canvas.height };
       const drawPoint = (p: Point, color: string) => { const sp = scaleCoords(p); ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke(); };
@@ -146,9 +150,23 @@ function App() {
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
 
     if (appStatus === 'AWAITING_INITIAL_CLICK') {
+        setIsPanelOpen(true);
+        setInstructionText("Running automatic segmentation...");
         setTransientPoint(clickPoint);
-        try { setAppStatus('PROCESSING'); setInstructionText("Running automatic segmentation..."); const response = await samAutoSegment(currentMeasurementFile!, parseFloat(distance), scaleFactor!, clickPoint); if (response.status !== 'success') throw new Error(response.message); setScaleFactor(response.scale_factor); setDbhLine(response.dbh_line_coords); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics);
-        } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } finally { setTransientPoint(null); }
+        try { 
+          setAppStatus('PROCESSING'); 
+          const response = await samAutoSegment(currentMeasurementFile!, parseFloat(distance), scaleFactor!, clickPoint); 
+          if (response.status !== 'success') throw new Error(response.message); 
+          setScaleFactor(response.scale_factor); 
+          setDbhLine(response.dbh_line_coords); 
+          setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
+          handleMeasurementSuccess(response.metrics);
+        } catch (error: any) { 
+          setAppStatus('ERROR'); 
+          setErrorMessage(error.message); 
+        } finally { 
+          setTransientPoint(null); 
+        }
     } else if (appStatus === 'AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
   };
@@ -156,12 +174,18 @@ function App() {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     if (pendingTreeFile) {
-      setCurrentMeasurementFile(pendingTreeFile);
-      setResultImageSrc(URL.createObjectURL(pendingTreeFile));
-      setPendingTreeFile(null);
-      setAppStatus('IMAGE_LOADED');
-      setIsPanelOpen(true);
-      setInstructionText("Calibration successful! Enter distance to the tree base.");
+      const fileToProcess = pendingTreeFile;
+      const tempImage = new Image();
+      tempImage.src = URL.createObjectURL(fileToProcess);
+      tempImage.onload = () => {
+        setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
+        setCurrentMeasurementFile(fileToProcess);
+        setResultImageSrc(tempImage.src);
+        setPendingTreeFile(null);
+        setAppStatus('IMAGE_LOADED');
+        setIsPanelOpen(true);
+        setInstructionText("Calibration successful! Enter distance to the tree base.");
+      };
     } else {
       softReset();
     }
@@ -180,11 +204,11 @@ function App() {
   };
   const handleApplyRefinements = async () => { 
     if (refinePoints.length === 0) return; 
-    try { setAppStatus('PROCESSING'); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics);
+    try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics);
     } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
   };
   const handleCalculateManual = async () => { 
-    try { setAppStatus('PROCESSING'); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics);
+    try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics);
     } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } 
   };
   const handleSaveToSession = () => {
@@ -225,45 +249,45 @@ function App() {
   const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
 
   return (
-    <div className="min-h-screen bg-white font-inter md:overflow-hidden">
-      <div className="flex flex-col md:flex-row h-screen">
+    <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
         
-        {/* --- Display Panel --- */}
-        <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center md:flex-[0.65] relative">
-          {!hasActiveMeasurement && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
-          {hasActiveMeasurement && (
-            isLocationPickerActive ? (
-                <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} />
-            ) : (
-                <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} />
-            )
-          )}
-        </div>
-        
-        {/* --- Mobile Controls --- */}
-        {hasActiveMeasurement && !isPanelOpen && (
-          <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800">
-            <Menu size={24} />
-          </button>
+      {/* --- Display Panel (Canvas or Map) --- */}
+      <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
+        {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
+        {(hasActiveMeasurement || isLocationPickerActive) && (
+          isLocationPickerActive ? (
+              <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} />
+          ) : (
+              <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} />
+          )
         )}
+      </div>
+      
+      {/* --- Mobile Controls (Hamburger Button) --- */}
+      {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && (
+        <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform">
+          <Menu size={24} />
+        </button>
+      )}
 
-        {/* --- Control Panel (Desktop) / Summoned Panel (Mobile) --- */}
-        <div id="control-panel" className={`
-          ${hasActiveMeasurement ? 'fixed md:static' : 'static'}
-          bottom-0 left-0 w-full h-full md:h-auto
-          bg-gray-50 border-r border-gray-200
-          flex flex-col
-          transition-transform duration-300 ease-in-out md:transform-none
-          z-20
-          md:flex-[0.35] md:flex
-          ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}`
-        }>
-          <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
-            <h2 className="font-semibold text-lg text-gray-800">Controls</h2>
-            <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800">
-              <X size={24} />
-            </button>
-          </div>
+      {/* --- Control Panel (Desktop) / Summoned Panel (Mobile) --- */}
+      {(!isLocationPickerActive || window.innerWidth >= 768) && (
+        <div id="control-panel" 
+          className={`
+            bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out 
+            md:static md:w-[35%] md:flex-[0.35] md:translate-y-0
+            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full md:w-[35%]'}
+            ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}
+          `}
+        >
+          {hasActiveMeasurement && (
+            <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
+              <h2 className="font-semibold text-lg text-gray-800">Controls</h2>
+              <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800">
+                <X size={24} />
+              </button>
+            </div>
+          )}
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <div className="hidden md:flex justify-between items-center mb-6">
@@ -332,7 +356,7 @@ function App() {
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
