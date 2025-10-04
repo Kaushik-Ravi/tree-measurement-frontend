@@ -174,18 +174,9 @@ function App() {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     if (pendingTreeFile) {
-      const fileToProcess = pendingTreeFile;
-      const tempImage = new Image();
-      tempImage.src = URL.createObjectURL(fileToProcess);
-      tempImage.onload = () => {
-        setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
-        setCurrentMeasurementFile(fileToProcess);
-        setResultImageSrc(tempImage.src);
-        setPendingTreeFile(null);
-        setAppStatus('IMAGE_LOADED');
-        setIsPanelOpen(true);
-        setInstructionText("Calibration successful! Enter distance to the tree base.");
-      };
+      setCurrentMeasurementFile(pendingTreeFile);
+      setPendingTreeFile(null);
+      setAppStatus('IMAGE_UPLOADING'); // Re-trigger the trusted workflow
     } else {
       softReset();
     }

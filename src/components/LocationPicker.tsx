@@ -82,7 +82,7 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation }: Locatio
         )}
       </MapContainer>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col md:flex-row justify-between items-center z-[1000] pointer-events-none gap-4">
+      <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 md:pb-4 flex flex-col md:flex-row justify-between items-center z-[1000] pointer-events-none gap-4">
         <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto w-full text-center md:w-auto md:text-left">
             {pinnedPosition ? `Selected: ${pinnedPosition[0].toFixed(4)}, ${pinnedPosition[1].toFixed(4)}` : "Click on the map or use search"}
         </p>
