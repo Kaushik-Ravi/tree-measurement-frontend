@@ -10,6 +10,7 @@ import { SpeciesIdentifier } from './components/SpeciesIdentifier';
 import { CO2ResultCard } from './components/CO2ResultCard';
 import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDetailsForm';
 import { LocationPicker } from './components/LocationPicker';
+import { InstructionToast } from './components/InstructionToast';
 
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
@@ -26,6 +27,7 @@ function App() {
   const [instructionText, setInstructionText] = useState("Welcome! To begin, select a tree image to measure.");
   const [errorMessage, setErrorMessage] = useState('');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [showInstructionToast, setShowInstructionToast] = useState(false);
   
   const [fovRatio, setFovRatio] = useState<number | null>(null);
 
@@ -56,6 +58,8 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
+  
+  useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
 
   useEffect(() => {
     const triggerCO2Calculation = async () => {
@@ -138,6 +142,7 @@ function App() {
   const handleDeleteResult = (idToDelete: string) => setAllResults(results => results.filter(result => result.id !== idToDelete));
   const handleMeasurementSuccess = (metrics: Metrics) => { setCurrentMetrics(metrics); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Measurement complete. Review the results below."); };
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
+    setShowInstructionToast(false); // Hide toast on any canvas interaction
     const canvas = event.currentTarget;
     if (!imageDimensions || !canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -192,6 +197,7 @@ function App() {
     setAppStatus('AWAITING_INITIAL_CLICK'); 
     setIsPanelOpen(false);
     setInstructionText("Ready. Please click once on the main trunk of the tree.");
+    setShowInstructionToast(true);
   };
   const handleApplyRefinements = async () => { 
     if (refinePoints.length === 0) return; 
@@ -217,20 +223,75 @@ function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const fullReset = () => { softReset(); setAllResults([]); };
-  const handleCorrectOutline = () => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); };
+  const handleCorrectOutline = () => { 
+    setIsLocationPickerActive(false); 
+    setAppStatus('AWAITING_REFINE_POINTS'); 
+    setIsPanelOpen(false); 
+    setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); 
+    setShowInstructionToast(true);
+  };
   const handleCancelRefinement = () => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled. Review the results below."); };
-  const handleSwitchToManualMode = () => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); }};
+  const handleSwitchToManualMode = () => { 
+      if (currentMeasurementFile && scaleFactor) { 
+          setIsLocationPickerActive(false); 
+          setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); 
+          setCurrentMetrics(null); 
+          setDbhLine(null); 
+          setRefinePoints([]); 
+          setAppStatus('MANUAL_AWAITING_BASE_CLICK'); 
+          setIsPanelOpen(false); 
+          setInstructionText("Manual Mode: Click the exact base of the tree trunk."); 
+          setShowInstructionToast(true);
+      }
+  };
   const handleCancelManualMode = () => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }};
+  
   const handleManualPointCollection = async (point: Point) => { 
     if (!scaleFactor || !imageDimensions) return;
+
+    const showNextInstruction = (text: string) => {
+        setInstructionText(text);
+        setShowInstructionToast(true);
+    };
+
     if (appStatus === 'MANUAL_AWAITING_BASE_CLICK') {
-      try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('MANUAL_AWAITING_HEIGHT_POINTS'); setInstructionText("STEP 1/3 (Height): Click highest and lowest points."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
+      try { 
+        const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); 
+        setDbhGuideRect(response.rectangle_coords); 
+        setAppStatus('MANUAL_AWAITING_HEIGHT_POINTS'); 
+        showNextInstruction("STEP 1/3 (Height): Click highest and lowest points.");
+      } catch (error: any) { 
+          setAppStatus('ERROR'); 
+          setErrorMessage(error.message); 
+      }
     } else if (appStatus === 'MANUAL_AWAITING_HEIGHT_POINTS') {
-      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('MANUAL_AWAITING_CANOPY_POINTS'); setInstructionText("STEP 2/3 (Canopy): Click widest points."); } return {...p, height: h}; }); 
+      setManualPoints(p => { 
+        const h = [...p.height, point]; 
+        if (h.length === 2) { 
+            setAppStatus('MANUAL_AWAITING_CANOPY_POINTS'); 
+            showNextInstruction("STEP 2/3 (Canopy): Click widest points.");
+        } 
+        return {...p, height: h}; 
+      }); 
     } else if (appStatus === 'MANUAL_AWAITING_CANOPY_POINTS') {
-      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('MANUAL_AWAITING_GIRTH_POINTS'); setInstructionText("STEP 3/3 (Girth): Use guide to click trunk's width."); } return {...p, canopy: c}; }); 
+      setManualPoints(p => { 
+        const c = [...p.canopy, point]; 
+        if (c.length === 2) { 
+            setAppStatus('MANUAL_AWAITING_GIRTH_POINTS'); 
+            showNextInstruction("STEP 3/3 (Girth): Use guide to click trunk's width.");
+        } 
+        return {...p, canopy: c}; 
+      }); 
     } else if (appStatus === 'MANUAL_AWAITING_GIRTH_POINTS') {
-      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
+      setManualPoints(p => { 
+        const g = [...p.girth, point]; 
+        if (g.length === 2) { 
+            setAppStatus('MANUAL_READY_TO_CALCULATE'); 
+            setIsPanelOpen(true); 
+            setInstructionText("All points collected. Click 'Calculate'."); 
+        } 
+        return {...p, girth: g}; 
+      }); 
     }
   };
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
@@ -241,6 +302,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
+      <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
       {/* --- Display Panel (Canvas or Map) --- */}
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
