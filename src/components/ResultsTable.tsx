@@ -74,7 +74,7 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
             {sortedResults.map((result) => (
               <tr key={result.id} className="md:hover:bg-gray-50">
                 <td data-label="File" className="px-4 py-3 font-medium text-gray-900 truncate"><span>{result.fileName}</span></td>
-                <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic"><span>{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
+                <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic truncate"><span>{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
                 <td data-label="Condition" className="px-4 py-3 text-gray-600"><span>{result.condition || <span className="text-gray-400">N/A</span>}</span></td>
                 <td data-label="Ownership" className="px-4 py-3 text-gray-600"><span>{result.ownership || <span className="text-gray-400">N/A</span>}</span></td>
                 <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono font-semibold text-sky-800"><span>{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</span></td>
