@@ -42,7 +42,7 @@ function LocateControl() {
   };
 
   return (
-    <div className="absolute bottom-[170px] md:bottom-[110px] right-4 z-[1000]">
+    <div className="absolute top-20 right-4 z-[1000]">
        <button
         onClick={handleLocateMe}
         className="p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"

@@ -51,17 +51,19 @@ body {
 
 /*
   ==============================================
-  MOBILE RESPONSIVENESS - SURGICAL ADDITIONS
+  MOBILE RESPONSIVENESS - A FOCUSED EXPERIENCE
   ==============================================
 */
 @media (max-width: 767px) {
-  /* --- Core Layout Orchestration --- */
+  /* --- The Focus View: Canvas as the Stage, Controls as the Tool --- */
+  /* When a measurement is active, the layout transforms. The canvas fills the screen,
+     and the controls are presented in an ergonomic sheet at the bottom. */
   .mobile-focus-view #control-panel {
     @apply absolute bottom-0 left-0 w-full bg-gray-50 z-20;
     @apply border-t border-gray-200 rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)];
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
-    transition: height 0.3s ease-in-out;
+    transition: transform 0.3s ease-in-out;
   }
 
   .mobile-focus-view #display-panel {
@@ -69,26 +71,20 @@ body {
   }
 
   .mobile-focus-view #image-canvas {
-    @apply w-full h-full rounded-none;
-  }
-  
-  /* Hide desktop-only content when in mobile focus view */
-  .mobile-focus-view #control-panel > *:not(:last-child) {
-    @apply hidden;
-  }
-  .mobile-focus-view #control-panel > div:last-child {
-    @apply mt-0 pt-0 border-none;
+    @apply w-full h-full object-contain rounded-none;
   }
 
-  /* --- Results Table Mobile Cards --- */
+  /* --- Session History: A Timeline of Cards --- */
+  /* On mobile, the data table is reimagined as a vertical timeline of cards,
+     making each result a clear, self-contained entry. */
   .mobile-cards-table thead {
     @apply hidden;
   }
   .mobile-cards-table tr {
-    @apply block border-2 border-gray-200 rounded-xl mb-4 shadow-sm bg-white;
+    @apply block border border-gray-200 rounded-xl mb-4 shadow-sm bg-white;
   }
   .mobile-cards-table td {
-    @apply flex justify-between items-center text-right p-3 border-b border-gray-100;
+    @apply flex justify-between items-center p-3 border-b border-gray-100 text-sm;
   }
   .mobile-cards-table td:last-child {
     @apply border-b-0;
@@ -97,20 +93,10 @@ body {
     content: attr(data-label);
     @apply font-semibold text-gray-600 text-left pr-4;
   }
-  .mobile-cards-table td {
+  .mobile-cards-table td > * {
     @apply text-right;
   }
-  .mobile-cards-table td[data-label="File"],
-  .mobile-cards-table td[data-label="Species"],
-  .mobile-cards-table td[data-label="Condition"],
-  .mobile-cards-table td[data-label="Ownership"] {
-    @apply text-left;
-  }
-  .mobile-cards-table td[data-label="Actions"] {
-    @apply justify-end md:justify-center;
-  }
-  .mobile-cards-table td[data-label="File"],
-  .mobile-cards-table td[data-label="Species"] {
-    @apply whitespace-normal max-w-full;
+  .mobile-cards-table td[data-label="Actions"] > button {
+    @apply ml-auto; /* Ensure delete button is pushed right */
   }
 }
