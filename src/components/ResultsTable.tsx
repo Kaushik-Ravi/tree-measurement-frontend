@@ -21,9 +21,9 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
         let aValue: string | number;
         let bValue: string | number;
 
-        if (sortConfig.key === 'fileName') { aValue = a.fileName.toLowerCase(); bValue = b.fileName.toLowerCase(); } 
-        else if (sortConfig.key === 'species') { aValue = a.species?.scientificName.toLowerCase() ?? ''; bValue = b.species?.scientificName.toLowerCase() ?? ''; } 
-        else if (sortConfig.key === 'woodDensity') { aValue = a.woodDensity?.value ?? -1; bValue = b.woodDensity?.value ?? -1; } 
+        if (sortConfig.key === 'fileName') { aValue = a.fileName.toLowerCase(); bValue = b.fileName.toLowerCase(); }
+        else if (sortConfig.key === 'species') { aValue = a.species?.scientificName.toLowerCase() ?? ''; bValue = b.species?.scientificName.toLowerCase() ?? ''; }
+        else if (sortConfig.key === 'woodDensity') { aValue = a.woodDensity?.value ?? -1; bValue = b.woodDensity?.value ?? -1; }
         else if (sortConfig.key === 'co2') { aValue = a.co2_sequestered_kg ?? -1; bValue = b.co2_sequestered_kg ?? -1; }
         else if (sortConfig.key === 'condition') { aValue = a.condition?.toLowerCase() ?? ''; bValue = b.condition?.toLowerCase() ?? ''; }
         else if (sortConfig.key === 'ownership') { aValue = a.ownership?.toLowerCase() ?? ''; bValue = b.ownership?.toLowerCase() ?? ''; }
@@ -52,8 +52,8 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
   if (results.length === 0) { return null; }
 
   return (
-    <div className="md:mt-8">
-      <div className="flex justify-between items-center mb-4 px-1 md:px-0">
+    <div>
+      <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Session History</h2></div>
         <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
       </div>
@@ -73,8 +73,8 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
           <tbody className="md:divide-y md:divide-gray-200">
             {sortedResults.map((result) => (
               <tr key={result.id} className="md:hover:bg-gray-50">
-                <td data-label="File" className="px-4 py-3 font-medium text-gray-900 truncate"><span>{result.fileName}</span></td>
-                <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic truncate"><span>{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
+                <td data-label="File" className="px-4 py-3 font-medium text-gray-900"><span className="truncate">{result.fileName}</span></td>
+                <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic"><span className="truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
                 <td data-label="Condition" className="px-4 py-3 text-gray-600"><span>{result.condition || <span className="text-gray-400">N/A</span>}</span></td>
                 <td data-label="Ownership" className="px-4 py-3 text-gray-600"><span>{result.ownership || <span className="text-gray-400">N/A</span>}</span></td>
                 <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono font-semibold text-sky-800"><span>{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</span></td>
