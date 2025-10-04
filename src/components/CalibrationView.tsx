@@ -1,6 +1,7 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Upload, Menu, X } from 'lucide-react';
+import { Settings, Upload, Menu, X, Zap } from 'lucide-react';
+import { InstructionToast } from './InstructionToast';
 
 interface Point { x: number; y: number; }
 
@@ -30,9 +31,16 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   const [points, setPoints] = useState<Point[]>([]);
   const [instruction, setInstruction] = useState("A one-time camera calibration is needed.");
   const [isPanelVisible, setIsPanelVisible] = useState(true);
+  const [showInstructionToast, setShowInstructionToast] = useState(false);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isPanelVisible) {
+      setShowInstructionToast(false);
+    }
+  }, [isPanelVisible]);
 
   useEffect(() => {
     if (!calibFile) return;
@@ -73,6 +81,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   };
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    setShowInstructionToast(false); // Hide toast on interaction
     if (points.length >= 2 || !imageDimensions || !canvasRef.current) return;
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
@@ -88,37 +97,40 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
 
     const newPoints = [...points, clickPoint];
     setPoints(newPoints);
-    if (newPoints.length === 1) { setInstruction("First point selected. Click the second endpoint."); }
-    if (newPoints.length === 2) { calculateAndFinish(newPoints); }
+    if (newPoints.length === 1) { 
+        setInstruction("First point selected. Click the second endpoint."); 
+        setShowInstructionToast(true);
+    }
+    if (newPoints.length === 2) { 
+        calculateAndFinish(newPoints); 
+    }
   };
 
   const calculateAndFinish = (finalPoints: Point[]) => {
     if (!imageDimensions || !distance || !realSize) return;
     setInstruction("Calibration complete! You can now measure trees.");
+    setIsPanelVisible(true);
     const r = parseFloat(realSize); const D = parseFloat(distance);
     const w = Math.max(imageDimensions.w, imageDimensions.h);
     const n = Math.hypot(finalPoints[0].x - finalPoints[1].x, finalPoints[0].y - finalPoints[1].y);
     const D_in_cm = D * 100;
     const cameraConstant = (r * w) / (n * D_in_cm);
     console.log(`Final Calculated Camera Constant (FOV Ratio): ${cameraConstant}`);
-    onCalibrationComplete(cameraConstant);
+    setTimeout(() => onCalibrationComplete(cameraConstant), 500); // Delay to show final message
   };
 
   const canSelectPoints = !!(calibFile && distance && realSize);
-  
-  useEffect(() => {
-    if (canSelectPoints) {
-      if (points.length < 2) {
-        setInstruction("Please click the two endpoints of your known object in the image.");
-      }
-      if (window.innerWidth < 768 && points.length === 0) {
-        setIsPanelVisible(false);
-      }
-    }
-  }, [canSelectPoints, points.length]);
 
+  const handlePrepareCalibration = () => {
+    if (!canSelectPoints) return;
+    setInstruction("Please click the two endpoints of your known object in the image.");
+    setIsPanelVisible(false);
+    setShowInstructionToast(true);
+  };
+  
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
+      <InstructionToast message={instruction} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
       {/* --- Display Panel --- */}
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
@@ -131,12 +143,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         <canvas 
           ref={canvasRef} 
           onClick={canSelectPoints ? handleCanvasClick : undefined} 
-          className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 ? 'cursor-crosshair' : 'cursor-default'}`} 
+          className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
       </div>
       
       {/* --- Mobile Controls (Hamburger Button) --- */}
-      {!isPanelVisible && (
+      {calibFile && !isPanelVisible && (
         <button onClick={() => setIsPanelVisible(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform">
           <Menu size={24} />
         </button>
@@ -148,16 +160,18 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         className={`
           bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out 
           md:static md:w-[28rem] md:translate-y-0
-          fixed z-20 inset-0
+          w-full fixed z-20 inset-0
           ${isPanelVisible ? 'translate-y-0' : 'translate-y-full'}
         `}
       >
         {/* Mobile Header */}
         <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
           <h2 className="font-semibold text-lg text-gray-800">Camera Calibration</h2>
-          <button onClick={() => setIsPanelVisible(false)} className="p-2 text-gray-500 hover:text-gray-800">
-            <X size={24} />
-          </button>
+          {calibFile && (
+            <button onClick={() => setIsPanelVisible(false)} className="p-2 text-gray-500 hover:text-gray-800">
+              <X size={24} />
+            </button>
+          )}
         </div>
         
         {/* Panel Content */}
@@ -188,6 +202,14 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   <label className="block text-sm font-medium text-gray-700 mb-2">3. Object's Real Size (cm)</label>
                   <input type="number" value={realSize} onChange={e => setRealSize(e.target.value)} placeholder="e.g., 29.7 for A4 paper" className="w-full text-base px-4 py-3 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-green-500"/>
                 </div>
+                <button 
+                  onClick={handlePrepareCalibration} 
+                  disabled={!canSelectPoints} 
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300 transition-all"
+                >
+                  <Zap className="w-5 h-5" />
+                  Prepare for Calibration
+                </button>
             </main>
         </div>
       </div>
