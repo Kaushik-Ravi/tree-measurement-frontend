@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, User as UserIcon, LogIn, LogOut } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, Point, Metrics, IdentificationResponse } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
@@ -11,6 +11,7 @@ import { CO2ResultCard } from './components/CO2ResultCard';
 import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDetailsForm';
 import { LocationPicker } from './components/LocationPicker';
 import { InstructionToast } from './components/InstructionToast';
+import { useAuth } from './contexts/AuthContext'; // --- IMPORT AUTH HOOK ---
 
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
@@ -22,7 +23,53 @@ const ARLinks = () => ( <p className="text-xs text-gray-500 mt-1 pl-1">Need help
 
 const initialAdditionalData: AdditionalData = { condition: '', ownership: '', remarks: '' };
 
+// --- NEW AUTH COMPONENT ---
+const AuthComponent = () => {
+  const { user, signInWithGoogle, signOut } = useAuth();
+
+  if (user) {
+    return (
+      <div className="flex items-center gap-2">
+        <img src={user.user_metadata.avatar_url} alt="User avatar" className="w-8 h-8 rounded-full" />
+        <button onClick={signOut} className="p-2 text-sm text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 flex items-center gap-2">
+          <LogOut className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button onClick={signInWithGoogle} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
+      <LogIn className="w-4 h-4" />
+      Sign In
+    </button>
+  );
+};
+
+// --- NEW LOGIN PROMPT COMPONENT ---
+const LoginPrompt = () => {
+    const { signInWithGoogle } = useAuth();
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-center bg-gray-50 p-6">
+        <TreePine className="w-16 h-16 text-green-600 mb-4" />
+        <h1 className="text-3xl font-bold text-gray-800">Welcome to the Tree Measurement Tool</h1>
+        <p className="mt-2 max-w-md text-gray-600">
+          Sign in to begin measuring trees, identifying species, and tracking your results in a persistent measurement history.
+        </p>
+        <button 
+          onClick={signInWithGoogle}
+          className="mt-8 flex items-center gap-3 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 transition-transform active:scale-95 shadow-lg"
+        >
+          <svg className="w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 381.5 512 244 512 110.3 512 0 398.8 0 256S110.3 0 244 0c69.8 0 130.8 28.5 173.4 74.5l-68.2 66.3C314.5 112.5 282.2 96 244 96c-83.2 0-151.2 67.2-151.2 150.2s68 150.2 151.2 150.2c97.7 0 128.8-72.2 132.3-108.9H244v-85.3h238.9c2.3 12.7 3.6 26.4 3.6 40.5z"></path></svg>
+          Sign In with Google
+        </button>
+      </div>
+    );
+};
+
 function App() {
+  const { user, isLoading: isAuthLoading } = useAuth(); // --- USE AUTH HOOK ---
+
   const [appStatus, setAppStatus] = useState<AppStatus>('IDLE');
   const [instructionText, setInstructionText] = useState("Welcome! To begin, select a tree image to measure.");
   const [errorMessage, setErrorMessage] = useState('');
@@ -328,8 +375,21 @@ function App() {
     }
   };
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
+  
+  // --- NEW AUTH-BASED RENDER LOGIC ---
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-white">
+        <div className="progress-bar-container w-1/2 max-w-sm"><div className="progress-bar-animated"></div></div>
+      </div>
+    );
+  }
 
   if (appStatus === 'CALIBRATION_AWAITING_INPUT') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
+
+  if (!user) {
+    return <LoginPrompt />;
+  }
 
   const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
 
@@ -337,7 +397,6 @@ function App() {
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
-      {/* --- Display Panel (Canvas or Map) --- */}
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
         {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
         {(hasActiveMeasurement || isLocationPickerActive) && (
@@ -349,14 +408,12 @@ function App() {
         )}
       </div>
       
-      {/* --- Mobile Controls (Hamburger Button) --- */}
       {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && (
         <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform">
           <Menu size={24} />
         </button>
       )}
 
-      {/* --- Control Panel (Desktop) / Summoned Panel (Mobile) --- */}
       {(!isLocationPickerActive || window.innerWidth >= 768) && (
         <div id="control-panel" 
           className={`
@@ -378,6 +435,7 @@ function App() {
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <div className="hidden md:flex justify-between items-center mb-6">
               <div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div>
+              <AuthComponent />
             </div>
             
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{appStatus === 'ERROR' && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
@@ -476,14 +534,14 @@ function App() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-4 border-t">
                   <button onClick={softReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button>
-                  <button onClick={handleSaveToSession} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to Session</button>
+                  <button onClick={handleSaveToSession} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>
                 </div>
               </div>
             )}
             
             <div className="border-t border-gray-200 mt-6 pt-6">
               <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} />
-              {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear Session</button></div>)}
+              {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear All History</button></div>)}
             </div>
           </div>
         </div>
