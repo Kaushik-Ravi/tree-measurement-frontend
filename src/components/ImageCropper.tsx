@@ -8,7 +8,7 @@ import ReactCrop, {
 } from 'react-image-crop';
 import { getCroppedImg } from '../utils/imageUtils';
 import 'react-image-crop/dist/ReactCrop.css';
-import { Check, X, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { Check, X, ZoomIn, ZoomOut, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface ImageCropperProps {
   src: string;
@@ -16,6 +16,8 @@ interface ImageCropperProps {
   onCropComplete: (file: File) => void;
   onCancel: () => void;
 }
+
+const MIN_CROP_DIMENSION = 256; // Minimum recommended pixels for identification
 
 // This is a helper function to create a centered crop selection
 function centerAspectCrop(
@@ -39,45 +41,64 @@ function centerAspectCrop(
 }
 
 export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }: ImageCropperProps) {
-  const imgRef = React.useRef<HTMLImageElement>(null);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-
-  // Panning state
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  
+  // State for the smart quality warning
+  const [showQualityWarning, setShowQualityWarning] = useState(false);
 
   function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const { width, height } = e.currentTarget;
     setCrop(centerAspectCrop(width, height, 1));
   }
+  
+  // This handler now also checks the crop quality to provide a user warning
+  const handleCropUpdate = (pixelCrop: PixelCrop) => {
+    setCompletedCrop(pixelCrop);
 
+    if (imgRef.current) {
+      // Create a temporary image to get the original dimensions
+      const sourceImage = new Image();
+      sourceImage.src = src;
+      // Calculate the scaling factor between the displayed image and the original image
+      const scaleX = sourceImage.naturalWidth / imgRef.current.width;
+      
+      // Calculate the final pixel width of the crop on the original image
+      const finalWidth = pixelCrop.width * scaleX;
+      
+      // Show warning if the crop is too small
+      if (finalWidth < MIN_CROP_DIMENSION && pixelCrop.width > 0) {
+        setShowQualityWarning(true);
+      } else {
+        setShowQualityWarning(false);
+      }
+    }
+  };
+
+  // This handler now uses the new, robust utility function to ensure high quality
   async function handleConfirmCrop() {
     if (completedCrop?.width && completedCrop?.height && imgRef.current) {
       try {
-        // We need to pass the untransformed image to the crop utility.
-        // We can achieve this by creating a temporary, untransformed image object.
-        const originalImage = new Image();
-        originalImage.src = src;
-        originalImage.onload = async () => {
-           const croppedFile = await getCroppedImg(
-            originalImage, // Pass the original, not the transformed ref
-            completedCrop,
-            `cropped_${originalFileName}`
-          );
-          onCropComplete(croppedFile);
-        }
+        const croppedFile = await getCroppedImg(
+          src, // Pass the original, full-res image source
+          completedCrop,
+          imgRef.current, // Pass the on-screen image element for scaling reference
+          `cropped_${originalFileName}`
+        );
+        onCropComplete(croppedFile);
       } catch (e) {
         console.error('Error creating cropped image:', e);
       }
     }
   }
 
+  // Zoom and pan logic remains unchanged
   const handleZoomChange = (newZoom: number) => {
-    // When zoom changes, reset pan to avoid the image being off-center
     setZoom(newZoom);
     setPan({ x: 0, y: 0 });
   };
@@ -89,17 +110,13 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
   
   const onMouseDown = (e: React.MouseEvent) => {
     if (zoom <= 1) return;
-    e.preventDefault(); // Prevent default image drag behavior
+    e.preventDefault();
     setIsPanning(true);
-    setPanStart({
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y,
-    });
+    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
     if (!isPanning) return;
-    // Calculate new pan position, but constrain it so the image doesn't go too far
     const newX = e.clientX - panStart.x;
     const newY = e.clientY - panStart.y;
     setPan({ x: newX, y: newY });
@@ -117,10 +134,8 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
           <p className="text-sm text-gray-500">Zoom and pan to select a part of the image for identification.</p>
         </div>
 
-        {/* This container is the viewport for the zoomable/pannable image */}
         <div
-          ref={containerRef}
-          className="flex-grow p-4 overflow-hidden flex items-center justify-center bg-gray-100"
+          className="flex-grow p-4 overflow-hidden flex items-center justify-center bg-gray-100 relative"
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUpOrLeave}
@@ -130,10 +145,10 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
           <ReactCrop
             crop={crop}
             onChange={(_, percentCrop) => setCrop(percentCrop)}
-            onComplete={(c) => setCompletedCrop(c)}
+            onComplete={handleCropUpdate}
             aspect={1}
-            minWidth={100}
-            minHeight={100}
+            minWidth={50}
+            minHeight={50}
           >
             <img
               ref={imgRef}
@@ -148,9 +163,16 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
               }}
             />
           </ReactCrop>
+
+           {/* Smart Warning Message */}
+           {showQualityWarning && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-auto px-4 py-2 bg-amber-500/90 text-white text-xs font-semibold rounded-full flex items-center gap-2 shadow-lg animate-fade-in-down">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Small selection may lead to inaccurate results.</span>
+            </div>
+          )}
         </div>
         
-        {/* Controls for Zoom and Actions */}
         <div className="flex-shrink-0 p-3 border-t bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-lg">
           <div className="flex items-center gap-2 w-full sm:w-auto">
               <ZoomOut className="w-5 h-5 text-gray-500" />
