@@ -36,6 +36,7 @@ function MapEventsHandler({ setPinnedPosition }: {
 function LocateControl() {
   const map = useMap();
   const handleLocateMe = (e: React.MouseEvent) => {
+    // PREVENT THE CLICK FROM PROPAGATING TO THE MAP BELOW
     e.preventDefault();
     e.stopPropagation();
     map.locate();
