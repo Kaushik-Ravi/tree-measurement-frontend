@@ -1,6 +1,5 @@
 // src/components/LocationPicker.tsx
 import React, { useState } from 'react';
-import 'leaflet/dist/leaflet.css';
 import { MapContainer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { Crosshair } from 'lucide-react';
 import MapFeatures from './MapFeatures';
