@@ -141,8 +141,9 @@ function App() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
   const handleDeleteResult = (idToDelete: string) => setAllResults(results => results.filter(result => result.id !== idToDelete));
   const handleMeasurementSuccess = (metrics: Metrics) => { setCurrentMetrics(metrics); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Measurement complete. Review the results below."); };
+  
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    setShowInstructionToast(false); // Hide toast on any canvas interaction
+    setShowInstructionToast(false);
     const canvas = event.currentTarget;
     if (!imageDimensions || !canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -159,8 +160,40 @@ function App() {
         setInstructionText("Running automatic segmentation...");
         setTransientPoint(clickPoint);
         try { 
-          setAppStatus('PROCESSING'); 
-          const response = await samAutoSegment(currentMeasurementFile!, parseFloat(distance), scaleFactor!, clickPoint); 
+          setAppStatus('PROCESSING');
+          
+          // --- BEGIN CRITICAL FIX ---
+          // Calculate the dimensions of the image that will be sent to the server.
+          // This logic MUST mirror the logic inside apiService.ts's processImageBeforeUpload.
+          const MAX_IMAGE_DIMENSION = 1024;
+          let newWidth = imageDimensions.w;
+          let newHeight = imageDimensions.h;
+
+          if (newWidth > newHeight) {
+              if (newWidth > MAX_IMAGE_DIMENSION) {
+                  newHeight *= MAX_IMAGE_DIMENSION / newWidth;
+                  newWidth = MAX_IMAGE_DIMENSION;
+              }
+          } else {
+              if (newHeight > MAX_IMAGE_DIMENSION) {
+                  newWidth *= MAX_IMAGE_DIMENSION / newHeight;
+                  newHeight = MAX_IMAGE_DIMENSION;
+              }
+          }
+          
+          // Calculate the ratio to scale the coordinates.
+          const scaleRatio = newWidth / imageDimensions.w;
+
+          // Create a new point object with coordinates scaled to the new image size.
+          const scaledClickPoint: Point = {
+              x: Math.round(clickPoint.x * scaleRatio),
+              y: Math.round(clickPoint.y * scaleRatio),
+          };
+          // --- END CRITICAL FIX ---
+
+          // Call the API with the original file but the CORRECTLY scaled click point.
+          const response = await samAutoSegment(currentMeasurementFile!, parseFloat(distance), scaleFactor!, scaledClickPoint); 
+
           if (response.status !== 'success') throw new Error(response.message); 
           setScaleFactor(response.scale_factor); 
           setDbhLine(response.dbh_line_coords); 
@@ -175,6 +208,7 @@ function App() {
     } else if (appStatus === 'AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
   };
+
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
