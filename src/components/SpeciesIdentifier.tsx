@@ -1,7 +1,8 @@
 // src/components/SpeciesIdentifier.tsx
 import React, { useState } from 'react';
-import { Leaf, UploadCloud, Flower2, TreeDeciduous, X, Loader2, AlertTriangle, Sparkles, MapPin } from 'lucide-react';
+import { Leaf, UploadCloud, Flower2, TreeDeciduous, X, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
+import { ImageCropper } from './ImageCropper'; // We will create this component
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 
@@ -9,11 +10,15 @@ interface SpeciesIdentifierProps {
   onIdentificationComplete: (data: IdentificationData) => void;
   onClear: () => void;
   existingResult: IdentificationData;
+  mainImageFile: File | null;
+  mainImageSrc: string;
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
+type Mode = 'idle' | 'uploading' | 'cropping';
 
-export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult }: SpeciesIdentifierProps) {
+export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc }: SpeciesIdentifierProps) {
+  const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -29,6 +34,13 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       setImagePreview(URL.createObjectURL(file));
       setError(null);
     }
+  };
+
+  const handleCropComplete = (croppedFile: File) => {
+    setImageFile(croppedFile);
+    setImagePreview(URL.createObjectURL(croppedFile));
+    setMode('uploading'); // Transition to organ selection after cropping
+    setError(null);
   };
 
   const handleIdentify = async () => {
@@ -63,6 +75,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     setImageFile(null);
     setImagePreview('');
     setSelectedOrgan(null);
+    setMode('idle'); // Reset mode to the initial choice screen
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -106,34 +119,67 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
 
   return (
     <div className="space-y-3 p-4 bg-white rounded-lg border">
-      <p className="text-sm font-medium text-gray-700">Optional: Identify species</p>
+      {mode === 'cropping' && mainImageFile && (
+        <ImageCropper 
+          src={mainImageSrc}
+          originalFileName={mainImageFile.name}
+          onCropComplete={handleCropComplete}
+          onCancel={() => setMode('idle')}
+        />
+      )}
+
+      <div className="flex justify-between items-center">
+        <p className="text-sm font-medium text-gray-700">Optional: Identify species</p>
+        {mode === 'uploading' && (
+           <button onClick={() => { setImageFile(null); setImagePreview(''); setMode('idle'); }} className="text-xs text-blue-600 hover:underline">Back to options</button>
+        )}
+      </div>
+
       {remainingQuota !== null && remainingQuota < 50 && (
         <div className="p-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md">
           <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> <p>Low daily quota: {remainingQuota} requests left.</p></div>
         </div>
       )}
-      <div>
-        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-          <div className="space-y-1 text-center">
-            {imagePreview ? <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" /> : <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />}
-            <div className="flex text-sm text-gray-600"><label htmlFor="species-file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500"><span>Upload a close-up</span><input ref={fileInputRef} id="species-file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" /></label></div>
+
+      {mode === 'idle' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+           <button onClick={() => setMode('uploading')} className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
+              <UploadCloud className="w-6 h-6" />
+              <span className="text-sm font-medium">Upload Close-up</span>
+           </button>
+           <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300 text-gray-600 disabled:text-gray-400">
+              <CropIcon className="w-6 h-6" />
+              <span className="text-sm font-medium">Crop from Main Image</span>
+           </button>
+        </div>
+      )}
+
+      {mode === 'uploading' && (
+        <>
+          <div>
+            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+              <div className="space-y-1 text-center">
+                {imagePreview ? <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" /> : <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />}
+                <div className="flex text-sm text-gray-600"><label htmlFor="species-file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500"><span>{imageFile ? 'Change image' : 'Upload a close-up'}</span><input ref={fileInputRef} id="species-file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" /></label></div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      <div>
-        <div className="grid grid-cols-2 gap-3">
-          {organOptions.map(({ name, icon }) => (
-            <button key={name} onClick={() => setSelectedOrgan(name)} className={`flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition-all ${selectedOrgan === name ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white hover:bg-gray-100'}`}>
-              {icon}
-              {name.charAt(0).toUpperCase() + name.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300">
-        {isLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Identifying...</> : <><Sparkles className="w-5 h-5" /> Identify</>}
-      </button>
-      {error && <div className="text-xs text-red-600 text-center pt-1">{error}</div>}
+          <div>
+            <div className="grid grid-cols-2 gap-3">
+              {organOptions.map(({ name, icon }) => (
+                <button key={name} onClick={() => setSelectedOrgan(name)} className={`flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition-all ${selectedOrgan === name ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white hover:bg-gray-100'}`}>
+                  {icon}
+                  {name.charAt(0).toUpperCase() + name.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300">
+            {isLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Identifying...</> : <><Sparkles className="w-5 h-5" /> Identify</>}
+          </button>
+          {error && <div className="text-xs text-red-600 text-center pt-1">{error}</div>}
+        </>
+      )}
     </div>
   );
 }

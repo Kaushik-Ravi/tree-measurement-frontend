@@ -460,7 +460,13 @@ function App() {
                   <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
                       <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'}
                   </button>
-                  <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} />
+                  <SpeciesIdentifier
+                    onIdentificationComplete={setCurrentIdentification}
+                    onClear={() => setCurrentIdentification(null)}
+                    existingResult={currentIdentification}
+                    mainImageFile={currentMeasurementFile}
+                    mainImageSrc={resultImageSrc}
+                  />
                   <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
                   <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
                 </div>
