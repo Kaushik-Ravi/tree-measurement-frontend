@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Leaf, UploadCloud, Flower2, TreeDeciduous, X, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
-import { ImageCropper } from './ImageCropper'; // We will create this component
+import { ImageCropper } from './ImageCropper';
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 
@@ -11,7 +11,7 @@ interface SpeciesIdentifierProps {
   onClear: () => void;
   existingResult: IdentificationData;
   mainImageFile: File | null;
-  mainImageSrc: string;
+  mainImageSrc: string; // This will now be the original, unmodified image source
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
@@ -143,13 +143,19 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
 
       {mode === 'idle' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-           <button onClick={() => setMode('uploading')} className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
-              <UploadCloud className="w-6 h-6" />
-              <span className="text-sm font-medium">Upload Close-up</span>
+           <button onClick={() => setMode('uploading')} className="relative text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
+              <div className="flex items-center gap-2">
+                <UploadCloud className="w-5 h-5" />
+                <span className="text-sm font-semibold">Upload Close-up</span>
+              </div>
+              <span className="text-xs text-green-700 font-medium mt-1 pl-px">Recommended for best accuracy</span>
            </button>
-           <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300 text-gray-600 disabled:text-gray-400">
-              <CropIcon className="w-6 h-6" />
-              <span className="text-sm font-medium">Crop from Main Image</span>
+           <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300 text-gray-600 disabled:text-gray-400">
+              <div className="flex items-center gap-2">
+                <CropIcon className="w-5 h-5" />
+                <span className="text-sm font-semibold">Crop from Main Image</span>
+              </div>
+               <span className="text-xs text-gray-500 mt-1 pl-px">A convenient option</span>
            </button>
         </div>
       )}

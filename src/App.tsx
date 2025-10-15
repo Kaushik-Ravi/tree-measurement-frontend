@@ -44,6 +44,7 @@ function App() {
   const [isLocationPickerActive, setIsLocationPickerActive] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<LocationData>(null);
   
+  const [originalImageSrc, setOriginalImageSrc] = useState<string>('');
   const [resultImageSrc, setResultImageSrc] = useState<string>('');
   const [imageDimensions, setImageDimensions] = useState<{w: number, h: number} | null>(null);
   const [refinePoints, setRefinePoints] = useState<Point[]>([]);
@@ -77,7 +78,9 @@ function App() {
       setInstructionText("Analyzing image metadata...");
       try {
         const tempImage = new Image();
-        tempImage.src = URL.createObjectURL(currentMeasurementFile);
+        const objectURL = URL.createObjectURL(currentMeasurementFile);
+        tempImage.src = objectURL;
+
         tempImage.onload = async () => {
           setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
           const tags = await ExifReader.load(currentMeasurementFile);
@@ -92,7 +95,8 @@ function App() {
           }
 
           const focalLengthValue = tags['FocalLengthIn35mmFilm']?.value;
-          setResultImageSrc(tempImage.src);
+          setOriginalImageSrc(objectURL);
+          setResultImageSrc(objectURL);
           
           if (typeof focalLengthValue === 'number') {
             setFocalLength(focalLengthValue); 
@@ -110,7 +114,7 @@ function App() {
             }
           }
         };
-      } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); if (currentMeasurementFile) setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }
+      } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); if (currentMeasurementFile) { const objURL = URL.createObjectURL(currentMeasurementFile); setOriginalImageSrc(objURL); setResultImageSrc(objURL); } }
     };
     processImage();
   }, [currentMeasurementFile, appStatus, fovRatio]);
@@ -248,7 +252,7 @@ function App() {
     softReset();
   };
   const softReset = () => { 
-    setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false);
+    setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const fullReset = () => { softReset(); setAllResults([]); };
@@ -465,7 +469,7 @@ function App() {
                     onClear={() => setCurrentIdentification(null)}
                     existingResult={currentIdentification}
                     mainImageFile={currentMeasurementFile}
-                    mainImageSrc={resultImageSrc}
+                    mainImageSrc={originalImageSrc}
                   />
                   <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
                   <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
