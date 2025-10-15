@@ -8,6 +8,70 @@ export interface SpeciesInfo { scientificName: string; score: number; commonName
 export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: string; matchScore: number; sourceRegion: string; }
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
+export interface TreeResult {
+  id: string;
+  created_at: string;
+  user_id: string;
+  fileName: string;
+  metrics: Metrics;
+  species?: SpeciesInfo;
+  woodDensity?: WoodDensityInfo;
+  co2_sequestered_kg?: number;
+  condition?: string;
+  ownership?: string;
+  remarks?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+
+// --- NEW: Helper to get auth headers ---
+const getAuthHeaders = (token: string) => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${token}`,
+});
+
+// --- NEW: Database API Functions ---
+
+export const getResults = async (token: string): Promise<TreeResult[]> => {
+  const response = await fetch(`${API_BASE_URL}/api/results`, {
+    method: 'GET',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const saveResult = async (resultData: Omit<TreeResult, 'id' | 'created_at' | 'user_id'>, token: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/api/results`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(resultData),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const deleteResult = async (resultId: string, token: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/api/results/${resultId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+
+// --- Existing Unchanged Functions ---
 
 export const calculateCO2 = async (metrics: Metrics, woodDensity: number): Promise<CO2Response> => {
   const payload = { metrics, wood_density: woodDensity };

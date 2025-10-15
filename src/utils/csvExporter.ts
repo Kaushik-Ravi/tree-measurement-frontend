@@ -2,8 +2,11 @@
 
 import { Metrics, SpeciesInfo, WoodDensityInfo } from '../apiService';
 
+// This interface is now aligned with the database schema from apiService.ts
 export interface TreeResult {
   id: string;
+  created_at: string;
+  user_id: string;
   fileName: string;
   metrics: Metrics;
   species?: SpeciesInfo;
@@ -12,7 +15,6 @@ export interface TreeResult {
   condition?: string;
   ownership?: string;
   remarks?: string;
-  // --- NEW FIELDS ---
   latitude?: number;
   longitude?: number;
 }
@@ -24,16 +26,17 @@ export function downloadResultsAsCSV(results: TreeResult[]): void {
   }
 
   const headers = [
-    'File Name', 'Species', 'Common Names', 'Confidence Score', 
+    'ID', 'Date Created', 'File Name', 'Species', 'Common Names', 'Confidence Score', 
     'Height (m)', 'Canopy (m)', 'DBH (cm)', 
     'Wood Density (g/cm^3)', 'Wood Density Source Region',
     'CO2 Sequestered (kg)',
     'Condition', 'Ownership', 'Remarks',
-    // --- NEW HEADERS ---
     'Latitude', 'Longitude'
   ];
   
   const rows = results.map(result => [
+    `"${result.id}"`,
+    `"${new Date(result.created_at).toLocaleString()}"`,
     `"${result.fileName.replace(/"/g, '""')}"`,
     `"${result.species?.scientificName ?? 'N/A'}"`,
     `"${result.species?.commonNames.join(', ') ?? 'N/A'}"`,
@@ -47,7 +50,6 @@ export function downloadResultsAsCSV(results: TreeResult[]): void {
     `"${result.condition ?? 'N/A'}"`,
     `"${result.ownership ?? 'N/A'}"`,
     `"${(result.remarks ?? 'N/A').replace(/"/g, '""')}"`,
-    // --- NEW VALUES ---
     result.latitude ? result.latitude.toFixed(6) : 'N/A',
     result.longitude ? result.longitude.toFixed(6) : 'N/A'
   ].join(','));

@@ -1,17 +1,20 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, User as UserIcon, LogIn, LogOut } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2 } from 'lucide-react';
 import ExifReader from 'exifreader';
-import { samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, Point, Metrics, IdentificationResponse } from './apiService';
+import { 
+  samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
+  Point, Metrics, IdentificationResponse, TreeResult, // <-- Import TreeResult type
+  getResults, saveResult, deleteResult // <-- Import new DB functions
+} from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
-import { TreeResult } from './utils/csvExporter';
 import { SpeciesIdentifier } from './components/SpeciesIdentifier';
 import { CO2ResultCard } from './components/CO2ResultCard';
 import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDetailsForm';
 import { LocationPicker } from './components/LocationPicker';
 import { InstructionToast } from './components/InstructionToast';
-import { useAuth } from './contexts/AuthContext'; // --- IMPORT AUTH HOOK ---
+import { useAuth } from './contexts/AuthContext';
 
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
@@ -23,15 +26,15 @@ const ARLinks = () => ( <p className="text-xs text-gray-500 mt-1 pl-1">Need help
 
 const initialAdditionalData: AdditionalData = { condition: '', ownership: '', remarks: '' };
 
-// --- NEW AUTH COMPONENT ---
 const AuthComponent = () => {
   const { user, signInWithGoogle, signOut } = useAuth();
 
   if (user) {
     return (
-      <div className="flex items-center gap-2">
-        <img src={user.user_metadata.avatar_url} alt="User avatar" className="w-8 h-8 rounded-full" />
-        <button onClick={signOut} className="p-2 text-sm text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <img src={user.user_metadata.avatar_url} alt="User avatar" className="w-8 h-8 rounded-full border-2 border-green-200" />
+        <span className="text-sm font-medium text-gray-700 hidden lg:inline">{user.user_metadata.full_name}</span>
+        <button onClick={signOut} className="p-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 flex items-center gap-2" title="Sign Out">
           <LogOut className="w-4 h-4" />
         </button>
       </div>
@@ -46,7 +49,6 @@ const AuthComponent = () => {
   );
 };
 
-// --- NEW LOGIN PROMPT COMPONENT ---
 const LoginPrompt = () => {
     const { signInWithGoogle } = useAuth();
     return (
@@ -68,7 +70,7 @@ const LoginPrompt = () => {
 };
 
 function App() {
-  const { user, isLoading: isAuthLoading } = useAuth(); // --- USE AUTH HOOK ---
+  const { user, session, isLoading: isAuthLoading } = useAuth();
 
   const [appStatus, setAppStatus] = useState<AppStatus>('IDLE');
   const [instructionText, setInstructionText] = useState("Welcome! To begin, select a tree image to measure.");
@@ -101,6 +103,7 @@ function App() {
   const [dbhGuideRect, setDbhGuideRect] = useState<{x:number, y:number, width:number, height:number} | null>(null);
 
   const [allResults, setAllResults] = useState<TreeResult[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +111,24 @@ function App() {
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
+
+  // --- MODIFIED: Fetch results from DB on login ---
+  useEffect(() => {
+    const fetchUserResults = async () => {
+      if (session?.access_token) {
+        setIsHistoryLoading(true);
+        try {
+          const results = await getResults(session.access_token);
+          setAllResults(results);
+        } catch (error: any) {
+          setErrorMessage(`Could not fetch history: ${error.message}`);
+        } finally {
+          setIsHistoryLoading(false);
+        }
+      }
+    };
+    fetchUserResults();
+  }, [session]);
 
   useEffect(() => {
     const triggerCO2Calculation = async () => {
@@ -190,10 +211,27 @@ function App() {
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
-  const handleDeleteResult = (idToDelete: string) => setAllResults(results => results.filter(result => result.id !== idToDelete));
+  
+  // --- MODIFIED: Delete from DB ---
+  const handleDeleteResult = async (idToDelete: string) => {
+    if (!session?.access_token) {
+      setErrorMessage("You must be logged in to delete results.");
+      return;
+    }
+    if (window.confirm("Are you sure you want to permanently delete this measurement?")) {
+      try {
+        await deleteResult(idToDelete, session.access_token);
+        setAllResults(results => results.filter(result => result.id !== idToDelete));
+      } catch (error: any) {
+        setErrorMessage(`Failed to delete: ${error.message}`);
+      }
+    }
+  };
+
   const handleMeasurementSuccess = (metrics: Metrics) => { setCurrentMetrics(metrics); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Measurement complete. Review the results below."); };
+  
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
-    setShowInstructionToast(false); // Hide toast on any canvas interaction
+    setShowInstructionToast(false);
     const canvas = event.currentTarget;
     if (!imageDimensions || !canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -226,13 +264,14 @@ function App() {
     } else if (appStatus === 'AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
   };
+  
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     if (pendingTreeFile) {
       setCurrentMeasurementFile(pendingTreeFile);
       setPendingTreeFile(null);
-      setAppStatus('IMAGE_UPLOADING'); // Re-trigger the trusted workflow
+      setAppStatus('IMAGE_UPLOADING');
     } else {
       softReset();
     }
@@ -257,139 +296,79 @@ function App() {
     return true;
   };
   
-  const handleStartAutoMeasurement = () => {
-    if (prepareMeasurementSession()) {
-      setAppStatus('AWAITING_INITIAL_CLICK');
-      setIsPanelOpen(false);
-      setInstructionText("Ready. Please click once on the main trunk of the tree.");
-      setShowInstructionToast(true);
-    }
-  };
+  const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Ready. Please click once on the main trunk of the tree."); setShowInstructionToast(true); } };
+  const handleStartManualMeasurement = () => { if (prepareMeasurementSession()) { setResultImageSrc(URL.createObjectURL(currentMeasurementFile!)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } };
+  const handleApplyRefinements = async () => { if (refinePoints.length === 0) return; try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
+  const handleCalculateManual = async () => { try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
-  const handleStartManualMeasurement = () => {
-    if (prepareMeasurementSession()) {
-      setResultImageSrc(URL.createObjectURL(currentMeasurementFile!));
-      setCurrentMetrics(null);
-      setDbhLine(null);
-      setRefinePoints([]);
-      setAppStatus('MANUAL_AWAITING_BASE_CLICK');
-      setIsPanelOpen(false);
-      setInstructionText("Manual Mode: Click the exact base of the tree trunk.");
-      setShowInstructionToast(true);
+  // --- MODIFIED: Save to DB ---
+  const handleSaveResult = async () => {
+    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) {
+      setErrorMessage("Cannot save: missing data or not logged in.");
+      return;
+    }
+    const newResult = {
+      fileName: currentMeasurementFile.name,
+      metrics: currentMetrics,
+      species: currentIdentification?.bestMatch ?? undefined,
+      woodDensity: currentIdentification?.woodDensity ?? undefined,
+      co2_sequestered_kg: currentCO2 ?? undefined,
+      latitude: currentLocation?.lat,
+      longitude: currentLocation?.lng,
+      ...additionalData,
+    };
+    try {
+      await saveResult(newResult, session.access_token);
+      const updatedResults = await getResults(session.access_token);
+      setAllResults(updatedResults);
+      softReset();
+    } catch (error: any) {
+      setErrorMessage(`Failed to save result: ${error.message}`);
     }
   };
 
-  const handleApplyRefinements = async () => { 
-    if (refinePoints.length === 0) return; 
-    try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics);
-    } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
-  };
-  const handleCalculateManual = async () => { 
-    try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics);
-    } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } 
-  };
-  const handleSaveToSession = () => {
-    if (!currentMeasurementFile || !currentMetrics) return;
-    const newResult: TreeResult = {
-      id: `${currentMeasurementFile.name}-${Date.now()}`, fileName: currentMeasurementFile.name, metrics: currentMetrics,
-      species: currentIdentification?.bestMatch ?? undefined, woodDensity: currentIdentification?.woodDensity ?? undefined,
-      co2_sequestered_kg: currentCO2 ?? undefined, latitude: currentLocation?.lat, longitude: currentLocation?.lng, ...additionalData
-    };
-    setAllResults(prev => [newResult, ...prev]);
-    softReset();
-  };
-  const softReset = () => { 
-    setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-  const fullReset = () => { softReset(); setAllResults([]); };
-  const handleCorrectOutline = () => { 
-    setIsLocationPickerActive(false); 
-    setAppStatus('AWAITING_REFINE_POINTS'); 
-    setIsPanelOpen(false); 
-    setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); 
-    setShowInstructionToast(true);
-  };
-  const handleCancelRefinement = () => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled. Review the results below."); };
-  const handleSwitchToManualMode = () => { 
-      if (currentMeasurementFile && scaleFactor) { 
-          setIsLocationPickerActive(false); 
-          setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); 
-          setCurrentMetrics(null); 
-          setDbhLine(null); 
-          setRefinePoints([]); 
-          setAppStatus('MANUAL_AWAITING_BASE_CLICK'); 
-          setIsPanelOpen(false); 
-          setInstructionText("Manual Mode: Click the exact base of the tree trunk."); 
-          setShowInstructionToast(true);
+  const softReset = () => { setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; };
+  
+  // --- MODIFIED: Clear all from DB ---
+  const fullReset = async () => {
+    if (!session?.access_token) return;
+    if (window.confirm("Are you sure you want to permanently delete ALL measurements from your history? This cannot be undone.")) {
+      try {
+        // Sequentially delete all items.
+        for (const result of allResults) {
+          await deleteResult(result.id, session.access_token);
+        }
+        setAllResults([]);
+        softReset();
+      } catch (error: any) {
+        setErrorMessage(`Failed to clear history: ${error.message}`);
       }
+    }
   };
+
+  const handleCorrectOutline = () => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); };
+  const handleCancelRefinement = () => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled. Review the results below."); };
+  const handleSwitchToManualMode = () => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } };
   const handleCancelManualMode = () => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }};
   
   const handleManualPointCollection = async (point: Point) => { 
     if (!scaleFactor || !imageDimensions) return;
-
-    const showNextInstruction = (text: string) => {
-        setInstructionText(text);
-        setShowInstructionToast(true);
-    };
-
+    const showNextInstruction = (text: string) => { setInstructionText(text); setShowInstructionToast(true); };
     if (appStatus === 'MANUAL_AWAITING_BASE_CLICK') {
-      try { 
-        const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); 
-        setDbhGuideRect(response.rectangle_coords); 
-        setAppStatus('MANUAL_AWAITING_HEIGHT_POINTS'); 
-        showNextInstruction("STEP 1/3 (Height): Click highest and lowest points.");
-      } catch (error: any) { 
-          setAppStatus('ERROR'); 
-          setErrorMessage(error.message); 
-      }
+      try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('MANUAL_AWAITING_HEIGHT_POINTS'); showNextInstruction("STEP 1/3 (Height): Click highest and lowest points."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
     } else if (appStatus === 'MANUAL_AWAITING_HEIGHT_POINTS') {
-      setManualPoints(p => { 
-        const h = [...p.height, point]; 
-        if (h.length === 2) { 
-            setAppStatus('MANUAL_AWAITING_CANOPY_POINTS'); 
-            showNextInstruction("STEP 2/3 (Canopy): Click widest points.");
-        } 
-        return {...p, height: h}; 
-      }); 
+      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click widest points."); } return {...p, height: h}; }); 
     } else if (appStatus === 'MANUAL_AWAITING_CANOPY_POINTS') {
-      setManualPoints(p => { 
-        const c = [...p.canopy, point]; 
-        if (c.length === 2) { 
-            setAppStatus('MANUAL_AWAITING_GIRTH_POINTS'); 
-            showNextInstruction("STEP 3/3 (Girth): Use guide to click trunk's width.");
-        } 
-        return {...p, canopy: c}; 
-      }); 
+      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use guide to click trunk's width."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'MANUAL_AWAITING_GIRTH_POINTS') {
-      setManualPoints(p => { 
-        const g = [...p.girth, point]; 
-        if (g.length === 2) { 
-            setAppStatus('MANUAL_READY_TO_CALCULATE'); 
-            setIsPanelOpen(true); 
-            setInstructionText("All points collected. Click 'Calculate'."); 
-        } 
-        return {...p, girth: g}; 
-      }); 
+      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
   };
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
   
-  // --- NEW AUTH-BASED RENDER LOGIC ---
-  if (isAuthLoading) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-white">
-        <div className="progress-bar-container w-1/2 max-w-sm"><div className="progress-bar-animated"></div></div>
-      </div>
-    );
-  }
-
+  if (isAuthLoading) { return ( <div className="h-screen w-screen flex items-center justify-center bg-white"> <Loader2 className="w-8 h-8 text-gray-400 animate-spin" /> </div> ); }
   if (appStatus === 'CALIBRATION_AWAITING_INPUT') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
-
-  if (!user) {
-    return <LoginPrompt />;
-  }
+  if (!user) { return <LoginPrompt />; }
 
   const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
 
@@ -438,8 +417,8 @@ function App() {
               <AuthComponent />
             </div>
             
-            <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{appStatus === 'ERROR' && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
-            {(appStatus === 'PROCESSING' || isCO2Calculating) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ isCO2Calculating && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">Calculating CO₂...</p>}</div> )}
+            <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
+            {(appStatus === 'PROCESSING' || isCO2Calculating || isHistoryLoading) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ (isCO2Calculating || isHistoryLoading) && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : 'Calculating CO₂...'}</p>}</div> )}
             
             {appStatus !== 'AUTO_RESULT_SHOWN' && (
               <div className="space-y-4">
@@ -464,29 +443,13 @@ function App() {
                           <ARLinks />
                         </div>
                         <div className="space-y-3 pt-2 border-t">
-                          <button
-                              id="start-auto-btn"
-                              onClick={handleStartAutoMeasurement}
-                              disabled={appStatus !== 'IMAGE_LOADED' || !distance}
-                              className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4"
-                          >
-                              <Zap className="w-6 h-6 flex-shrink-0" />
-                              <div>
-                                  <p className="font-semibold">Automatic Measurement</p>
-                                  <p className="text-xs text-green-200">Slower, more precise</p>
-                              </div>
+                          <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4">
+                            <Zap className="w-6 h-6 flex-shrink-0" />
+                            <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div>
                           </button>
-                          <button
-                              id="start-manual-btn"
-                              onClick={handleStartManualMeasurement}
-                              disabled={appStatus !== 'IMAGE_LOADED' || !distance}
-                              className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"
-                          >
-                              <Ruler className="w-6 h-6 flex-shrink-0" />
-                              <div>
-                                  <p className="font-semibold">Manual Measurement</p>
-                                  <p className="text-xs text-amber-100">Faster, mark points yourself</p>
-                              </div>
+                          <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4">
+                            <Ruler className="w-6 h-6 flex-shrink-0" />
+                            <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div>
                           </button>
                         </div>
                       </>
@@ -495,46 +458,33 @@ function App() {
                   </div>
                 )}
                 {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={handleCancelRefinement} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )}
-                {isManualMode(appStatus) && (
-                  <div className="pt-4 border-t">
-                      {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>}
-                      <button onClick={handleCancelManualMode} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button>
-                  </div>
-                )}
+                {isManualMode(appStatus) && ( <div className="pt-4 border-t"> {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>} <button onClick={handleCancelManualMode} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button> </div> )}
               </div>
             )}
 
             {appStatus === 'AUTO_RESULT_SHOWN' && (
               <div className="space-y-4">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2>
-                    <div className="space-y-2 mt-2">
-                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
-                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
-                        <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
-                    </div>
+                  <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2>
+                  <div className="space-y-2 mt-2">
+                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
+                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
+                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-4 border-t">
-                    <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
-                    <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
+                  <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
+                  <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
                 </div>
                 <div className="space-y-4 border-t pt-4">
-                  <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100">
-                      <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'}
-                  </button>
-                  <SpeciesIdentifier
-                    onIdentificationComplete={setCurrentIdentification}
-                    onClear={() => setCurrentIdentification(null)}
-                    existingResult={currentIdentification}
-                    mainImageFile={currentMeasurementFile}
-                    mainImageSrc={originalImageSrc}
-                  />
+                  <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button>
+                  <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} />
                   <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
                   <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-4 border-t">
                   <button onClick={softReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button>
-                  <button onClick={handleSaveToSession} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>
+                  <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>
                 </div>
               </div>
             )}
