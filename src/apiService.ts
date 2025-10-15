@@ -23,9 +23,9 @@ export const calculateCO2 = async (metrics: Metrics, woodDensity: number): Promi
   return response.json();
 };
 
-export const identifySpecies = async (imageFile: File, organ: string): Promise<IdentificationResponse> => {
+export const identifySpecies = async (imageBlob: Blob, originalFileName: string, organ: string): Promise<IdentificationResponse> => {
   const formData = new FormData();
-  formData.append('image', imageFile);
+  formData.append('image', imageBlob, originalFileName);
   formData.append('organ', organ);
   const response = await fetch(`${API_BASE_URL}/api/plantnet/identify`, { method: 'POST', body: formData, });
   if (!response.ok) {
@@ -35,9 +35,9 @@ export const identifySpecies = async (imageFile: File, organ: string): Promise<I
   return response.json();
 };
 
-export const samAutoSegment = async (imageFile: File, distanceM: number, scaleFactor: number, clickPoint: Point) => {
+export const samAutoSegment = async (imageBlob: Blob, originalFileName: string, distanceM: number, scaleFactor: number, clickPoint: Point) => {
   const formData = new FormData();
-  formData.append('image', imageFile);
+  formData.append('image', imageBlob, originalFileName);
   formData.append('distance_m', distanceM.toString());
   formData.append('scale_factor', scaleFactor.toString());
   formData.append('click_x', clickPoint.x.toString());
@@ -50,10 +50,10 @@ export const samAutoSegment = async (imageFile: File, distanceM: number, scaleFa
   return response.json();
 };
 
-export const samRefineWithPoints = async (imageFile: File, foregroundPoints: Point[], scaleFactor: number) => {
+export const samRefineWithPoints = async (imageBlob: Blob, originalFileName: string, foregroundPoints: Point[], scaleFactor: number) => {
     const dataPayload = { foreground_points: foregroundPoints, scale_factor: scaleFactor, };
     const formData = new FormData();
-    formData.append('image', imageFile);
+    formData.append('image', imageBlob, originalFileName);
     formData.append('data', JSON.stringify(dataPayload));
     const response = await fetch(`${API_BASE_URL}/api/sam_refine_with_points`, { method: 'POST', body: formData, });
     if (!response.ok) {
