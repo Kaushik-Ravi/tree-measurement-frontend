@@ -11,7 +11,6 @@ interface MapFeaturesProps {
   onLocationSelected: (location: { lat: number, lng: number }) => void;
 }
 
-// --- DEBOUNCE HOOK ---
 // This custom hook delays updating a value until a certain amount of time has passed
 // without that value changing. This is perfect for search inputs.
 function useDebounce<T>(value: T, delay: number): T {
@@ -40,9 +39,6 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // --- USE THE DEBOUNCE HOOK ---
-  // We create a debounced version of the search query.
-  // The API search will only be triggered when this value changes.
   const debouncedQuery = useDebounce(query, 300); // 300ms delay
 
   const performSearch = useCallback(async (searchTerm: string) => {
@@ -56,8 +52,6 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
     }
   }, []);
 
-  // --- EFFECT IS NOW TRIGGERED BY THE DEBOUNCED QUERY ---
-  // This ensures performSearch is not called on every keystroke.
   useEffect(() => {
     performSearch(debouncedQuery);
   }, [debouncedQuery, performSearch]);
@@ -92,19 +86,20 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
         </LayersControl.BaseLayer>
       </LayersControl>
       
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[1000]">
-        <div className="relative">
-          <div className="bg-white shadow-lg rounded-md flex items-center border-2 border-transparent focus-within:border-blue-500 transition-all">
+      {/* --- MODIFIED BLOCK FOR RESPONSIVENESS --- */}
+      <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
+        <div className="relative w-full">
+          <div className="bg-white shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-blue-500 transition-all">
               <div className="pl-3 pr-2 text-gray-400">
                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
               </div>
               <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Enter address"
-                  className="h-10 pr-10 border-none text-sm font-sans placeholder-gray-500 w-64 md:w-80 bg-transparent outline-none"
+                  placeholder="Search for a location..."
+                  className="h-12 pr-10 border-none text-sm font-sans placeholder-gray-500 w-full md:w-80 bg-transparent outline-none"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)} // Input updates the query state immediately
+                  onChange={(e) => setQuery(e.target.value)}
               />
               {query && (
                   <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-500 hover:bg-gray-100">
@@ -114,7 +109,7 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
           </div>
 
           {results.length > 0 && (
-              <div className="absolute top-full mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 z-[1000]">
+              <div className="absolute top-full mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 z-[1000] max-h-60 overflow-y-auto">
                   {results.map((result) => (
                       <div
                           key={result.raw.place_id}
@@ -128,6 +123,7 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
           )}
         </div>
       </div>
+      {/* --- END MODIFIED BLOCK --- */}
     </>
   );
 };

@@ -36,7 +36,6 @@ function MapEventsHandler({ setPinnedPosition }: {
 function LocateControl() {
   const map = useMap();
   const handleLocateMe = (e: React.MouseEvent) => {
-    // PREVENT THE CLICK FROM PROPAGATING TO THE MAP BELOW
     e.preventDefault();
     e.stopPropagation();
     map.locate();
@@ -83,26 +82,28 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation }: Locatio
         )}
       </MapContainer>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 pb-8 md:pb-4 flex flex-col md:flex-row justify-between items-center z-[1000] pointer-events-none gap-4">
-        <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto w-full text-center md:w-auto md:text-left">
+      {/* --- MODIFIED BLOCK FOR RESPONSIVENESS --- */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col items-center z-[1000] pointer-events-none gap-3">
+        <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto w-full text-center">
             {pinnedPosition ? `Selected: ${pinnedPosition[0].toFixed(4)}, ${pinnedPosition[1].toFixed(4)}` : "Click on the map or use search"}
         </p>
-        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto w-full md:w-auto">
+        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex flex-col sm:flex-row items-center gap-2 pointer-events-auto w-full">
             <button
                 onClick={onCancel}
-                className="px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 w-1/2 md:w-auto text-sm"
+                className="w-full sm:w-auto flex-1 px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 text-sm"
             >
                 Cancel
             </button>
             <button
                 onClick={() => { if(pinnedPosition) onConfirm({ lat: pinnedPosition[0], lng: pinnedPosition[1] }) }}
                 disabled={!pinnedPosition}
-                className="px-6 py-3 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed w-1/2 md:w-auto text-sm"
+                className="w-full sm:w-auto flex-1 px-6 py-3 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
             >
                 Confirm Location
             </button>
         </div>
       </div>
+       {/* --- END MODIFIED BLOCK --- */}
     </div>
   );
 }

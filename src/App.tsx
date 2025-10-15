@@ -4,8 +4,8 @@ import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Spar
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
-  Point, Metrics, IdentificationResponse, TreeResult, // <-- Import TreeResult type
-  getResults, saveResult, deleteResult // <-- Import new DB functions
+  Point, Metrics, IdentificationResponse, TreeResult,
+  getResults, saveResult, deleteResult
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -112,7 +112,6 @@ function App() {
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
 
-  // --- MODIFIED: Fetch results from DB on login ---
   useEffect(() => {
     const fetchUserResults = async () => {
       if (session?.access_token) {
@@ -212,19 +211,10 @@ function App() {
   
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
   
-  // --- MODIFIED: Delete from DB ---
   const handleDeleteResult = async (idToDelete: string) => {
-    if (!session?.access_token) {
-      setErrorMessage("You must be logged in to delete results.");
-      return;
-    }
+    if (!session?.access_token) { setErrorMessage("You must be logged in to delete results."); return; }
     if (window.confirm("Are you sure you want to permanently delete this measurement?")) {
-      try {
-        await deleteResult(idToDelete, session.access_token);
-        setAllResults(results => results.filter(result => result.id !== idToDelete));
-      } catch (error: any) {
-        setErrorMessage(`Failed to delete: ${error.message}`);
-      }
+      try { await deleteResult(idToDelete, session.access_token); setAllResults(results => results.filter(result => result.id !== idToDelete)); } catch (error: any) { setErrorMessage(`Failed to delete: ${error.message}`); }
     }
   };
 
@@ -244,56 +234,33 @@ function App() {
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
 
     if (appStatus === 'AWAITING_INITIAL_CLICK') {
-        setIsPanelOpen(true);
-        setInstructionText("Running automatic segmentation...");
-        setTransientPoint(clickPoint);
+        setIsPanelOpen(true); setInstructionText("Running automatic segmentation..."); setTransientPoint(clickPoint);
         try { 
           setAppStatus('PROCESSING'); 
           const response = await samAutoSegment(currentMeasurementFile!, parseFloat(distance), scaleFactor!, clickPoint); 
           if (response.status !== 'success') throw new Error(response.message); 
-          setScaleFactor(response.scale_factor); 
-          setDbhLine(response.dbh_line_coords); 
-          setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
+          setScaleFactor(response.scale_factor); setDbhLine(response.dbh_line_coords); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
           handleMeasurementSuccess(response.metrics);
-        } catch (error: any) { 
-          setAppStatus('ERROR'); 
-          setErrorMessage(error.message); 
-        } finally { 
-          setTransientPoint(null); 
-        }
+        } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } finally { setTransientPoint(null); }
     } else if (appStatus === 'AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
   };
   
   const onCalibrationComplete = (newFovRatio: number) => {
-    setFovRatio(newFovRatio);
-    localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
-    if (pendingTreeFile) {
-      setCurrentMeasurementFile(pendingTreeFile);
-      setPendingTreeFile(null);
-      setAppStatus('IMAGE_UPLOADING');
-    } else {
-      softReset();
-    }
+    setFovRatio(newFovRatio); localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
+    if (pendingTreeFile) { setCurrentMeasurementFile(pendingTreeFile); setPendingTreeFile(null); setAppStatus('IMAGE_UPLOADING');
+    } else { softReset(); }
   };
 
   const prepareMeasurementSession = (): boolean => {
     if (!distance || !currentMeasurementFile || !imageDimensions) return false;
     let cameraConstant: number | null = null;
-    if (focalLength) {
-      cameraConstant = 36.0 / focalLength;
-    } else if (fovRatio) {
-      cameraConstant = fovRatio;
-    } else {
-      setAppStatus('ERROR');
-      setErrorMessage("Calibration data missing. Please calibrate your camera first.");
-      return false;
-    }
+    if (focalLength) { cameraConstant = 36.0 / focalLength; } else if (fovRatio) { cameraConstant = fovRatio;
+    } else { setAppStatus('ERROR'); setErrorMessage("Calibration data missing. Please calibrate your camera first."); return false; }
     const distMM = parseFloat(distance) * 1000;
     const horizontalPixels = Math.max(imageDimensions.w, imageDimensions.h);
     const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
-    setScaleFactor(finalScaleFactor);
-    return true;
+    setScaleFactor(finalScaleFactor); return true;
   };
   
   const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Ready. Please click once on the main trunk of the tree."); setShowInstructionToast(true); } };
@@ -301,48 +268,25 @@ function App() {
   const handleApplyRefinements = async () => { if (refinePoints.length === 0) return; try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   const handleCalculateManual = async () => { try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
-  // --- MODIFIED: Save to DB ---
   const handleSaveResult = async () => {
-    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) {
-      setErrorMessage("Cannot save: missing data or not logged in.");
-      return;
-    }
+    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) { setErrorMessage("Cannot save: missing data or not logged in."); return; }
     const newResult = {
-      fileName: currentMeasurementFile.name,
-      metrics: currentMetrics,
-      species: currentIdentification?.bestMatch ?? undefined,
-      woodDensity: currentIdentification?.woodDensity ?? undefined,
-      co2_sequestered_kg: currentCO2 ?? undefined,
-      latitude: currentLocation?.lat,
-      longitude: currentLocation?.lng,
-      ...additionalData,
+      fileName: currentMeasurementFile.name, metrics: currentMetrics, species: currentIdentification?.bestMatch ?? undefined, woodDensity: currentIdentification?.woodDensity ?? undefined,
+      co2_sequestered_kg: currentCO2 ?? undefined, latitude: currentLocation?.lat, longitude: currentLocation?.lng, ...additionalData,
     };
     try {
       await saveResult(newResult, session.access_token);
       const updatedResults = await getResults(session.access_token);
-      setAllResults(updatedResults);
-      softReset();
-    } catch (error: any) {
-      setErrorMessage(`Failed to save result: ${error.message}`);
-    }
+      setAllResults(updatedResults); softReset();
+    } catch (error: any) { setErrorMessage(`Failed to save result: ${error.message}`); }
   };
 
   const softReset = () => { setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; };
   
-  // --- MODIFIED: Clear all from DB ---
   const fullReset = async () => {
     if (!session?.access_token) return;
     if (window.confirm("Are you sure you want to permanently delete ALL measurements from your history? This cannot be undone.")) {
-      try {
-        // Sequentially delete all items.
-        for (const result of allResults) {
-          await deleteResult(result.id, session.access_token);
-        }
-        setAllResults([]);
-        softReset();
-      } catch (error: any) {
-        setErrorMessage(`Failed to clear history: ${error.message}`);
-      }
+      try { for (const result of allResults) { await deleteResult(result.id, session.access_token); } setAllResults([]); softReset(); } catch (error: any) { setErrorMessage(`Failed to clear history: ${error.message}`); }
     }
   };
 
@@ -398,25 +342,35 @@ function App() {
           className={`
             bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out 
             md:static md:w-[35%] md:flex-[0.35] md:translate-y-0
-            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full md:w-[35%]'}
+            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full md:w-[35%] overflow-y-auto'}
             ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}
           `}
         >
-          {hasActiveMeasurement && (
-            <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
-              <h2 className="font-semibold text-lg text-gray-800">Controls</h2>
-              <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800">
-                <X size={24} />
-              </button>
-            </div>
-          )}
+          {/* --- MODIFIED BLOCK --- */}
+          <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
+            {hasActiveMeasurement ? (
+              <>
+                <AuthComponent />
+                <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button>
+              </>
+            ) : (
+              <div className="w-full flex justify-between items-center">
+                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Tree Measurement</h1></div>
+                <AuthComponent />
+              </div>
+            )}
+          </div>
+          {/* --- END MODIFIED BLOCK --- */}
+
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
+            {/* --- MODIFIED BLOCK --- */}
             <div className="hidden md:flex justify-between items-center mb-6">
               <div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div>
               <AuthComponent />
             </div>
-            
+            {/* --- END MODIFIED BLOCK --- */}
+
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
             {(appStatus === 'PROCESSING' || isCO2Calculating || isHistoryLoading) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ (isCO2Calculating || isHistoryLoading) && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : 'Calculating CO₂...'}</p>}</div> )}
             
