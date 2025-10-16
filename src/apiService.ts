@@ -8,10 +8,25 @@ export interface SpeciesInfo { scientificName: string; score: number; commonName
 export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: string; matchScore: number; sourceRegion: string; }
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
+
+// --- MODIFIED: TreeResult interface to match backend snake_case ---
 export interface TreeResult {
   id: string;
   created_at: string;
   user_id: string;
+  file_name: string; // Changed from fileName
+  metrics: Metrics;
+  species?: SpeciesInfo;
+  wood_density?: WoodDensityInfo; // Changed from woodDensity
+  co2_sequestered_kg?: number; // Changed from co2_sequestered_kg
+  condition?: string;
+  ownership?: string;
+  remarks?: string;
+  latitude?: number;
+  longitude?: number;
+}
+// This interface is for the SAVE payload, which the backend expects as camelCase
+export interface TreeResultPayload {
   fileName: string;
   metrics: Metrics;
   species?: SpeciesInfo;
@@ -31,7 +46,7 @@ const getAuthHeaders = (token: string) => ({
   'Authorization': `Bearer ${token}`,
 });
 
-// --- NEW: Database API Functions ---
+// --- Database API Functions ---
 
 export const getResults = async (token: string): Promise<TreeResult[]> => {
   const response = await fetch(`${API_BASE_URL}/api/results`, {
@@ -45,7 +60,8 @@ export const getResults = async (token: string): Promise<TreeResult[]> => {
   return response.json();
 };
 
-export const saveResult = async (resultData: Omit<TreeResult, 'id' | 'created_at' | 'user_id'>, token: string): Promise<any> => {
+// --- MODIFIED: saveResult now uses the specific TreeResultPayload type ---
+export const saveResult = async (resultData: TreeResultPayload, token: string): Promise<any> => {
   const response = await fetch(`${API_BASE_URL}/api/results`, {
     method: 'POST',
     headers: getAuthHeaders(token),
@@ -59,7 +75,7 @@ export const saveResult = async (resultData: Omit<TreeResult, 'id' | 'created_at
 };
 
 export const deleteResult = async (resultId: string, token: string): Promise<any> => {
-  const response = await fetch(`${API_BASE_URL}/api/results/${resultId}`, {
+  const response = await fetch(`${API_BSE_URL}/api/results/${resultId}`, {
     method: 'DELETE',
     headers: getAuthHeaders(token),
   });

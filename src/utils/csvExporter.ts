@@ -1,23 +1,7 @@
 // src/utils/csvExporter.ts
 
-import { Metrics, SpeciesInfo, WoodDensityInfo } from '../apiService';
-
-// This interface is now aligned with the database schema from apiService.ts
-export interface TreeResult {
-  id: string;
-  created_at: string;
-  user_id: string;
-  fileName: string;
-  metrics: Metrics;
-  species?: SpeciesInfo;
-  woodDensity?: WoodDensityInfo;
-  co2_sequestered_kg?: number;
-  condition?: string;
-  ownership?: string;
-  remarks?: string;
-  latitude?: number;
-  longitude?: number;
-}
+// --- MODIFIED: Import TreeResult from the single source of truth ---
+import { TreeResult } from '../apiService';
 
 export function downloadResultsAsCSV(results: TreeResult[]): void {
   if (results.length === 0) {
@@ -34,19 +18,20 @@ export function downloadResultsAsCSV(results: TreeResult[]): void {
     'Latitude', 'Longitude'
   ];
   
+  // --- MODIFIED: Use snake_case properties to match the API response ---
   const rows = results.map(result => [
     `"${result.id}"`,
     `"${new Date(result.created_at).toLocaleString()}"`,
-    `"${result.fileName.replace(/"/g, '""')}"`,
+    `"${result.file_name.replace(/"/g, '""')}"`, // WAS: fileName
     `"${result.species?.scientificName ?? 'N/A'}"`,
     `"${result.species?.commonNames.join(', ') ?? 'N/A'}"`,
     result.species ? (result.species.score * 100).toFixed(1) : 'N/A',
     result.metrics.height_m.toFixed(2),
     result.metrics.canopy_m.toFixed(2),
     result.metrics.dbh_cm.toFixed(2),
-    result.woodDensity ? result.woodDensity.value.toFixed(2) : 'N/A',
-    `"${result.woodDensity?.sourceRegion ?? 'N/A'}"`,
-    result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : 'N/A',
+    result.wood_density ? result.wood_density.value.toFixed(2) : 'N/A', // WAS: woodDensity
+    `"${result.wood_density?.sourceRegion ?? 'N/A'}"`, // WAS: woodDensity
+    result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : 'N/A', // WAS: co2_sequestered_kg
     `"${result.condition ?? 'N/A'}"`,
     `"${result.ownership ?? 'N/A'}"`,
     `"${(result.remarks ?? 'N/A').replace(/"/g, '""')}"`,
