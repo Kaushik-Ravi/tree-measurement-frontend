@@ -5,7 +5,7 @@ import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
   Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload,
-  getResults, saveResult, deleteResult, updateResult // MODIFIED: Imported updateResult
+  getResults, saveResult, deleteResult, updateResult
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -164,7 +164,21 @@ function App() {
             setCurrentLocation({ lat: parseFloat(latDescription), lng: parseFloat(lngDescription) });
           }
 
-          const focalLengthValue = tags['FocalLengthIn35mmFilm']?.value;
+          // --- MODIFIED BLOCK: Type-Safe and Robust Focal Length Detection ---
+          let focalLengthValue: number | null = null;
+          const focalLengthIn35mm = tags['FocalLengthIn35mmFilm']?.value;
+          const rawFocalLength = tags['FocalLength']?.value;
+          const scaleFactor35 = tags['ScaleFactor35efl']?.value;
+          
+          // Attempt 1: The ideal, pre-calculated tag (ensuring it's a number)
+          if (typeof focalLengthIn35mm === 'number') {
+            focalLengthValue = focalLengthIn35mm;
+          // Attempt 2: Calculate from raw focal length and scale factor (ensuring both are numbers)
+          } else if (typeof rawFocalLength === 'number' && typeof scaleFactor35 === 'number') {
+            focalLengthValue = rawFocalLength * scaleFactor35;
+          }
+          // --- END MODIFIED BLOCK ---
+
           setOriginalImageSrc(objectURL);
           setResultImageSrc(objectURL);
           
@@ -225,7 +239,6 @@ function App() {
     setEditingResult(resultToEdit);
   };
   
-  // --- MODIFIED: Implemented the full update logic ---
   const handleUpdateResult = async (updatedData: AdditionalData, updatedLocation: LocationData) => {
     if (!editingResult || !session?.access_token) {
       setErrorMessage("Cannot update: missing data or not logged in.");
@@ -241,13 +254,11 @@ function App() {
     try {
       const updatedResult = await updateResult(editingResult.id, payload, session.access_token);
       setAllResults(prev => prev.map(r => (r.id === updatedResult.id ? updatedResult : r)));
-      setEditingResult(null); // Close modal on success
+      setEditingResult(null);
     } catch (error: any) {
       setErrorMessage(`Failed to update result: ${error.message}`);
-      // Keep modal open to show the error if desired, or handle differently
     }
   };
-  // --- END MODIFIED BLOCK ---
 
   const handleMeasurementSuccess = (metrics: Metrics) => { setCurrentMetrics(metrics); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Measurement complete. Review the results below."); };
   
