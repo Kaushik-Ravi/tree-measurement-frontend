@@ -9,23 +9,21 @@ export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: s
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
 
-// --- MODIFIED: TreeResult interface to match backend snake_case ---
 export interface TreeResult {
   id: string;
   created_at: string;
   user_id: string;
-  file_name: string; // Changed from fileName
+  file_name: string;
   metrics: Metrics;
   species?: SpeciesInfo;
-  wood_density?: WoodDensityInfo; // Changed from woodDensity
-  co2_sequestered_kg?: number; // Changed from co2_sequestered_kg
+  wood_density?: WoodDensityInfo;
+  co2_sequestered_kg?: number;
   condition?: string;
   ownership?: string;
   remarks?: string;
   latitude?: number;
   longitude?: number;
 }
-// This interface is for the SAVE payload, which the backend expects as camelCase
 export interface TreeResultPayload {
   fileName: string;
   metrics: Metrics;
@@ -39,8 +37,16 @@ export interface TreeResultPayload {
   longitude?: number;
 }
 
+// --- NEW: Interface for the update payload ---
+export interface UpdateTreeResultPayload {
+    condition?: string;
+    ownership?: string;
+    remarks?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+}
 
-// --- NEW: Helper to get auth headers ---
+
 const getAuthHeaders = (token: string) => ({
   'Content-Type': 'application/json',
   'Authorization': `Bearer ${token}`,
@@ -60,7 +66,6 @@ export const getResults = async (token: string): Promise<TreeResult[]> => {
   return response.json();
 };
 
-// --- MODIFIED: saveResult now uses the specific TreeResultPayload type ---
 export const saveResult = async (resultData: TreeResultPayload, token: string): Promise<any> => {
   const response = await fetch(`${API_BASE_URL}/api/results`, {
     method: 'POST',
@@ -74,8 +79,22 @@ export const saveResult = async (resultData: TreeResultPayload, token: string): 
   return response.json();
 };
 
+// --- NEW: Function to update a result ---
+export const updateResult = async (resultId: string, updateData: UpdateTreeResultPayload, token: string): Promise<TreeResult> => {
+    const response = await fetch(`${API_BASE_URL}/api/results/${resultId}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(token),
+        body: JSON.stringify(updateData),
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+        throw new Error(errorData.detail || `API error! status: ${response.status}`);
+    }
+    return response.json();
+};
+
 export const deleteResult = async (resultId: string, token: string): Promise<any> => {
-  const response = await fetch(`${API_BSE_URL}/api/results/${resultId}`, {
+  const response = await fetch(`${API_BASE_URL}/api/results/${resultId}`, {
     method: 'DELETE',
     headers: getAuthHeaders(token),
   });

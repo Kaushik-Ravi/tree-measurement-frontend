@@ -1,17 +1,18 @@
 // src/components/ResultsTable.tsx
 import React, { useState, useMemo } from 'react';
-import { Download, LayoutList, Trash2, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Download, LayoutList, Trash2, ChevronUp, ChevronDown, Edit } from 'lucide-react'; // MODIFIED: Imported Edit icon
 import { downloadResultsAsCSV } from '../utils/csvExporter';
-import { TreeResult, Metrics } from '../apiService'; // <-- MODIFIED: Import TreeResult from apiService
+import { TreeResult, Metrics } from '../apiService';
 
 type SortableKeys = keyof Metrics | 'file_name' | 'species' | 'wood_density' | 'co2' | 'condition' | 'ownership' | 'location';
 
 interface ResultsTableProps {
   results: TreeResult[];
   onDeleteResult: (id: string) => void;
+  onEditResult: (result: TreeResult) => void; // MODIFIED: Added onEditResult prop
 }
 
-export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
+export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) { // MODIFIED: Destructured onEditResult
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'created_at' as any, direction: 'descending' });
 
   const sortedResults = useMemo(() => {
@@ -21,7 +22,6 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
         let aValue: string | number | Date;
         let bValue: string | number | Date;
         
-        // --- MODIFIED: Use snake_case properties for sorting ---
         if (sortConfig.key === 'file_name') { aValue = a.file_name.toLowerCase(); bValue = b.file_name.toLowerCase(); }
         else if (sortConfig.key === 'species') { aValue = a.species?.scientificName.toLowerCase() ?? ''; bValue = b.species?.scientificName.toLowerCase() ?? ''; }
         else if (sortConfig.key === 'wood_density') { aValue = a.wood_density?.value ?? -1; bValue = b.wood_density?.value ?? -1; }
@@ -31,7 +31,6 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
         else if (sortConfig.key === 'location') { aValue = a.latitude ?? -91; bValue = b.latitude ?? -91; }
         else if (sortConfig.key === ('created_at' as any)) { aValue = new Date(a.created_at); bValue = new Date(b.created_at); }
         else { aValue = a.metrics[sortConfig.key as keyof Metrics]; bValue = b.metrics[sortConfig.key as keyof Metrics]; }
-        // --- END MODIFIED BLOCK ---
 
         if (aValue < bValue) { return sortConfig.direction === 'ascending' ? -1 : 1; }
         if (aValue > bValue) { return sortConfig.direction === 'ascending' ? 1 : -1; }
@@ -80,13 +79,12 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('ownership')} className="flex items-center gap-1">Ownership {getSortIcon('ownership')}</button></th>
               <th scope="col" className="px-4 py-3 text-right"><button onClick={() => requestSort('co2')} className="flex items-center gap-1 w-full justify-end">CO₂ (kg) {getSortIcon('co2')}</button></th>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('location')} className="flex items-center gap-1">Location {getSortIcon('location')}</button></th>
-              <th scope="col" className="px-4 py-3 text-center">Actions</th>
+              <th scope="col" className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="md:divide-y md:divide-gray-200">
             {sortedResults.map((result) => (
               <tr key={result.id} className="md:hover:bg-gray-50">
-                {/* --- MODIFIED: Use snake_case property for display --- */}
                 <td data-label="File" className="px-4 py-3 font-medium text-gray-900"><span className="truncate">{result.file_name}</span></td>
                 <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic"><span className="truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
                 <td data-label="Condition" className="px-4 py-3 text-gray-600"><span>{result.condition || <span className="text-gray-400">N/A</span>}</span></td>
@@ -101,7 +99,18 @@ export function ResultsTable({ results, onDeleteResult }: ResultsTableProps) {
                       ) : <span className="text-gray-400">N/A</span>}
                     </span>
                 </td>
-                <td data-label="Actions" className="px-4 py-3"><button onClick={() => onDeleteResult(result.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-md"><Trash2 className="w-5 h-5" /></button></td>
+                {/* --- MODIFIED BLOCK --- */}
+                <td data-label="Actions" className="px-4 py-3">
+                  <div className="flex justify-end items-center gap-2">
+                    <button onClick={() => onEditResult(result)} className="p-1 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result">
+                        <Edit className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => onDeleteResult(result.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-md" aria-label="Delete result">
+                        <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </td>
+                {/* --- END MODIFIED BLOCK --- */}
               </tr>
             ))}
           </tbody>

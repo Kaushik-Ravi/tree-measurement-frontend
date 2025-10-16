@@ -1,11 +1,11 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2 } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
-  Point, Metrics, IdentificationResponse, TreeResult,
-  getResults, saveResult, deleteResult
+  Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload,
+  getResults, saveResult, deleteResult, updateResult // MODIFIED: Imported updateResult
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -15,6 +15,7 @@ import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDe
 import { LocationPicker } from './components/LocationPicker';
 import { InstructionToast } from './components/InstructionToast';
 import { useAuth } from './contexts/AuthContext';
+import { EditResultModal } from './components/EditResultModal'; 
 
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
@@ -104,6 +105,8 @@ function App() {
 
   const [allResults, setAllResults] = useState<TreeResult[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  
+  const [editingResult, setEditingResult] = useState<TreeResult | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -218,6 +221,34 @@ function App() {
     }
   };
 
+  const handleOpenEditModal = (resultToEdit: TreeResult) => {
+    setEditingResult(resultToEdit);
+  };
+  
+  // --- MODIFIED: Implemented the full update logic ---
+  const handleUpdateResult = async (updatedData: AdditionalData, updatedLocation: LocationData) => {
+    if (!editingResult || !session?.access_token) {
+      setErrorMessage("Cannot update: missing data or not logged in.");
+      return;
+    }
+    
+    const payload: UpdateTreeResultPayload = {
+      ...updatedData,
+      latitude: updatedLocation?.lat,
+      longitude: updatedLocation?.lng,
+    };
+
+    try {
+      const updatedResult = await updateResult(editingResult.id, payload, session.access_token);
+      setAllResults(prev => prev.map(r => (r.id === updatedResult.id ? updatedResult : r)));
+      setEditingResult(null); // Close modal on success
+    } catch (error: any) {
+      setErrorMessage(`Failed to update result: ${error.message}`);
+      // Keep modal open to show the error if desired, or handle differently
+    }
+  };
+  // --- END MODIFIED BLOCK ---
+
   const handleMeasurementSuccess = (metrics: Metrics) => { setCurrentMetrics(metrics); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Measurement complete. Review the results below."); };
   
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -318,6 +349,14 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
+      {editingResult && (
+        <EditResultModal
+          result={editingResult}
+          onClose={() => setEditingResult(null)}
+          onSave={handleUpdateResult}
+        />
+      )}
+      
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
@@ -346,7 +385,6 @@ function App() {
             ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}
           `}
         >
-          {/* --- MODIFIED BLOCK --- */}
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
             {hasActiveMeasurement ? (
               <>
@@ -360,16 +398,12 @@ function App() {
               </div>
             )}
           </div>
-          {/* --- END MODIFIED BLOCK --- */}
-
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
-            {/* --- MODIFIED BLOCK --- */}
             <div className="hidden md:flex justify-between items-center mb-6">
               <div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div>
               <AuthComponent />
             </div>
-            {/* --- END MODIFIED BLOCK --- */}
 
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
             {(appStatus === 'PROCESSING' || isCO2Calculating || isHistoryLoading) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ (isCO2Calculating || isHistoryLoading) && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : 'Calculating CO₂...'}</p>}</div> )}
@@ -444,7 +478,11 @@ function App() {
             )}
             
             <div className="border-t border-gray-200 mt-6 pt-6">
-              <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} />
+              <ResultsTable 
+                results={allResults} 
+                onDeleteResult={handleDeleteResult}
+                onEditResult={handleOpenEditModal}
+              />
               {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear All History</button></div>)}
             </div>
           </div>
