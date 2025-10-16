@@ -1,6 +1,5 @@
 // src/utils/csvExporter.ts
 
-// --- MODIFIED: Import TreeResult from the single source of truth ---
 import { TreeResult } from '../apiService';
 
 export function downloadResultsAsCSV(results: TreeResult[]): void {
@@ -10,28 +9,31 @@ export function downloadResultsAsCSV(results: TreeResult[]): void {
   }
 
   const headers = [
-    'ID', 'Date Created', 'File Name', 'Species', 'Common Names', 'Confidence Score', 
-    'Height (m)', 'Canopy (m)', 'DBH (cm)', 
+    'ID', 'Date Created', 'File Name', 'Image URL', 'Species', 'Common Names', 'Confidence Score', 
+    'Height (m)', 'Canopy (m)', 'DBH (cm)', 'Distance (m)',
     'Wood Density (g/cm^3)', 'Wood Density Source Region',
     'CO2 Sequestered (kg)',
     'Condition', 'Ownership', 'Remarks',
     'Latitude', 'Longitude'
   ];
   
-  // --- MODIFIED: Use snake_case properties to match the API response ---
   const rows = results.map(result => [
     `"${result.id}"`,
     `"${new Date(result.created_at).toLocaleString()}"`,
-    `"${result.file_name.replace(/"/g, '""')}"`, // WAS: fileName
+    `"${result.file_name.replace(/"/g, '""')}"`,
+    `"${result.image_url ?? 'N/A'}"`,
     `"${result.species?.scientificName ?? 'N/A'}"`,
     `"${result.species?.commonNames.join(', ') ?? 'N/A'}"`,
     result.species ? (result.species.score * 100).toFixed(1) : 'N/A',
     result.metrics.height_m.toFixed(2),
     result.metrics.canopy_m.toFixed(2),
     result.metrics.dbh_cm.toFixed(2),
-    result.wood_density ? result.wood_density.value.toFixed(2) : 'N/A', // WAS: woodDensity
-    `"${result.wood_density?.sourceRegion ?? 'N/A'}"`, // WAS: woodDensity
-    result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : 'N/A', // WAS: co2_sequestered_kg
+    // --- MODIFIED: Added distance_m to the export ---
+    result.distance_m ? result.distance_m.toFixed(2) : 'N/A',
+    // --- END MODIFIED BLOCK ---
+    result.wood_density ? result.wood_density.value.toFixed(2) : 'N/A',
+    `"${result.wood_density?.sourceRegion ?? 'N/A'}"`,
+    result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : 'N/A',
     `"${result.condition ?? 'N/A'}"`,
     `"${result.ownership ?? 'N/A'}"`,
     `"${(result.remarks ?? 'N/A').replace(/"/g, '""')}"`,
