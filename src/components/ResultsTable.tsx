@@ -1,6 +1,6 @@
 // src/components/ResultsTable.tsx
 import React, { useState, useMemo } from 'react';
-import { Download, LayoutList, Trash2, ChevronUp, ChevronDown, Edit } from 'lucide-react'; // MODIFIED: Imported Edit icon
+import { Download, LayoutList, Trash2, ChevronUp, ChevronDown, Edit, ImageIcon } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
 import { TreeResult, Metrics } from '../apiService';
 
@@ -9,10 +9,10 @@ type SortableKeys = keyof Metrics | 'file_name' | 'species' | 'wood_density' | '
 interface ResultsTableProps {
   results: TreeResult[];
   onDeleteResult: (id: string) => void;
-  onEditResult: (result: TreeResult) => void; // MODIFIED: Added onEditResult prop
+  onEditResult: (result: TreeResult) => void;
 }
 
-export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) { // MODIFIED: Destructured onEditResult
+export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
   const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'created_at' as any, direction: 'descending' });
 
   const sortedResults = useMemo(() => {
@@ -73,10 +73,11 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         <table className="min-w-full text-sm mobile-cards-table">
           <thead className="hidden md:table-header-group bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
             <tr>
+              {/* --- MODIFIED: Added Image column header --- */}
+              <th scope="col" className="px-4 py-3 text-left">Image</th>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('file_name')} className="flex items-center gap-1">File Name {getSortIcon('file_name')}</button></th>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('species')} className="flex items-center gap-1">Species {getSortIcon('species')}</button></th>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('condition')} className="flex items-center gap-1">Condition {getSortIcon('condition')}</button></th>
-              <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('ownership')} className="flex items-center gap-1">Ownership {getSortIcon('ownership')}</button></th>
               <th scope="col" className="px-4 py-3 text-right"><button onClick={() => requestSort('co2')} className="flex items-center gap-1 w-full justify-end">CO₂ (kg) {getSortIcon('co2')}</button></th>
               <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('location')} className="flex items-center gap-1">Location {getSortIcon('location')}</button></th>
               <th scope="col" className="px-4 py-3 text-right">Actions</th>
@@ -85,10 +86,27 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
           <tbody className="md:divide-y md:divide-gray-200">
             {sortedResults.map((result) => (
               <tr key={result.id} className="md:hover:bg-gray-50">
+                {/* --- MODIFIED: Added Image data cell --- */}
+                <td data-label="Image" className="px-4 py-3">
+                  <div className="flex items-center justify-center md:justify-start">
+                    {result.image_url ? (
+                      <a href={result.image_url} target="_blank" rel="noopener noreferrer">
+                        <img 
+                          src={result.image_url} 
+                          alt={`Thumbnail for ${result.file_name}`} 
+                          className="h-12 w-12 object-cover rounded-md bg-gray-100 shadow-sm hover:scale-105 transition-transform"
+                        />
+                      </a>
+                    ) : (
+                      <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400">
+                        <ImageIcon className="w-6 h-6" />
+                      </div>
+                    )}
+                  </div>
+                </td>
                 <td data-label="File" className="px-4 py-3 font-medium text-gray-900"><span className="truncate">{result.file_name}</span></td>
                 <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic"><span className="truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
                 <td data-label="Condition" className="px-4 py-3 text-gray-600"><span>{result.condition || <span className="text-gray-400">N/A</span>}</span></td>
-                <td data-label="Ownership" className="px-4 py-3 text-gray-600"><span>{result.ownership || <span className="text-gray-400">N/A</span>}</span></td>
                 <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono font-semibold text-sky-800"><span>{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</span></td>
                 <td data-label="Location" className="px-4 py-3 font-mono">
                     <span>
@@ -99,7 +117,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                       ) : <span className="text-gray-400">N/A</span>}
                     </span>
                 </td>
-                {/* --- MODIFIED BLOCK --- */}
                 <td data-label="Actions" className="px-4 py-3">
                   <div className="flex justify-end items-center gap-2">
                     <button onClick={() => onEditResult(result)} className="p-1 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result">
@@ -110,7 +127,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     </button>
                   </div>
                 </td>
-                {/* --- END MODIFIED BLOCK --- */}
               </tr>
             ))}
           </tbody>

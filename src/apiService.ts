@@ -9,6 +9,7 @@ export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: s
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
 
+// --- MODIFIED: Interfaces updated with new fields ---
 export interface TreeResult {
   id: string;
   created_at: string;
@@ -23,6 +24,8 @@ export interface TreeResult {
   remarks?: string;
   latitude?: number;
   longitude?: number;
+  image_url?: string; // Added
+  distance_m?: number; // Added
 }
 export interface TreeResultPayload {
   fileName: string;
@@ -35,9 +38,11 @@ export interface TreeResultPayload {
   remarks?: string;
   latitude?: number;
   longitude?: number;
+  image_url?: string; // Added
+  distance_m?: number; // Added
 }
+// --- END MODIFIED BLOCK ---
 
-// --- NEW: Interface for the update payload ---
 export interface UpdateTreeResultPayload {
     condition?: string;
     ownership?: string;
@@ -47,12 +52,37 @@ export interface UpdateTreeResultPayload {
 }
 
 
-const getAuthHeaders = (token: string) => ({
-  'Content-Type': 'application/json',
-  'Authorization': `Bearer ${token}`,
-});
+const getAuthHeaders = (token: string, contentType: string = 'application/json') => {
+  const headers: HeadersInit = {
+    'Authorization': `Bearer ${token}`,
+  };
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+  return headers;
+};
 
-// --- Database API Functions ---
+// --- Database & Upload API Functions ---
+
+// --- NEW: Function to handle image upload to our secure backend endpoint ---
+export const uploadImage = async (imageFile: File, token: string): Promise<{ image_url: string }> => {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+
+  const response = await fetch(`${API_BASE_URL}/api/upload-image`, {
+    method: 'POST',
+    // Note: We don't set Content-Type for FormData; the browser does it correctly with the boundary.
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred during upload.' }));
+    throw new Error(errorData.detail || `Image upload API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+// --- END NEW BLOCK ---
 
 export const getResults = async (token: string): Promise<TreeResult[]> => {
   const response = await fetch(`${API_BASE_URL}/api/results`, {
@@ -79,7 +109,6 @@ export const saveResult = async (resultData: TreeResultPayload, token: string): 
   return response.json();
 };
 
-// --- NEW: Function to update a result ---
 export const updateResult = async (resultId: string, updateData: UpdateTreeResultPayload, token: string): Promise<TreeResult> => {
     const response = await fetch(`${API_BASE_URL}/api/results/${resultId}`, {
         method: 'PATCH',
@@ -90,7 +119,8 @@ export const updateResult = async (resultId: string, updateData: UpdateTreeResul
         const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
         throw new Error(errorData.detail || `API error! status: ${response.status}`);
     }
-    return response.json();
+    const responseData = await response.json();
+    return responseData.data; // The PATCH endpoint returns { status: 'success', data: {...} }
 };
 
 export const deleteResult = async (resultId: string, token: string): Promise<any> => {

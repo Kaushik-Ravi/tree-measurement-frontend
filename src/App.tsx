@@ -5,7 +5,7 @@ import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
   Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload,
-  getResults, saveResult, deleteResult, updateResult
+  getResults, saveResult, deleteResult, updateResult, uploadImage
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -17,7 +17,7 @@ import { InstructionToast } from './components/InstructionToast';
 import { useAuth } from './contexts/AuthContext';
 import { EditResultModal } from './components/EditResultModal'; 
 
-type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
+type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'SAVING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
 
@@ -163,21 +163,17 @@ function App() {
           } else if (typeof latDescription === 'string' && typeof lngDescription === 'string') {
             setCurrentLocation({ lat: parseFloat(latDescription), lng: parseFloat(lngDescription) });
           }
-
-          // --- MODIFIED BLOCK: Type-Safe and Robust Focal Length Detection ---
+          
           let focalLengthValue: number | null = null;
           const focalLengthIn35mm = tags['FocalLengthIn35mmFilm']?.value;
           const rawFocalLength = tags['FocalLength']?.value;
           const scaleFactor35 = tags['ScaleFactor35efl']?.value;
           
-          // Attempt 1: The ideal, pre-calculated tag (ensuring it's a number)
           if (typeof focalLengthIn35mm === 'number') {
             focalLengthValue = focalLengthIn35mm;
-          // Attempt 2: Calculate from raw focal length and scale factor (ensuring both are numbers)
           } else if (typeof rawFocalLength === 'number' && typeof scaleFactor35 === 'number') {
             focalLengthValue = rawFocalLength * scaleFactor35;
           }
-          // --- END MODIFIED BLOCK ---
 
           setOriginalImageSrc(objectURL);
           setResultImageSrc(objectURL);
@@ -252,9 +248,11 @@ function App() {
     };
 
     try {
+      // --- MODIFIED: This is the corrected logic ---
       const updatedResult = await updateResult(editingResult.id, payload, session.access_token);
       setAllResults(prev => prev.map(r => (r.id === updatedResult.id ? updatedResult : r)));
       setEditingResult(null);
+      // --- END MODIFIED BLOCK ---
     } catch (error: any) {
       setErrorMessage(`Failed to update result: ${error.message}`);
     }
@@ -311,16 +309,43 @@ function App() {
   const handleCalculateManual = async () => { try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
   const handleSaveResult = async () => {
-    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) { setErrorMessage("Cannot save: missing data or not logged in."); return; }
-    const newResult = {
-      fileName: currentMeasurementFile.name, metrics: currentMetrics, species: currentIdentification?.bestMatch ?? undefined, woodDensity: currentIdentification?.woodDensity ?? undefined,
-      co2_sequestered_kg: currentCO2 ?? undefined, latitude: currentLocation?.lat, longitude: currentLocation?.lng, ...additionalData,
-    };
+    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) {
+      setErrorMessage("Cannot save: missing data or not logged in.");
+      return;
+    }
+
+    setAppStatus('SAVING');
+    setInstructionText("Uploading image and saving results...");
+    setIsPanelOpen(true);
+
     try {
-      await saveResult(newResult, session.access_token);
+      const uploadResponse = await uploadImage(currentMeasurementFile, session.access_token);
+      const imageUrl = uploadResponse.image_url;
+
+      const newResultPayload = {
+        fileName: currentMeasurementFile.name,
+        metrics: currentMetrics,
+        species: currentIdentification?.bestMatch ?? undefined,
+        woodDensity: currentIdentification?.woodDensity ?? undefined,
+        co2_sequestered_kg: currentCO2 ?? undefined,
+        latitude: currentLocation?.lat,
+        longitude: currentLocation?.lng,
+        image_url: imageUrl,
+        distance_m: parseFloat(distance),
+        ...additionalData,
+      };
+
+      await saveResult(newResultPayload, session.access_token);
+      
       const updatedResults = await getResults(session.access_token);
-      setAllResults(updatedResults); softReset();
-    } catch (error: any) { setErrorMessage(`Failed to save result: ${error.message}`); }
+      setAllResults(updatedResults);
+      softReset();
+
+    } catch (error: any) {
+      setErrorMessage(`Failed to save result: ${error.message}`);
+      setAppStatus('AUTO_RESULT_SHOWN');
+      setInstructionText("An error occurred. Please try saving again.");
+    }
   };
 
   const softReset = () => { setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; };
@@ -357,6 +382,7 @@ function App() {
   if (!user) { return <LoginPrompt />; }
 
   const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
+  const isBusy = appStatus === 'PROCESSING' || appStatus === 'SAVING' || isCO2Calculating || isHistoryLoading;
 
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
@@ -417,7 +443,7 @@ function App() {
             </div>
 
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
-            {(appStatus === 'PROCESSING' || isCO2Calculating || isHistoryLoading) && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ (isCO2Calculating || isHistoryLoading) && <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : 'Calculating CO₂...'}</p>}</div> )}
+            {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'SAVING' ? 'Saving result...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
             
             {appStatus !== 'AUTO_RESULT_SHOWN' && (
               <div className="space-y-4">
