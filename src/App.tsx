@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, Compass } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -21,6 +21,12 @@ type AppMode = 'SELECT_MODE' | 'QUICK_CAPTURE' | 'FULL_ANALYSIS';
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'SAVING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
+type SensorStatus = 'PENDING' | 'GRANTED' | 'DENIED';
+type PrerequisiteStatus = {
+  location: SensorStatus;
+  compass: SensorStatus;
+};
+
 
 const isManualMode = (status: AppStatus) => status.startsWith('MANUAL_');
 const CAMERA_FOV_RATIO_KEY = 'treeMeasurementFovRatio';
@@ -110,7 +116,7 @@ function App() {
   
   const [editingResult, setEditingResult] = useState<TreeResult | null>(null);
 
-  const [geoPermissionStatus, setGeoPermissionStatus] = useState<'IDLE' | 'PENDING' | 'GRANTED' | 'DENIED'>('IDLE');
+  const [prereqStatus, setPrereqStatus] = useState<PrerequisiteStatus>({ location: 'PENDING', compass: 'PENDING' });
   const [userGeoLocation, setUserGeoLocation] = useState<LocationData>(null);
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
 
@@ -120,34 +126,79 @@ function App() {
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
-  
+
+  // Effect for pre-flight checks on the mode selection screen
   useEffect(() => {
-    if (appMode !== 'QUICK_CAPTURE') return;
+    if (appMode !== 'SELECT_MODE') return;
   
-    const handleOrientation = (event: DeviceOrientationEvent) => {
-      if (event.alpha !== null) { setDeviceHeading(event.alpha); }
+    // --- Location Check ---
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserGeoLocation(userLoc);
+        setCurrentLocation(userLoc);
+        setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  
+    // --- Compass Check ---
+    const handleInitialOrientation = (event: DeviceOrientationEvent) => {
+      if (event.alpha !== null) {
+        setPrereqStatus(prev => ({ ...prev, compass: 'GRANTED' }));
+        window.removeEventListener('deviceorientation', handleInitialOrientation, true);
+      }
     };
   
+    const requestAndListen = () => {
+        window.addEventListener('deviceorientation', handleInitialOrientation, true);
+        setTimeout(() => {
+            setPrereqStatus(prev => prev.compass === 'GRANTED' ? prev : { ...prev, compass: 'DENIED' });
+        }, 3000);
+    };
+
     // @ts-ignore
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       // @ts-ignore
       DeviceOrientationEvent.requestPermission()
         .then((permissionState: string) => {
           if (permissionState === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation, true);
+            requestAndListen();
           } else {
-            setErrorMessage("Compass access is required for Quick Capture. Please enable it in your device settings.");
+            setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
           }
         })
-        .catch(console.error);
+        .catch((err: any) => {
+            console.error("Compass permission error:", err);
+            setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
+        });
     } else {
-      window.addEventListener('deviceorientation', handleOrientation, true);
+      requestAndListen();
     }
-  
-    return () => {
-      window.removeEventListener('deviceorientation', handleOrientation, true);
-    };
   }, [appMode]);
+
+  // Effect for live compass updates during Quick Capture
+  useEffect(() => {
+    if (appMode !== 'QUICK_CAPTURE' || prereqStatus.compass !== 'GRANTED') {
+      return;
+    }
+
+    const handleLiveOrientation = (event: DeviceOrientationEvent) => {
+      if (event.alpha !== null) {
+        setDeviceHeading(event.alpha);
+      }
+    };
+    window.addEventListener('deviceorientation', handleLiveOrientation, true);
+    
+    return () => {
+      window.removeEventListener('deviceorientation', handleLiveOrientation, true);
+    };
+  }, [appMode, prereqStatus.compass]);
+
 
   useEffect(() => {
     const fetchUserResults = async () => {
@@ -248,26 +299,10 @@ function App() {
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
   const handleModeSelect = (mode: AppMode) => {
-    setInstructionText("Waiting for location permission...");
-    setGeoPermissionStatus('PENDING');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setUserGeoLocation(userLoc);
-        setCurrentLocation(userLoc); 
-        setGeoPermissionStatus('GRANTED');
-        setAppMode(mode);
-        setAppStatus('IDLE');
-        setIsPanelOpen(true);
-        setInstructionText(mode === 'QUICK_CAPTURE' ? 'Ready for Quick Capture. Upload an image and enter the distance.' : 'Ready for Full Analysis. Upload an image to start.');
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        setGeoPermissionStatus('DENIED');
-        setErrorMessage("Location access is required to use this application. Please enable it in your browser settings.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    setAppMode(mode);
+    setAppStatus('IDLE');
+    setIsPanelOpen(true);
+    setInstructionText(mode === 'QUICK_CAPTURE' ? 'Ready for Quick Capture. Upload an image and enter the distance.' : 'Ready for Full Analysis. Upload an image to start.');
   };
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
@@ -414,6 +449,7 @@ function App() {
   };
 
   const handleQuickCaptureSubmit = async () => {
+    console.log('Submitting with heading:', deviceHeading); // DIAGNOSTIC LOG
     if (!currentMeasurementFile || !distance || !userGeoLocation || !session?.access_token) {
       setErrorMessage("Missing required data: image, distance, or location.");
       return;
@@ -472,16 +508,17 @@ function App() {
     setDbhGuideRect(null);
     setPendingTreeFile(null);
     setImageDimensions(null);
-    setDeviceHeading(null);
+    // Do not reset deviceHeading here, keep the last known value
     setIsPanelOpen(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   
   const handleReturnToModeSelect = () => {
     softReset('SELECT_MODE');
-    setGeoPermissionStatus('IDLE');
+    setPrereqStatus({ location: 'PENDING', compass: 'PENDING' });
     setUserGeoLocation(null);
     setCurrentLocation(null);
+    setDeviceHeading(null);
     setInstructionText("Welcome! Please select a measurement mode to begin.");
   };
 
@@ -508,24 +545,41 @@ function App() {
   const hasActiveMeasurement = (appMode === 'FULL_ANALYSIS' || appMode === 'QUICK_CAPTURE') && appStatus !== 'IDLE' && currentMeasurementFile;
   const isBusy = appStatus === 'PROCESSING' || appStatus === 'SAVING' || isCO2Calculating || isHistoryLoading;
 
+  const PrereqCheckItem = ({ name, status, errorText }: { name: string, status: SensorStatus, errorText: string }) => {
+    return (
+      <div className="flex items-center gap-3">
+        {status === 'PENDING' && <Loader2 className="animate-spin w-5 h-5 text-gray-400" />}
+        {status === 'GRANTED' && <CheckCircle className="w-5 h-5 text-green-600" />}
+        {status === 'DENIED' && <XCircle className="w-5 h-5 text-red-600" />}
+        <div>
+          <p className={`font-medium ${status === 'DENIED' ? 'text-red-700' : 'text-gray-700'}`}>{name}</p>
+          {status === 'DENIED' && <p className="text-xs text-red-600">{errorText}</p>}
+        </div>
+      </div>
+    );
+  };
+
   const ModeSelectionScreen = () => (
     <div className="w-full h-full flex flex-col justify-center items-center p-4 md:p-8">
       <div className="text-center max-w-2xl">
         <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Choose Your Workflow</h2>
-        <p className="mt-2 text-gray-600">Select the best method for your needs.</p>
+        <p className="mt-2 text-gray-600">First, let's ensure your device is ready.</p>
       </div>
-      
-      {geoPermissionStatus === 'PENDING' && ( <div className="mt-8 flex items-center gap-3 text-gray-500"> <Loader2 className="animate-spin w-5 h-5" /> <span>Accessing your location...</span> </div> )}
-      {geoPermissionStatus === 'DENIED' && ( <div className="mt-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg max-w-md text-center"> <div className="flex items-center justify-center gap-2 font-bold"><AlertTriangle size={20}/>Location Access Denied</div> <p className="text-sm mt-1">{errorMessage}</p> </div> )}
+
+      <div className="mt-8 p-6 bg-white border border-gray-200 rounded-lg w-full max-w-md space-y-4">
+        <h3 className="font-semibold text-gray-800">System Prerequisites</h3>
+        <PrereqCheckItem name="Location Access" status={prereqStatus.location} errorText="Location is required. Please enable it in browser settings." />
+        <PrereqCheckItem name="Compass Sensor" status={prereqStatus.compass} errorText="Compass is needed for Quick Capture. Please enable permissions and point your device towards the tree." />
+      </div>
 
       <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
-        <button onClick={() => handleModeSelect('QUICK_CAPTURE')} disabled={geoPermissionStatus === 'PENDING' || geoPermissionStatus === 'DENIED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onClick={() => handleModeSelect('QUICK_CAPTURE')} disabled={prereqStatus.location !== 'GRANTED' || prereqStatus.compass !== 'GRANTED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
           <div className="flex items-center gap-4">
             <div className="bg-blue-100 p-3 rounded-full group-hover:bg-blue-500 transition-colors"> <Navigation className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" /> </div>
             <div> <h3 className="text-lg font-bold text-gray-900">Quick Capture</h3> <p className="text-sm text-gray-500">Fastest way to log a tree. Requires a photo, distance, and GPS.</p> </div>
           </div>
         </button>
-        <button onClick={() => handleModeSelect('FULL_ANALYSIS')} disabled={geoPermissionStatus === 'PENDING' || geoPermissionStatus === 'DENIED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-green-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onClick={() => handleModeSelect('FULL_ANALYSIS')} disabled={prereqStatus.location !== 'GRANTED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-green-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
            <div className="flex items-center gap-4">
             <div className="bg-green-100 p-3 rounded-full group-hover:bg-green-500 transition-colors"> <ShieldCheck className="w-6 h-6 text-green-600 group-hover:text-white transition-colors" /> </div>
             <div> <h3 className="text-lg font-bold text-gray-900">Full Analysis</h3> <p className="text-sm text-gray-500">The complete in-field tool for the most accurate results.</p> </div>
@@ -581,7 +635,15 @@ function App() {
                   </div>
                   
                   {appMode === 'QUICK_CAPTURE' && (
-                    <div className="pt-6 border-t mt-6">
+                    <div className="pt-6 mt-6 border-t">
+                        {prereqStatus.compass === 'GRANTED' && (
+                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center gap-3">
+                            <Compass className="w-5 h-5 text-blue-600"/>
+                            <span className="text-sm font-medium text-blue-800">
+                              Device Heading: {deviceHeading !== null ? `${deviceHeading.toFixed(0)}°` : '...'}
+                            </span>
+                          </div>
+                        )}
                         <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300">
                             <Zap className="w-5 h-5" />
                             Submit for Analysis
