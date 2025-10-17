@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, Compass } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -119,6 +119,7 @@ function App() {
   const [prereqStatus, setPrereqStatus] = useState<PrerequisiteStatus>({ location: 'PENDING', compass: 'PENDING' });
   const [userGeoLocation, setUserGeoLocation] = useState<LocationData>(null);
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
+  const [capturedHeading, setCapturedHeading] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -181,9 +182,10 @@ function App() {
     }
   }, [appMode]);
 
-  // Effect for live compass updates during Quick Capture
+  // Effect for live compass updates (used to snapshot on upload)
   useEffect(() => {
-    if (appMode !== 'QUICK_CAPTURE' || prereqStatus.compass !== 'GRANTED') {
+    // Keep listener active in both modes if compass is granted
+    if (prereqStatus.compass !== 'GRANTED') {
       return;
     }
 
@@ -197,7 +199,7 @@ function App() {
     return () => {
       window.removeEventListener('deviceorientation', handleLiveOrientation, true);
     };
-  }, [appMode, prereqStatus.compass]);
+  }, [prereqStatus.compass]);
 
 
   useEffect(() => {
@@ -308,6 +310,9 @@ function App() {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
     const file = event.target.files?.[0]; 
     if (!file) return;
+
+    setCapturedHeading(deviceHeading); // Lock in the heading value on upload.
+
     setAppStatus('IMAGE_UPLOADING');
     setErrorMessage('');
     setCurrentMeasurementFile(file);
@@ -449,7 +454,6 @@ function App() {
   };
 
   const handleQuickCaptureSubmit = async () => {
-    console.log('Submitting with heading:', deviceHeading); // DIAGNOSTIC LOG
     if (!currentMeasurementFile || !distance || !userGeoLocation || !session?.access_token) {
       setErrorMessage("Missing required data: image, distance, or location.");
       return;
@@ -468,7 +472,7 @@ function App() {
         currentMeasurementFile,
         parseFloat(distance),
         calculatedScaleFactor,
-        deviceHeading,
+        capturedHeading, // Use the captured heading
         userGeoLocation.lat,
         userGeoLocation.lng,
         session.access_token
@@ -508,7 +512,7 @@ function App() {
     setDbhGuideRect(null);
     setPendingTreeFile(null);
     setImageDimensions(null);
-    // Do not reset deviceHeading here, keep the last known value
+    setCapturedHeading(null);
     setIsPanelOpen(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -519,6 +523,7 @@ function App() {
     setUserGeoLocation(null);
     setCurrentLocation(null);
     setDeviceHeading(null);
+    setCapturedHeading(null);
     setInstructionText("Welcome! Please select a measurement mode to begin.");
   };
 
@@ -636,14 +641,6 @@ function App() {
                   
                   {appMode === 'QUICK_CAPTURE' && (
                     <div className="pt-6 mt-6 border-t">
-                        {prereqStatus.compass === 'GRANTED' && (
-                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center gap-3">
-                            <Compass className="w-5 h-5 text-blue-600"/>
-                            <span className="text-sm font-medium text-blue-800">
-                              Device Heading: {deviceHeading !== null ? `${deviceHeading.toFixed(0)}°` : '...'}
-                            </span>
-                          </div>
-                        )}
                         <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300">
                             <Zap className="w-5 h-5" />
                             Submit for Analysis
