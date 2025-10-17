@@ -58,6 +58,14 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
     );
   }
 
+  if (user && !profile) {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />
+      </div>
+    )
+  }
+
   return (
     <button onClick={signInWithGoogle} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100">
       <LogIn className="w-4 h-4" />
@@ -675,7 +683,7 @@ function App() {
     } else if (appStatus === 'MANUAL_AWAITING_CANOPY_POINTS') {
       setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use guide to click trunk's width."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'MANUAL_AWAITING_GIRTH_POINTS') {
-      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus(appMode === 'COMMUNITY_ANALYSIS' ? 'COMMUNITY_ANALYSIS_ACTIVE' : 'MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
+      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
   };
 
@@ -801,6 +809,19 @@ function App() {
                   {appMode === 'QUICK_CAPTURE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"> <Zap className="w-5 h-5" /> Submit for Analysis </button> </div> )}
 
                   {(appStatus === 'IMAGE_LOADED' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE') && (appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && ( <div className="space-y-3 pt-6 border-t mt-6"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={isAutoDisabled} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={isManualDisabled} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> )}
+
+                  {appStatus === 'MANUAL_READY_TO_CALCULATE' && (
+                    <div className="pt-6 mt-6 border-t">
+                      <button 
+                        onClick={handleCalculateManual} 
+                        disabled={isBusy}
+                        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:bg-gray-300"
+                      >
+                        <Ruler className="w-5 h-5" />
+                        Calculate Measurements
+                      </button>
+                    </div>
+                  )}
 
                   {currentMetrics && (appStatus === 'AUTO_RESULT_SHOWN' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE' || appStatus === 'MANUAL_READY_TO_CALCULATE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {appMode === 'FULL_ANALYSIS' && appStatus === 'AUTO_RESULT_SHOWN' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} <div className="space-y-4 border-t pt-4"> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> {appMode === 'FULL_ANALYSIS' && <><button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button><AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /></>} </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(appMode)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{appMode === 'COMMUNITY_ANALYSIS' ? 'Cancel & Exit' : 'Measure Another'}</button> {appMode === 'FULL_ANALYSIS' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {appMode === 'COMMUNITY_ANALYSIS' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
                   
