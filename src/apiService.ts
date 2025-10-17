@@ -9,13 +9,13 @@ export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: s
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
 
-// --- MODIFIED: Interfaces updated with new database fields ---
+// --- MODIFIED: Interfaces updated to support Community Grove ---
 export interface TreeResult {
   id: string;
   created_at: string;
   user_id: string;
   file_name: string;
-  metrics: Metrics;
+  metrics: Metrics | null; // Can be null for pending
   species?: SpeciesInfo;
   wood_density?: WoodDensityInfo;
   co2_sequestered_kg?: number;
@@ -26,9 +26,14 @@ export interface TreeResult {
   longitude?: number;
   image_url?: string;
   distance_m?: number;
-  scale_factor?: number; // Added
-  device_heading?: number; // Added
-  status?: string; // Added
+  scale_factor?: number;
+  device_heading?: number;
+  status?: 'PENDING_ANALYSIS' | 'COMPLETE' | 'ANALYSIS_IN_PROGRESS' | 'VERIFIED'; // More specific status
+  confidence?: any; // To hold the consensus data
+}
+
+export interface PendingTree extends TreeResult {
+    analysis_count: number; // Field from our RPC call
 }
 
 export interface TreeResultPayload {
@@ -44,7 +49,7 @@ export interface TreeResultPayload {
   longitude?: number;
   image_url?: string; 
   distance_m?: number;
-  scale_factor?: number; // Added
+  scale_factor?: number;
 }
 // --- END MODIFIED BLOCK ---
 
@@ -56,8 +61,15 @@ export interface UpdateTreeResultPayload {
     longitude?: number | null;
 }
 
+// --- NEW: Interface for Community Analysis submission ---
+export interface CommunityAnalysisPayload {
+  metrics: Metrics;
+  species?: SpeciesInfo | null;
+}
+// --- END NEW BLOCK ---
 
-const getAuthHeaders = (token: string, contentType: string = 'application/json') => {
+
+const getAuthHeaders = (token: string, contentType: string | null = 'application/json') => {
   const headers: HeadersInit = {
     'Authorization': `Bearer ${token}`,
   };
@@ -75,7 +87,7 @@ export const uploadImage = async (imageFile: File, token: string): Promise<{ ima
 
   const response = await fetch(`${API_BASE_URL}/api/upload-image`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: getAuthHeaders(token, null), // Let browser set Content-Type for FormData
     body: formData,
   });
 
@@ -86,7 +98,6 @@ export const uploadImage = async (imageFile: File, token: string): Promise<{ ima
   return response.json();
 };
 
-// --- NEW: Function to handle the Quick Capture submission ---
 export const quickCapture = async (
   imageFile: File,
   distance: number,
@@ -108,7 +119,7 @@ export const quickCapture = async (
 
   const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type for FormData
+    headers: getAuthHeaders(token, null),
     body: formData,
   });
 
@@ -118,7 +129,6 @@ export const quickCapture = async (
   }
   return response.json();
 };
-// --- END NEW BLOCK ---
 
 export const getResults = async (token: string): Promise<TreeResult[]> => {
   const response = await fetch(`${API_BASE_URL}/api/results`, {
@@ -170,6 +180,49 @@ export const deleteResult = async (resultId: string, token: string): Promise<any
   }
   return response.json();
 };
+
+
+// --- [START] NEW COMMUNITY GROVE API FUNCTIONS ---
+
+export const getPendingTrees = async (token: string): Promise<PendingTree[]> => {
+  const response = await fetch(`${API_BASE_URL}/api/grove/pending`, {
+    method: 'GET',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const claimTree = async (resultId: string, token: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/api/grove/claim/${resultId}`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+export const submitCommunityAnalysis = async (resultId: string, submission: CommunityAnalysisPayload, token: string): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/api/grove/submit/${resultId}`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(submission),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+// --- [END] NEW COMMUNITY GROVE API FUNCTIONS ---
+
 
 // --- Existing Unchanged Functions ---
 

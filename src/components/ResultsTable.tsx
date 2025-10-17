@@ -1,6 +1,6 @@
 // src/components/ResultsTable.tsx
 import React, { useState } from 'react';
-import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2 } from 'lucide-react';
+import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2, Users, GitCommitVertical } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
 import { TreeResult } from '../apiService';
 
@@ -30,6 +30,12 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
         <p className="font-semibold text-gray-700">Ownership</p>
         <p className="text-gray-500">{result.ownership || 'N/A'}</p>
       </div>
+      {result.status === 'VERIFIED' && result.confidence && (
+        <div className="col-span-2 sm:col-span-1">
+            <p className="font-semibold text-gray-700">Community Verified</p>
+            <p className="text-gray-500 flex items-center gap-1"><Users size={12} /> {result.confidence.analysesCount} analyses</p>
+        </div>
+      )}
       <div className="col-span-2 sm:col-span-3">
         <p className="font-semibold text-gray-700">Location</p>
          {result.latitude && result.longitude ? (
@@ -48,22 +54,38 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
   </div>
 );
 
-const StatusBadge = ({ status }: { status: string | undefined }) => {
-    if (status === 'PENDING_ANALYSIS') {
-      return (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
-          <Clock className="h-3 w-3" />
-          Pending
-        </span>
-      );
+const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
+    switch (status) {
+        case 'PENDING_ANALYSIS':
+            return (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                    <Clock className="h-3 w-3" />
+                    Pending
+                </span>
+            );
+        case 'ANALYSIS_IN_PROGRESS':
+             return (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                    <GitCommitVertical className="h-3 w-3" />
+                    In Progress
+                </span>
+            );
+        case 'VERIFIED':
+            return (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
+                    <Users className="h-3 w-3" />
+                    Verified
+                </span>
+            );
+        case 'COMPLETE':
+        default:
+            return (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Complete
+                </span>
+            );
     }
-    // Default to 'Complete' for any other status or if status is undefined
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
-        <CheckCircle2 className="h-3 w-3" />
-        Complete
-      </span>
-    );
 };
 
 
@@ -127,9 +149,9 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     </a>
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-800 italic truncate">
-                    {result.status === 'PENDING_ANALYSIS' 
+                    {(result.status === 'PENDING_ANALYSIS' || !result.species?.scientificName)
                         ? <span className="text-gray-500 not-italic font-mono text-xs block">{result.id.substring(0, 8)}...</span> 
-                        : result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>
+                        : result.species.scientificName
                     }
                   </td>
                   <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.height_m.toFixed(2) : '-'}</td>
@@ -170,9 +192,9 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                 <div className="flex-grow min-w-0">
                   <div className="flex justify-between items-start">
                     <p className="font-semibold text-gray-800 italic truncate pr-2">
-                        {result.status === 'PENDING_ANALYSIS' 
+                        {(result.status === 'PENDING_ANALYSIS' || !result.species?.scientificName)
                             ? <span className="text-gray-500 not-italic">Pending...</span> 
-                            : result.species?.scientificName ?? 'Unknown Species'
+                            : result.species.scientificName
                         }
                     </p>
                     <StatusBadge status={result.status} />
