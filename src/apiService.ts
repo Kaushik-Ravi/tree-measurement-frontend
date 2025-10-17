@@ -267,6 +267,37 @@ export const samAutoSegment = async (imageFile: File, distanceM: number, scaleFa
   return response.json();
 };
 
+// --- NEW FUNCTION FOR COMMUNITY GROVE AUTO SEGMENTATION ---
+export const samAutoSegmentFromUrl = async (
+  imageUrl: string,
+  distanceM: number,
+  scaleFactor: number,
+  clickPoint: Point,
+  token: string
+) => {
+  const payload = {
+    image_url: imageUrl,
+    distance_m: distanceM,
+    scale_factor: scaleFactor,
+    click_x: clickPoint.x,
+    click_y: clickPoint.y,
+  };
+
+  const response = await fetch(`${API_BASE_URL}/api/sam_auto_segment_from_url`, {
+    method: 'POST',
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.detail || `URL Segmentation API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+// --- END NEW FUNCTION ---
+
+
 export const samRefineWithPoints = async (imageFile: File, foregroundPoints: Point[], scaleFactor: number) => {
     const dataPayload = { foreground_points: foregroundPoints, scale_factor: scaleFactor, };
     const formData = new FormData();

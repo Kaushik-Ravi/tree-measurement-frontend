@@ -1,12 +1,12 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2 } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
   Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload, PendingTree, CommunityAnalysisPayload,
   getResults, saveResult, deleteResult, updateResult, uploadImage, quickCapture,
-  getPendingTrees, claimTree, submitCommunityAnalysis
+  getPendingTrees, claimTree, submitCommunityAnalysis, samAutoSegmentFromUrl
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -19,6 +19,7 @@ import { useAuth } from './contexts/AuthContext';
 import { EditResultModal } from './components/EditResultModal'; 
 import { CommunityGroveView } from './components/CommunityGroveView';
 import { supabase } from './supabaseClient';
+import { LeaderboardView } from './components/LeaderboardView';
 
 type AppMode = 'SELECT_MODE' | 'QUICK_CAPTURE' | 'FULL_ANALYSIS' | 'COMMUNITY_ANALYSIS';
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'SAVING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR' | 'FETCHING_GROVE' | 'GROVE_LOADED' | 'CLAIMING_TREE' | 'COMMUNITY_ANALYSIS_ACTIVE';
@@ -30,6 +31,7 @@ type PrerequisiteStatus = {
   compass: SensorStatus;
 };
 type UserProfile = { id: string; full_name: string; avatar_url: string; sapling_points: number; rank: string; } | null;
+type MainView = 'main' | 'leaderboard';
 
 
 const isManualMode = (status: AppStatus) => status.startsWith('MANUAL_');
@@ -86,7 +88,8 @@ const LoginPrompt = () => {
 
 function App() {
   const { user, session, isLoading: isAuthLoading } = useAuth();
-
+  
+  const [currentView, setCurrentView] = useState<MainView>('main');
   const [appMode, setAppMode] = useState<AppMode>('SELECT_MODE');
   const [appStatus, setAppStatus] = useState<AppStatus>('IDLE');
   const [instructionText, setInstructionText] = useState("Welcome! Please select a measurement mode to begin.");
@@ -394,7 +397,7 @@ function App() {
   const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
     setShowInstructionToast(false);
     const canvas = event.currentTarget;
-    if (!imageDimensions || !canvas) return;
+    if (!imageDimensions || !canvas || !scaleFactor || !session?.access_token) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -405,16 +408,33 @@ function App() {
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
 
     if (appStatus === 'AWAITING_INITIAL_CLICK') {
-        if (appMode === 'FULL_ANALYSIS' && currentMeasurementFile) {
-            setIsPanelOpen(true); setInstructionText("Running automatic segmentation..."); setTransientPoint(clickPoint);
-            try { 
-                setAppStatus('PROCESSING'); 
-                const response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor!, clickPoint); 
-                if (response.status !== 'success') throw new Error(response.message); 
-                setScaleFactor(response.scale_factor); setDbhLine(response.dbh_line_coords); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
-                handleMeasurementSuccess(response.metrics);
-            } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } finally { setTransientPoint(null); }
+        setIsPanelOpen(true); 
+        setInstructionText("Running automatic segmentation..."); 
+        setTransientPoint(clickPoint);
+        setAppStatus('PROCESSING'); 
+
+        try {
+            let response;
+            if (appMode === 'FULL_ANALYSIS' && currentMeasurementFile) {
+                response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor, clickPoint);
+            } else if (appMode === 'COMMUNITY_ANALYSIS' && claimedTree) {
+                response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, clickPoint, session.access_token);
+            } else {
+                throw new Error("Invalid state for auto-segmentation.");
+            }
+
+            if (response.status !== 'success') throw new Error(response.message);
+            setScaleFactor(response.scale_factor); 
+            setDbhLine(response.dbh_line_coords); 
+            setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
+            handleMeasurementSuccess(response.metrics);
+        } catch (error: any) { 
+            setAppStatus('ERROR'); 
+            setErrorMessage(error.message); 
+        } finally { 
+            setTransientPoint(null); 
         }
+
     } else if (appStatus === 'AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
   };
@@ -466,7 +486,7 @@ function App() {
       } 
   };
 
-  const handleApplyRefinements = async () => { if (refinePoints.length === 0) return; try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile!, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
+  const handleApplyRefinements = async () => { if (refinePoints.length === 0 || !currentMeasurementFile) return; try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   const handleCalculateManual = async () => { try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
   const handleSaveResult = async () => {
@@ -576,7 +596,8 @@ function App() {
         setOriginalImageSrc(claimedData.image_url);
         setResultImageSrc(claimedData.image_url); // Set both for initial display
         setCurrentLocation(claimedData.latitude && claimedData.longitude ? {lat: claimedData.latitude, lng: claimedData.longitude} : null);
-        
+        setDistance(claimedData.distance_m ? String(claimedData.distance_m) : '');
+
         setAppStatus('COMMUNITY_ANALYSIS_ACTIVE');
         setIsPanelOpen(true);
         setInstructionText(`Tree claimed. You have 10 minutes to analyze. Start by selecting a measurement mode below.`);
@@ -651,6 +672,7 @@ function App() {
   const handleReturnToModeSelect = () => {
     setAppMode('SELECT_MODE');
     setAppStatus('IDLE');
+    setCurrentView('main');
     setPrereqStatus({ location: 'PENDING', compass: 'PENDING' });
     setUserGeoLocation(null);
     setCurrentLocation(null);
@@ -738,8 +760,19 @@ function App() {
           </div>
         </button>
       </div>
+
+      <div className="mt-8 w-full max-w-6xl">
+        <button onClick={() => setCurrentView('leaderboard')} className="group w-full text-left p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-lg transition-all flex items-center justify-center gap-3">
+          <BarChart2 className="w-5 h-5 text-gray-600 group-hover:text-indigo-600" />
+          <h3 className="text-md font-bold text-gray-700 group-hover:text-indigo-700">View Community Leaderboard</h3>
+        </button>
+      </div>
     </div>
   );
+
+  if (currentView === 'leaderboard') {
+    return <LeaderboardView onBack={() => setCurrentView('main')} />;
+  }
 
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
@@ -787,7 +820,7 @@ function App() {
                   
                   {appMode === 'QUICK_CAPTURE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"> <Zap className="w-5 h-5" /> Submit for Analysis </button> </div> )}
 
-                  {(appStatus === 'IMAGE_LOADED' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE') && (appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && ( <div className="space-y-3 pt-6 border-t mt-6"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || appMode === 'COMMUNITY_ANALYSIS'} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">{appMode === 'COMMUNITY_ANALYSIS' ? 'Unavailable for Community Analysis' : 'Slower, more precise'}</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile)} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> )}
+                  {(appStatus === 'IMAGE_LOADED' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE') && (appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && ( <div className="space-y-3 pt-6 border-t mt-6"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree)} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree)} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> )}
 
                   {currentMetrics && (appStatus === 'AUTO_RESULT_SHOWN' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE' || appStatus === 'MANUAL_READY_TO_CALCULATE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {appMode === 'FULL_ANALYSIS' && appStatus === 'AUTO_RESULT_SHOWN' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} <div className="space-y-4 border-t pt-4"> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> {appMode === 'FULL_ANALYSIS' && <><button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button><AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /></>} </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(appMode)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{appMode === 'COMMUNITY_ANALYSIS' ? 'Cancel & Exit' : 'Measure Another'}</button> {appMode === 'FULL_ANALYSIS' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {appMode === 'COMMUNITY_ANALYSIS' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
                   
