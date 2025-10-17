@@ -9,7 +9,7 @@ export interface WoodDensityInfo { value: number; unit: string; sourceSpecies: s
 export interface IdentificationResponse { bestMatch: SpeciesInfo | null; woodDensity: WoodDensityInfo | null; remainingIdentificationRequests?: number; }
 export interface CO2Response { co2_sequestered_kg: number; unit: string; }
 
-// --- MODIFIED: Interfaces updated with new fields ---
+// --- MODIFIED: Interfaces updated with new database fields ---
 export interface TreeResult {
   id: string;
   created_at: string;
@@ -24,9 +24,13 @@ export interface TreeResult {
   remarks?: string;
   latitude?: number;
   longitude?: number;
-  image_url?: string; // Added
-  distance_m?: number; // Added
+  image_url?: string;
+  distance_m?: number;
+  scale_factor?: number; // Added
+  device_heading?: number; // Added
+  status?: string; // Added
 }
+
 export interface TreeResultPayload {
   fileName: string;
   metrics: Metrics;
@@ -38,8 +42,9 @@ export interface TreeResultPayload {
   remarks?: string;
   latitude?: number;
   longitude?: number;
-  image_url?: string; // Added
-  distance_m?: number; // Added
+  image_url?: string; 
+  distance_m?: number;
+  scale_factor?: number; // Added
 }
 // --- END MODIFIED BLOCK ---
 
@@ -64,14 +69,12 @@ const getAuthHeaders = (token: string, contentType: string = 'application/json')
 
 // --- Database & Upload API Functions ---
 
-// --- NEW: Function to handle image upload to our secure backend endpoint ---
 export const uploadImage = async (imageFile: File, token: string): Promise<{ image_url: string }> => {
   const formData = new FormData();
   formData.append('image', imageFile);
 
   const response = await fetch(`${API_BASE_URL}/api/upload-image`, {
     method: 'POST',
-    // Note: We don't set Content-Type for FormData; the browser does it correctly with the boundary.
     headers: { 'Authorization': `Bearer ${token}` },
     body: formData,
   });
@@ -79,6 +82,39 @@ export const uploadImage = async (imageFile: File, token: string): Promise<{ ima
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred during upload.' }));
     throw new Error(errorData.detail || `Image upload API error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
+// --- NEW: Function to handle the Quick Capture submission ---
+export const quickCapture = async (
+  imageFile: File,
+  distance: number,
+  scaleFactor: number,
+  heading: number | null,
+  latitude: number,
+  longitude: number,
+  token: string
+): Promise<any> => {
+  const formData = new FormData();
+  formData.append('image', imageFile);
+  formData.append('distance_m', distance.toString());
+  formData.append('scale_factor', scaleFactor.toString());
+  formData.append('latitude', latitude.toString());
+  formData.append('longitude', longitude.toString());
+  if (heading !== null) {
+    formData.append('device_heading', heading.toString());
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type for FormData
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred during quick capture.' }));
+    throw new Error(errorData.detail || `Quick Capture API error! status: ${response.status}`);
   }
   return response.json();
 };
@@ -120,7 +156,7 @@ export const updateResult = async (resultId: string, updateData: UpdateTreeResul
         throw new Error(errorData.detail || `API error! status: ${response.status}`);
     }
     const responseData = await response.json();
-    return responseData.data; // The PATCH endpoint returns { status: 'success', data: {...} }
+    return responseData.data;
 };
 
 export const deleteResult = async (resultId: string, token: string): Promise<any> => {
@@ -134,7 +170,6 @@ export const deleteResult = async (resultId: string, token: string): Promise<any
   }
   return response.json();
 };
-
 
 // --- Existing Unchanged Functions ---
 

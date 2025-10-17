@@ -1,6 +1,6 @@
 // src/components/ResultsTable.tsx
 import React, { useState } from 'react';
-import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2 } from 'lucide-react';
+import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2 } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
 import { TreeResult } from '../apiService';
 
@@ -48,6 +48,24 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
   </div>
 );
 
+const StatusBadge = ({ status }: { status: string | undefined }) => {
+    if (status === 'PENDING_ANALYSIS') {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+          <Clock className="h-3 w-3" />
+          Pending
+        </span>
+      );
+    }
+    // Default to 'Complete' for any other status or if status is undefined
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+        <CheckCircle2 className="h-3 w-3" />
+        Complete
+      </span>
+    );
+};
+
 
 export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
@@ -81,16 +99,15 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         <table className="min-w-full text-sm table-fixed">
           <thead className="bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
             <tr>
-              {/* --- MODIFIED: Added specific widths for a stable layout --- */}
               <th scope="col" className="w-12 px-4 py-3"></th>
               <th scope="col" className="w-20 px-2 py-3"></th>
-              <th scope="col" className="px-4 py-3 text-left">Species</th>
+              <th scope="col" className="px-4 py-3 text-left">Species / ID</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">Height (m)</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">Canopy (m)</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">DBH (cm)</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">CO₂ (kg)</th>
+              <th scope="col" className="w-28 px-4 py-3 text-center">Status</th>
               <th scope="col" className="w-28 px-4 py-3 text-right">Actions</th>
-              {/* --- END MODIFIED BLOCK --- */}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
@@ -101,7 +118,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
                   </td>
                   <td className="px-2 py-2">
-                    {/* --- MODIFIED: Added stopPropagation to the link's onClick --- */}
                     <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                       {result.image_url ? (
                           <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-gray-100 transition-transform hover:scale-105"/>
@@ -110,11 +126,17 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                       )}
                     </a>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-800 italic truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics.height_m.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics.canopy_m.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics.dbh_cm.toFixed(2)}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800 italic truncate">
+                    {result.status === 'PENDING_ANALYSIS' 
+                        ? <span className="text-gray-500 not-italic font-mono text-xs block">{result.id.substring(0, 8)}...</span> 
+                        : result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>
+                    }
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.height_m.toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(2) : '-'}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-sky-800">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400">N/A</span>}</td>
+                  <td className="px-4 py-3 text-center"><StatusBadge status={result.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end items-center gap-2">
                       <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
@@ -124,7 +146,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                 </tr>
                 {expandedRowId === result.id && (
                   <tr>
-                    <td colSpan={8} className="p-0"><DetailRow result={result} /></td>
+                    <td colSpan={9} className="p-0"><DetailRow result={result} /></td>
                   </tr>
                 )}
               </React.Fragment>
@@ -138,7 +160,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
           <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-3">
               <div className="flex gap-4">
-                 {/* --- MODIFIED: Added stopPropagation to the mobile link's onClick --- */}
                 <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
                   {result.image_url ? (
                     <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-gray-100"/>
@@ -147,11 +168,19 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                   )}
                 </a>
                 <div className="flex-grow min-w-0">
-                  <p className="font-semibold text-gray-800 italic truncate">{result.species?.scientificName ?? 'Unknown Species'}</p>
+                  <div className="flex justify-between items-start">
+                    <p className="font-semibold text-gray-800 italic truncate pr-2">
+                        {result.status === 'PENDING_ANALYSIS' 
+                            ? <span className="text-gray-500 not-italic">Pending...</span> 
+                            : result.species?.scientificName ?? 'Unknown Species'
+                        }
+                    </p>
+                    <StatusBadge status={result.status} />
+                  </div>
                   <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
-                      <div><p className="font-medium text-gray-500">Height</p><p className="font-mono">{result.metrics.height_m.toFixed(1)}m</p></div>
-                      <div><p className="font-medium text-gray-500">Canopy</p><p className="font-mono">{result.metrics.canopy_m.toFixed(1)}m</p></div>
-                      <div><p className="font-medium text-gray-500">DBH</p><p className="font-mono">{result.metrics.dbh_cm.toFixed(1)}cm</p></div>
+                      <div><p className="font-medium text-gray-500">Height</p><p className="font-mono">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-gray-500">Canopy</p><p className="font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-gray-500">DBH</p><p className="font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
                   </div>
                 </div>
               </div>

@@ -1,11 +1,11 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
   Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload,
-  getResults, saveResult, deleteResult, updateResult, uploadImage
+  getResults, saveResult, deleteResult, updateResult, uploadImage, quickCapture
 } from './apiService';
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
@@ -17,6 +17,7 @@ import { InstructionToast } from './components/InstructionToast';
 import { useAuth } from './contexts/AuthContext';
 import { EditResultModal } from './components/EditResultModal'; 
 
+type AppMode = 'SELECT_MODE' | 'QUICK_CAPTURE' | 'FULL_ANALYSIS';
 type AppStatus = 'IDLE' | 'IMAGE_UPLOADING' | 'IMAGE_LOADED' | 'AWAITING_INITIAL_CLICK' | 'PROCESSING' | 'SAVING' | 'AUTO_RESULT_SHOWN' | 'AWAITING_REFINE_POINTS' | 'MANUAL_AWAITING_BASE_CLICK' | 'MANUAL_AWAITING_HEIGHT_POINTS' | 'MANUAL_AWAITING_CANOPY_POINTS' | 'MANUAL_AWAITING_GIRTH_POINTS' | 'MANUAL_READY_TO_CALCULATE' | 'AWAITING_CALIBRATION_CHOICE' | 'CALIBRATION_AWAITING_INPUT' | 'ERROR';
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
@@ -73,8 +74,9 @@ const LoginPrompt = () => {
 function App() {
   const { user, session, isLoading: isAuthLoading } = useAuth();
 
+  const [appMode, setAppMode] = useState<AppMode>('SELECT_MODE');
   const [appStatus, setAppStatus] = useState<AppStatus>('IDLE');
-  const [instructionText, setInstructionText] = useState("Welcome! To begin, select a tree image to measure.");
+  const [instructionText, setInstructionText] = useState("Welcome! Please select a measurement mode to begin.");
   const [errorMessage, setErrorMessage] = useState('');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [showInstructionToast, setShowInstructionToast] = useState(false);
@@ -108,12 +110,50 @@ function App() {
   
   const [editingResult, setEditingResult] = useState<TreeResult | null>(null);
 
+  const [geoPermissionStatus, setGeoPermissionStatus] = useState<'IDLE' | 'PENDING' | 'GRANTED' | 'DENIED'>('IDLE');
+  const [userGeoLocation, setUserGeoLocation] = useState<LocationData>(null);
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
+  
+  useEffect(() => {
+    // Only listen for device orientation when in Quick Capture mode
+    if (appMode !== 'QUICK_CAPTURE') return;
+  
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      // event.alpha is the compass direction in degrees (0-360)
+      if (event.alpha !== null) {
+        setDeviceHeading(event.alpha);
+      }
+    };
+  
+    // Check for support and request permission if necessary (for iOS 13+)
+    // @ts-ignore
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // @ts-ignore
+      DeviceOrientationEvent.requestPermission()
+        .then((permissionState: string) => {
+          if (permissionState === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+          } else {
+            setErrorMessage("Compass access is required for Quick Capture. Please enable it in your device settings.");
+          }
+        })
+        .catch(console.error);
+    } else {
+      // Standard browsers
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+  
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
+  }, [appMode]);
 
   useEffect(() => {
     const fetchUserResults = async () => {
@@ -154,15 +194,6 @@ function App() {
         tempImage.onload = async () => {
           setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
           const tags = await ExifReader.load(currentMeasurementFile);
-          
-          const latDescription = tags.GPSLatitude?.description;
-          const lngDescription = tags.GPSLongitude?.description;
-
-          if (typeof latDescription === 'number' && typeof lngDescription === 'number') {
-            setCurrentLocation({ lat: latDescription, lng: lngDescription });
-          } else if (typeof latDescription === 'string' && typeof lngDescription === 'string') {
-            setCurrentLocation({ lat: parseFloat(latDescription), lng: parseFloat(lngDescription) });
-          }
           
           let focalLengthValue: number | null = null;
           const focalLengthIn35mm = tags['FocalLengthIn35mmFilm']?.value;
@@ -222,7 +253,30 @@ function App() {
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
+  const handleModeSelect = (mode: AppMode) => {
+    setInstructionText("Waiting for location permission...");
+    setGeoPermissionStatus('PENDING');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserGeoLocation(userLoc);
+        setCurrentLocation(userLoc); 
+        setGeoPermissionStatus('GRANTED');
+        setAppMode(mode);
+        setAppStatus('IDLE');
+        setIsPanelOpen(true);
+        setInstructionText(mode === 'QUICK_CAPTURE' ? 'Ready for Quick Capture. Upload an image and enter the distance.' : 'Ready for Full Analysis. Upload an image to start.');
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setGeoPermissionStatus('DENIED');
+        setErrorMessage("Location access is required to use this application. Please enable it in your browser settings.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(appMode); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
   
   const handleDeleteResult = async (idToDelete: string) => {
     if (!session?.access_token) { setErrorMessage("You must be logged in to delete results."); return; }
@@ -287,18 +341,19 @@ function App() {
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio); localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     if (pendingTreeFile) { setCurrentMeasurementFile(pendingTreeFile); setPendingTreeFile(null); setAppStatus('IMAGE_UPLOADING');
-    } else { softReset(); }
+    } else { softReset(appMode); }
   };
 
-  const prepareMeasurementSession = (): boolean => {
-    if (!distance || !currentMeasurementFile || !imageDimensions) return false;
+  const prepareMeasurementSession = (): number | null => {
+    if (!distance || !currentMeasurementFile || !imageDimensions) return null;
     let cameraConstant: number | null = null;
     if (focalLength) { cameraConstant = 36.0 / focalLength; } else if (fovRatio) { cameraConstant = fovRatio;
-    } else { setAppStatus('ERROR'); setErrorMessage("Calibration data missing. Please calibrate your camera first."); return false; }
+    } else { setAppStatus('ERROR'); setErrorMessage("Calibration data missing. Please calibrate your camera first."); return null; }
     const distMM = parseFloat(distance) * 1000;
     const horizontalPixels = Math.max(imageDimensions.w, imageDimensions.h);
     const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
-    setScaleFactor(finalScaleFactor); return true;
+    setScaleFactor(finalScaleFactor); // Still set the state for Full Analysis mode
+    return finalScaleFactor;
   };
   
   const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Ready. Please click once on the main trunk of the tree."); setShowInstructionToast(true); } };
@@ -307,7 +362,7 @@ function App() {
   const handleCalculateManual = async () => { try { setAppStatus('PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
   const handleSaveResult = async () => {
-    if (!currentMeasurementFile || !currentMetrics || !session?.access_token) {
+    if (!currentMeasurementFile || !currentMetrics || !session?.access_token || !scaleFactor) {
       setErrorMessage("Cannot save: missing data or not logged in.");
       return;
     }
@@ -330,6 +385,7 @@ function App() {
         longitude: currentLocation?.lng,
         image_url: imageUrl,
         distance_m: parseFloat(distance),
+        scale_factor: scaleFactor, // Save the scale factor
         ...additionalData,
       };
 
@@ -337,7 +393,7 @@ function App() {
       
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
-      softReset();
+      softReset('FULL_ANALYSIS');
 
     } catch (error: any) {
       setErrorMessage(`Failed to save result: ${error.message}`);
@@ -346,20 +402,84 @@ function App() {
     }
   };
 
-  const softReset = () => { setAppStatus('IDLE'); setInstructionText("Select a tree image to measure."); setErrorMessage(''); setCurrentMeasurementFile(null); setDistance(''); setFocalLength(null); setScaleFactor(null); setCurrentMetrics(null); setCurrentIdentification(null); setCurrentCO2(null); setAdditionalData(initialAdditionalData); setCurrentLocation(null); setIsLocationPickerActive(false); setRefinePoints([]); setOriginalImageSrc(''); setResultImageSrc(''); setDbhLine(null); setTransientPoint(null); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); setPendingTreeFile(null); setImageDimensions(null); setIsPanelOpen(false); if (fileInputRef.current) fileInputRef.current.value = ''; };
-  
-  const fullReset = async () => {
-    if (!session?.access_token) return;
-    if (window.confirm("Are you sure you want to permanently delete ALL measurements from your history? This cannot be undone.")) {
-      try { for (const result of allResults) { await deleteResult(result.id, session.access_token); } setAllResults([]); softReset(); } catch (error: any) { setErrorMessage(`Failed to clear history: ${error.message}`); }
+  const handleQuickCaptureSubmit = async () => {
+    if (!currentMeasurementFile || !distance || !userGeoLocation || !session?.access_token) {
+      setErrorMessage("Missing required data: image, distance, or location.");
+      return;
+    }
+    setAppStatus('SAVING');
+    setInstructionText("Calculating and submitting data for analysis...");
+
+    const calculatedScaleFactor = prepareMeasurementSession();
+    if (!calculatedScaleFactor) {
+      setAppStatus('ERROR');
+      // The error message is already set by prepareMeasurementSession
+      return;
+    }
+    
+    try {
+      await quickCapture(
+        currentMeasurementFile,
+        parseFloat(distance),
+        calculatedScaleFactor,
+        deviceHeading,
+        userGeoLocation.lat,
+        userGeoLocation.lng,
+        session.access_token
+      );
+      // Success! Fetch new results and reset
+      const updatedResults = await getResults(session.access_token);
+      setAllResults(updatedResults);
+      
+      setInstructionText("Submission successful! Data sent for analysis.");
+      setAppStatus('IDLE');
+      setTimeout(() => {
+        handleReturnToModeSelect();
+      }, 2000);
+
+    } catch (error: any) {
+      setErrorMessage(`Submission failed: ${error.message}`);
+      setAppStatus('ERROR');
     }
   };
 
-  const handleCorrectOutline = () => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); };
-  const handleCancelRefinement = () => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled. Review the results below."); };
-  const handleSwitchToManualMode = () => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } };
-  const handleCancelManualMode = () => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }};
+  const softReset = (currentMode: AppMode) => {
+    setAppMode(currentMode);
+    setAppStatus('IDLE');
+    setInstructionText("Select a tree image to measure.");
+    setErrorMessage('');
+    setCurrentMeasurementFile(null);
+    setDistance('');
+    setFocalLength(null);
+    setScaleFactor(null);
+    setCurrentMetrics(null);
+    setCurrentIdentification(null);
+    setCurrentCO2(null);
+    setAdditionalData(initialAdditionalData);
+    setCurrentLocation(userGeoLocation); 
+    setIsLocationPickerActive(false);
+    setRefinePoints([]);
+    setOriginalImageSrc('');
+    setResultImageSrc('');
+    setDbhLine(null);
+    setTransientPoint(null);
+    setManualPoints({ height: [], canopy: [], girth: [] });
+    setDbhGuideRect(null);
+    setPendingTreeFile(null);
+    setImageDimensions(null);
+    setDeviceHeading(null);
+    setIsPanelOpen(true);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
   
+  const handleReturnToModeSelect = () => {
+    softReset('SELECT_MODE');
+    setGeoPermissionStatus('IDLE');
+    setUserGeoLocation(null);
+    setCurrentLocation(null);
+    setInstructionText("Welcome! Please select a measurement mode to begin.");
+  };
+
   const handleManualPointCollection = async (point: Point) => { 
     if (!scaleFactor || !imageDimensions) return;
     const showNextInstruction = (text: string) => { setInstructionText(text); setShowInstructionToast(true); };
@@ -373,6 +493,7 @@ function App() {
       setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
   };
+
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
   
   if (isAuthLoading) { return ( <div className="h-screen w-screen flex items-center justify-center bg-white"> <Loader2 className="w-8 h-8 text-gray-400 animate-spin" /> </div> ); }
@@ -382,149 +503,129 @@ function App() {
   const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
   const isBusy = appStatus === 'PROCESSING' || appStatus === 'SAVING' || isCO2Calculating || isHistoryLoading;
 
-  return (
-    <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
-      {editingResult && (
-        <EditResultModal
-          result={editingResult}
-          onClose={() => setEditingResult(null)}
-          onSave={handleUpdateResult}
-        />
-      )}
-      
-      <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
-        
-      <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
-        {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
-        {(hasActiveMeasurement || isLocationPickerActive) && (
-          isLocationPickerActive ? (
-              <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} />
-          ) : (
-              <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} />
-          )
-        )}
+  const ModeSelectionScreen = () => (
+    <div className="w-full h-full flex flex-col justify-center items-center p-4 md:p-8">
+      <div className="text-center max-w-2xl">
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Choose Your Workflow</h2>
+        <p className="mt-2 text-gray-600">Select the best method for your needs.</p>
       </div>
       
-      {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && (
-        <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform">
-          <Menu size={24} />
+      {geoPermissionStatus === 'PENDING' && ( <div className="mt-8 flex items-center gap-3 text-gray-500"> <Loader2 className="animate-spin w-5 h-5" /> <span>Accessing your location...</span> </div> )}
+      {geoPermissionStatus === 'DENIED' && ( <div className="mt-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg max-w-md text-center"> <div className="flex items-center justify-center gap-2 font-bold"><AlertTriangle size={20}/>Location Access Denied</div> <p className="text-sm mt-1">{errorMessage}</p> </div> )}
+
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+        <button onClick={() => handleModeSelect('QUICK_CAPTURE')} disabled={geoPermissionStatus === 'PENDING' || geoPermissionStatus === 'DENIED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-100 p-3 rounded-full group-hover:bg-blue-500 transition-colors"> <Navigation className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" /> </div>
+            <div> <h3 className="text-lg font-bold text-gray-900">Quick Capture</h3> <p className="text-sm text-gray-500">Fastest way to log a tree. Requires a photo, distance, and GPS.</p> </div>
+          </div>
         </button>
-      )}
-
-      {(!isLocationPickerActive || window.innerWidth >= 768) && (
-        // --- MODIFIED: This is the only line changed to fix the layout ---
-        <div id="control-panel" 
-          className={`
-            bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out
-            md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0
-            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full overflow-y-auto'}
-            ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}
-          `}
-        >
-        {/* --- END MODIFIED BLOCK --- */}
-          <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
-            {hasActiveMeasurement ? (
-              <>
-                <AuthComponent />
-                <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button>
-              </>
+        <button onClick={() => handleModeSelect('FULL_ANALYSIS')} disabled={geoPermissionStatus === 'PENDING' || geoPermissionStatus === 'DENIED'} className="group text-left p-6 bg-white border-2 border-gray-200 rounded-lg hover:border-green-500 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+           <div className="flex items-center gap-4">
+            <div className="bg-green-100 p-3 rounded-full group-hover:bg-green-500 transition-colors"> <ShieldCheck className="w-6 h-6 text-green-600 group-hover:text-white transition-colors" /> </div>
+            <div> <h3 className="text-lg font-bold text-gray-900">Full Analysis</h3> <p className="text-sm text-gray-500">The complete in-field tool for the most accurate results.</p> </div>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+  
+  const QuickCaptureScreen = () => (
+    <div className="w-full h-full flex flex-col md:flex-row">
+        <div className="w-full md:w-1/2 h-1/2 md:h-full bg-gray-100 flex items-center justify-center p-4">
+            {originalImageSrc ? (
+                <img src={originalImageSrc} alt="Tree preview" className="max-w-full max-h-full object-contain rounded-lg shadow-md" />
             ) : (
-              <div className="w-full flex justify-between items-center">
-                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Tree Measurement</h1></div>
-                <AuthComponent />
-              </div>
+                <div className="text-center text-gray-400">
+                    <ImageIcon size={64} className="mx-auto" />
+                    <p className="mt-2">Image preview will appear here</p>
+                </div>
             )}
-          </div>
-
-          <div className="flex-grow overflow-y-auto p-4 md:p-6">
-            <div className="hidden md:flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div>
-              <AuthComponent />
-            </div>
-
-            <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
-            {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'SAVING' ? 'Saving result...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
-            
-            {appStatus !== 'AUTO_RESULT_SHOWN' && (
-              <div className="space-y-4">
-                {appStatus !== 'AWAITING_REFINE_POINTS' && !isManualMode(appStatus) && (
-                  <div className="space-y-6">
-                    {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && (
-                      <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label>
-                          <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                          <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50">
-                            <Upload className="w-5 h-5 text-gray-400" />
-                            <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span>
-                          </button>
-                        </div>
-                        <div>
-                          <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label>
-                          <div className="relative">
-                            <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                            <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" />
-                          </div>
-                          <ARLinks />
-                        </div>
-                        <div className="space-y-3 pt-2 border-t">
-                          <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4">
-                            <Zap className="w-6 h-6 flex-shrink-0" />
-                            <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div>
-                          </button>
-                          <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4">
-                            <Ruler className="w-6 h-6 flex-shrink-0" />
-                            <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                    {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); }} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)}
-                  </div>
-                )}
-                {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={handleCancelRefinement} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )}
-                {isManualMode(appStatus) && ( <div className="pt-4 border-t"> {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>} <button onClick={handleCancelManualMode} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button> </div> )}
-              </div>
-            )}
-
-            {appStatus === 'AUTO_RESULT_SHOWN' && (
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2>
-                  <div className="space-y-2 mt-2">
-                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div>
-                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div>
-                    <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 pt-4 border-t">
-                  <button onClick={handleCorrectOutline} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button>
-                  <button onClick={handleSwitchToManualMode} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button>
-                </div>
-                <div className="space-y-4 border-t pt-4">
-                  <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button>
-                  <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} />
-                  <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
-                  <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
-                </div>
-                <div className="grid grid-cols-2 gap-3 pt-4 border-t">
-                  <button onClick={softReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button>
-                  <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>
-                </div>
-              </div>
-            )}
-            
-            <div className="border-t border-gray-200 mt-6 pt-6">
-              <ResultsTable 
-                results={allResults} 
-                onDeleteResult={handleDeleteResult}
-                onEditResult={handleOpenEditModal}
-              />
-              {allResults.length > 0 && (<div className="mt-4"><button onClick={fullReset} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-700 bg-red-100 rounded-lg hover:bg-red-200"><Trash2 className="w-4 h-4" /> Clear All History</button></div>)}
-            </div>
-          </div>
         </div>
-      )}
+        <div className="w-full md:w-1/2 h-1/2 md:h-full flex flex-col p-6 overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3"><Navigation className="w-8 h-8 text-blue-700" /><h1 className="text-2xl font-semibold text-gray-900">Quick Capture</h1></div>
+                <AuthComponent />
+            </div>
+            <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Mode Selection</button>
+
+            <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200">
+                <h3 className="font-bold text-slate-800">Current Task</h3>
+                <p className="text-sm text-slate-600">{instructionText}</p>
+                {errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}
+            </div>
+
+            {isBusy && appStatus === 'SAVING' && (
+                <div className="mb-6">
+                    <div className="progress-bar-container"><div className="progress-bar-animated"></div></div>
+                    <p className="text-xs text-center text-gray-500 animate-pulse mt-1">Submitting for analysis...</p>
+                </div>
+            )}
+
+            <div className="space-y-6">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Tree Photo</label>
+                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50">
+                        <Upload className="w-5 h-5 text-gray-400" />
+                        <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span>
+                    </button>
+                </div>
+                <div>
+                    <label htmlFor="distance-input-quick" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label>
+                    <div className="relative">
+                        <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input type="number" id="distance-input-quick" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-200" />
+                    </div>
+                </div>
+                <div className="pt-4 border-t">
+                    <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300">
+                        <Zap className="w-5 h-5" />
+                        Submit for Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+
+  const FullAnalysisScreen = () => (
+    <>
+    <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
+        {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
+        {(hasActiveMeasurement || isLocationPickerActive) && ( isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : ( <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} /> ) )}
+    </div>
+      
+    {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && ( <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform"> <Menu size={24} /> </button> )}
+
+    {(!isLocationPickerActive || window.innerWidth >= 768) && (
+      <div id="control-panel" className={` bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full overflow-y-auto'} ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'} `} >
+        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200">
+            <div className="flex items-center gap-3"><ShieldCheck className="w-8 h-8 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Full Analysis</h1></div>
+            {hasActiveMeasurement && <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800 md:hidden"><X size={24} /></button>}
+        </div>
+
+        <div className="flex-grow overflow-y-auto p-4 md:p-6">
+          <div className="hidden md:flex justify-between items-center mb-6"> <div></div> <AuthComponent /> </div>
+          <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Mode Selection</button>
+          <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
+          {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'SAVING' ? 'Saving result...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
+          {appStatus !== 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> {appStatus !== 'AWAITING_REFINE_POINTS' && !isManualMode(appStatus) && ( <div className="space-y-6"> {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && ( <> <div> <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span> </button> </div> <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" /> </div> <ARLinks /> </div> <div className="space-y-3 pt-2 border-t"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> </> )} {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); }} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)} </div> )} {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={() => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled."); }} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )} {isManualMode(appStatus) && ( <div className="pt-4 border-t"> {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>} <button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }}} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button> </div> )} </div> )}
+          {appStatus === 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div> <div className="space-y-4 border-t pt-4"> <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset('FULL_ANALYSIS')} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button> <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button> </div> </div> )}
+          <div className="border-t border-gray-200 mt-6 pt-6"> <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} /> </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+
+  return (
+    <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
+      {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} /> )}
+      <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
+      {appMode === 'SELECT_MODE' && <ModeSelectionScreen />}
+      {appMode === 'QUICK_CAPTURE' && <QuickCaptureScreen />}
+      {appMode === 'FULL_ANALYSIS' && <FullAnalysisScreen />}
     </div>
   );
 }
