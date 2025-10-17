@@ -248,11 +248,9 @@ function App() {
     };
 
     try {
-      // --- MODIFIED: This is the corrected logic ---
       const updatedResult = await updateResult(editingResult.id, payload, session.access_token);
       setAllResults(prev => prev.map(r => (r.id === updatedResult.id ? updatedResult : r)));
       setEditingResult(null);
-      // --- END MODIFIED BLOCK ---
     } catch (error: any) {
       setErrorMessage(`Failed to update result: ${error.message}`);
     }
@@ -414,14 +412,16 @@ function App() {
       )}
 
       {(!isLocationPickerActive || window.innerWidth >= 768) && (
+        // --- MODIFIED: This is the only line changed to fix the layout ---
         <div id="control-panel" 
           className={`
-            bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out 
-            md:static md:w-[35%] md:flex-[0.35] md:translate-y-0
-            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full md:w-[35%] overflow-y-auto'}
+            bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out
+            md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0
+            ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full overflow-y-auto'}
             ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'}
           `}
         >
+        {/* --- END MODIFIED BLOCK --- */}
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
             {hasActiveMeasurement ? (
               <>
