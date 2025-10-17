@@ -66,28 +66,8 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
   );
 };
 
-const LoginPrompt = () => {
-    const { signInWithGoogle } = useAuth();
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center text-center bg-gray-50 p-6">
-        <TreePine className="w-16 h-16 text-green-600 mb-4" />
-        <h1 className="text-3xl font-bold text-gray-800">Welcome to the Tree Measurement Tool</h1>
-        <p className="mt-2 max-w-md text-gray-600">
-          Sign in to begin measuring trees, identifying species, and tracking your results in a persistent measurement history.
-        </p>
-        <button 
-          onClick={signInWithGoogle}
-          className="mt-8 flex items-center gap-3 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 transition-transform active:scale-95 shadow-lg"
-        >
-          <svg className="w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 381.5 512 244 512 110.3 512 0 398.8 0 256S110.3 0 244 0c69.8 0 130.8 28.5 173.4 74.5l-68.2 66.3C314.5 112.5 282.2 96 244 96c-83.2 0-151.2 67.2-151.2 150.2s68 150.2 151.2 150.2c97.7 0 128.8-72.2 132.3-108.9H244v-85.3h238.9c2.3 12.7 3.6 26.4 3.6 40.5z"></path></svg>
-          Sign In with Google
-        </button>
-      </div>
-    );
-};
-
 function App() {
-  const { user, session, isLoading: isAuthLoading } = useAuth();
+  const { user, session } = useAuth();
   
   const [currentView, setCurrentView] = useState<MainView>('main');
   const [appMode, setAppMode] = useState<AppMode>('SELECT_MODE');
@@ -701,9 +681,7 @@ function App() {
 
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
   
-  if (isAuthLoading) { return ( <div className="h-screen w-screen flex items-center justify-center bg-white"> <Loader2 className="w-8 h-8 text-gray-400 animate-spin" /> </div> ); }
   if (appStatus === 'CALIBRATION_AWAITING_INPUT') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
-  if (!user) { return <LoginPrompt />; }
 
   const hasActiveMeasurement = (appMode === 'FULL_ANALYSIS' || appMode === 'QUICK_CAPTURE' || appMode === 'COMMUNITY_ANALYSIS') && appStatus !== 'IDLE' && (currentMeasurementFile || claimedTree);
   const isBusy = ['PROCESSING', 'SAVING', 'FETCHING_GROVE', 'CLAIMING_TREE'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
@@ -712,6 +690,8 @@ function App() {
   const workbenchTitle = appMode === 'COMMUNITY_ANALYSIS' ? 'Community Analysis' : appMode === 'QUICK_CAPTURE' ? 'Quick Capture' : 'Full Analysis';
   const workbenchIcon = appMode === 'COMMUNITY_ANALYSIS' ? <Users className="w-8 h-8 text-indigo-700" /> : appMode === 'QUICK_CAPTURE' ? <Navigation className="w-8 h-8 text-blue-700" /> : <TreePine className="w-8 h-8 text-green-700" />;
 
+  const isAutoDisabled = (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree);
+  const isManualDisabled = (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree);
 
   const PrereqCheckItem = ({ name, status, errorText }: { name: string, status: SensorStatus, errorText: string }) => {
     return (
@@ -820,7 +800,7 @@ function App() {
                   
                   {appMode === 'QUICK_CAPTURE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleQuickCaptureSubmit} disabled={appStatus !== 'IMAGE_LOADED' || !distance || isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"> <Zap className="w-5 h-5" /> Submit for Analysis </button> </div> )}
 
-                  {(appStatus === 'IMAGE_LOADED' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE') && (appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && ( <div className="space-y-3 pt-6 border-t mt-6"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree)} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={!distance || (appMode === 'FULL_ANALYSIS' && !currentMeasurementFile) || (appMode === 'COMMUNITY_ANALYSIS' && !claimedTree)} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> )}
+                  {(appStatus === 'IMAGE_LOADED' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE') && (appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && ( <div className="space-y-3 pt-6 border-t mt-6"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={isAutoDisabled} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={isManualDisabled} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> )}
 
                   {currentMetrics && (appStatus === 'AUTO_RESULT_SHOWN' || appStatus === 'COMMUNITY_ANALYSIS_ACTIVE' || appStatus === 'MANUAL_READY_TO_CALCULATE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {appMode === 'FULL_ANALYSIS' && appStatus === 'AUTO_RESULT_SHOWN' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} <div className="space-y-4 border-t pt-4"> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> {appMode === 'FULL_ANALYSIS' && <><button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button><AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /></>} </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(appMode)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{appMode === 'COMMUNITY_ANALYSIS' ? 'Cancel & Exit' : 'Measure Another'}</button> {appMode === 'FULL_ANALYSIS' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {appMode === 'COMMUNITY_ANALYSIS' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
                   
