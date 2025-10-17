@@ -122,17 +122,12 @@ function App() {
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
   
   useEffect(() => {
-    // Only listen for device orientation when in Quick Capture mode
     if (appMode !== 'QUICK_CAPTURE') return;
   
     const handleOrientation = (event: DeviceOrientationEvent) => {
-      // event.alpha is the compass direction in degrees (0-360)
-      if (event.alpha !== null) {
-        setDeviceHeading(event.alpha);
-      }
+      if (event.alpha !== null) { setDeviceHeading(event.alpha); }
     };
   
-    // Check for support and request permission if necessary (for iOS 13+)
     // @ts-ignore
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       // @ts-ignore
@@ -146,7 +141,6 @@ function App() {
         })
         .catch(console.error);
     } else {
-      // Standard browsers
       window.addEventListener('deviceorientation', handleOrientation, true);
     }
   
@@ -276,7 +270,24 @@ function App() {
     );
   };
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (!file) return; softReset(appMode); setCurrentMeasurementFile(file); setAppStatus('IMAGE_UPLOADING'); };
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
+    const file = event.target.files?.[0]; 
+    if (!file) return;
+    setAppStatus('IMAGE_UPLOADING');
+    setErrorMessage('');
+    setCurrentMeasurementFile(file);
+    setDistance('');
+    setFocalLength(null);
+    setScaleFactor(null);
+    setCurrentMetrics(null);
+    setRefinePoints([]);
+    setDbhLine(null);
+    setTransientPoint(null);
+    setManualPoints({ height: [], canopy: [], girth: [] });
+    setDbhGuideRect(null);
+    setPendingTreeFile(null);
+    setImageDimensions(null);
+  };
   
   const handleDeleteResult = async (idToDelete: string) => {
     if (!session?.access_token) { setErrorMessage("You must be logged in to delete results."); return; }
@@ -352,7 +363,7 @@ function App() {
     const distMM = parseFloat(distance) * 1000;
     const horizontalPixels = Math.max(imageDimensions.w, imageDimensions.h);
     const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
-    setScaleFactor(finalScaleFactor); // Still set the state for Full Analysis mode
+    setScaleFactor(finalScaleFactor);
     return finalScaleFactor;
   };
   
@@ -385,7 +396,7 @@ function App() {
         longitude: currentLocation?.lng,
         image_url: imageUrl,
         distance_m: parseFloat(distance),
-        scale_factor: scaleFactor, // Save the scale factor
+        scale_factor: scaleFactor,
         ...additionalData,
       };
 
@@ -413,7 +424,6 @@ function App() {
     const calculatedScaleFactor = prepareMeasurementSession();
     if (!calculatedScaleFactor) {
       setAppStatus('ERROR');
-      // The error message is already set by prepareMeasurementSession
       return;
     }
     
@@ -427,15 +437,10 @@ function App() {
         userGeoLocation.lng,
         session.access_token
       );
-      // Success! Fetch new results and reset
+      
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
-      
-      setInstructionText("Submission successful! Data sent for analysis.");
-      setAppStatus('IDLE');
-      setTimeout(() => {
-        handleReturnToModeSelect();
-      }, 2000);
+      softReset('QUICK_CAPTURE');
 
     } catch (error: any) {
       setErrorMessage(`Submission failed: ${error.message}`);
@@ -446,7 +451,7 @@ function App() {
   const softReset = (currentMode: AppMode) => {
     setAppMode(currentMode);
     setAppStatus('IDLE');
-    setInstructionText("Select a tree image to measure.");
+    setInstructionText(currentMode === 'QUICK_CAPTURE' ? 'Ready for next Quick Capture. Upload an image.' : 'Ready for next Full Analysis. Upload an image.');
     setErrorMessage('');
     setCurrentMeasurementFile(null);
     setDistance('');
@@ -500,7 +505,7 @@ function App() {
   if (appStatus === 'CALIBRATION_AWAITING_INPUT') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (!user) { return <LoginPrompt />; }
 
-  const hasActiveMeasurement = appStatus !== 'IDLE' && appStatus !== 'IMAGE_UPLOADING' && currentMeasurementFile;
+  const hasActiveMeasurement = appMode === 'FULL_ANALYSIS' && appStatus !== 'IDLE' && currentMeasurementFile;
   const isBusy = appStatus === 'PROCESSING' || appStatus === 'SAVING' || isCO2Calculating || isHistoryLoading;
 
   const ModeSelectionScreen = () => (
@@ -547,7 +552,7 @@ function App() {
                 <div className="flex items-center gap-3"><Navigation className="w-8 h-8 text-blue-700" /><h1 className="text-2xl font-semibold text-gray-900">Quick Capture</h1></div>
                 <AuthComponent />
             </div>
-            <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Mode Selection</button>
+            <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4 self-start">{'<'} Back to Mode Selection</button>
 
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200">
                 <h3 className="font-bold text-slate-800">Current Task</h3>
@@ -585,47 +590,60 @@ function App() {
                     </button>
                 </div>
             </div>
+
+            <div className="border-t border-gray-200 mt-6 pt-6">
+                <ResultsTable
+                    results={allResults}
+                    onDeleteResult={handleDeleteResult}
+                    onEditResult={handleOpenEditModal}
+                />
+            </div>
         </div>
     </div>
-  );
-
-  const FullAnalysisScreen = () => (
-    <>
-    <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
-        {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
-        {(hasActiveMeasurement || isLocationPickerActive) && ( isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : ( <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} /> ) )}
-    </div>
-      
-    {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && ( <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform"> <Menu size={24} /> </button> )}
-
-    {(!isLocationPickerActive || window.innerWidth >= 768) && (
-      <div id="control-panel" className={` bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full overflow-y-auto'} ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'} `} >
-        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200">
-            <div className="flex items-center gap-3"><ShieldCheck className="w-8 h-8 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Full Analysis</h1></div>
-            {hasActiveMeasurement && <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800 md:hidden"><X size={24} /></button>}
-        </div>
-
-        <div className="flex-grow overflow-y-auto p-4 md:p-6">
-          <div className="hidden md:flex justify-between items-center mb-6"> <div></div> <AuthComponent /> </div>
-          <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Mode Selection</button>
-          <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
-          {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'SAVING' ? 'Saving result...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
-          {appStatus !== 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> {appStatus !== 'AWAITING_REFINE_POINTS' && !isManualMode(appStatus) && ( <div className="space-y-6"> {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && ( <> <div> <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span> </button> </div> <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" /> </div> <ARLinks /> </div> <div className="space-y-3 pt-2 border-t"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> </> )} {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); }} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)} </div> )} {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={() => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled."); }} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )} {isManualMode(appStatus) && ( <div className="pt-4 border-t"> {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>} <button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }}} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button> </div> )} </div> )}
-          {appStatus === 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div> <div className="space-y-4 border-t pt-4"> <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset('FULL_ANALYSIS')} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button> <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button> </div> </div> )}
-          <div className="border-t border-gray-200 mt-6 pt-6"> <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} /> </div>
-        </div>
-      </div>
-    )}
-    </>
   );
 
   return (
     <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
       {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} /> )}
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
+      
       {appMode === 'SELECT_MODE' && <ModeSelectionScreen />}
       {appMode === 'QUICK_CAPTURE' && <QuickCaptureScreen />}
-      {appMode === 'FULL_ANALYSIS' && <FullAnalysisScreen />}
+
+      {appMode === 'FULL_ANALYSIS' && (
+          <>
+            <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
+                {(!hasActiveMeasurement && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start measuring</p></div>}
+                {(hasActiveMeasurement || isLocationPickerActive) && ( isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : ( <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} /> ) )}
+            </div>
+              
+            {hasActiveMeasurement && !isPanelOpen && !isLocationPickerActive && ( <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform"> <Menu size={24} /> </button> )}
+
+            {(!isLocationPickerActive || window.innerWidth >= 768) && (
+              <div id="control-panel" className={` bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${hasActiveMeasurement ? 'fixed z-20 inset-0' : 'w-full overflow-y-auto'} ${isPanelOpen || !hasActiveMeasurement ? 'translate-y-0' : 'translate-y-full'} `} >
+                <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
+                    {hasActiveMeasurement ? ( <> <AuthComponent /> <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button> </> ) : ( <div className="w-full flex justify-between items-center"> <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Tree Measurement</h1></div> <AuthComponent /> </div> )}
+                </div>
+
+                <div className="flex-grow overflow-y-auto p-4 md:p-6">
+                  <div className="hidden md:flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-3"><TreePine className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Tree Measurement</h1></div>
+                    <AuthComponent />
+                  </div>
+
+                  <button onClick={handleReturnToModeSelect} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Mode Selection</button>
+
+                  <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
+                  {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'SAVING' ? 'Saving result...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
+                  
+                  {appStatus !== 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> {appStatus !== 'AWAITING_REFINE_POINTS' && !isManualMode(appStatus) && ( <div className="space-y-6"> {appStatus !== 'AWAITING_CALIBRATION_CHOICE' && ( <> <div> <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Measurement Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">{currentMeasurementFile ? 'Change Image' : 'Choose Image File'}</span> </button> </div> <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} disabled={appStatus !== 'IMAGE_LOADED'} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 disabled:bg-gray-200" /> </div> <ARLinks /> </div> <div className="space-y-3 pt-2 border-t"> <button id="start-auto-btn" onClick={handleStartAutoMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> <button id="start-manual-btn" onClick={handleStartManualMeasurement} disabled={appStatus !== 'IMAGE_LOADED' || !distance} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> </div> </> )} {appStatus === 'AWAITING_CALIBRATION_CHOICE' && (<div className="space-y-4 p-4 border-2 border-dashed border-blue-500 rounded-lg"><div className="flex items-center gap-2 text-blue-700"><Save className="w-5 h-5" /><h3 className="font-bold">Use Saved Calibration?</h3></div><button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); }} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700">Yes, Use Saved</button><button onClick={() => setAppStatus('CALIBRATION_AWAITING_INPUT')} className="w-full px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700">No, Calibrate New</button></div>)} </div> )} {appStatus === 'AWAITING_REFINE_POINTS' && ( <div className="grid grid-cols-2 gap-3 pt-4 border-t"><button onClick={handleApplyRefinements} disabled={refinePoints.length === 0} className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 text-sm">Apply Correction</button><button onClick={() => { setRefinePoints([]); setAppStatus('AUTO_RESULT_SHOWN'); setIsPanelOpen(true); setInstructionText("Refinement cancelled."); }} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel</button></div> )} {isManualMode(appStatus) && ( <div className="pt-4 border-t"> {appStatus === 'MANUAL_READY_TO_CALCULATE' && <button onClick={handleCalculateManual} className="w-full mb-3 px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 text-sm">Calculate Manual Results</button>} <button onClick={() => { setAppStatus('IMAGE_LOADED'); setIsPanelOpen(true); setInstructionText("Manual mode cancelled."); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); if (currentMeasurementFile) { setCurrentMetrics(null); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); }}} className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">Cancel Manual Mode</button> </div> )} </div> )}
+                  {appStatus === 'AUTO_RESULT_SHOWN' && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div> <div className="space-y-4 border-t pt-4"> <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset('FULL_ANALYSIS')} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />Measure Another</button> <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button> </div> </div> )}
+                  <div className="border-t border-gray-200 mt-6 pt-6"> <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} /> </div>
+                </div>
+              </div>
+            )}
+          </>
+      )}
     </div>
   );
 }
