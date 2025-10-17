@@ -1,10 +1,8 @@
 // src/components/ResultsTable.tsx
-import React, { useState, useMemo } from 'react';
-import { Download, LayoutList, Trash2, ChevronUp, ChevronDown, Edit, ImageIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2 } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
-import { TreeResult, Metrics } from '../apiService';
-
-type SortableKeys = keyof Metrics | 'file_name' | 'species' | 'wood_density' | 'co2' | 'condition' | 'ownership' | 'location';
+import { TreeResult } from '../apiService';
 
 interface ResultsTableProps {
   results: TreeResult[];
@@ -12,45 +10,55 @@ interface ResultsTableProps {
   onEditResult: (result: TreeResult) => void;
 }
 
+// A new component for the expandable details section
+const DetailRow = ({ result }: { result: TreeResult }) => (
+  <div className="bg-slate-50 p-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs">
+      <div className="col-span-2 sm:col-span-3">
+        <p className="font-semibold text-gray-700">File & Date</p>
+        <p className="text-gray-500 truncate">{result.file_name} <span className="text-gray-400">({new Date(result.created_at).toLocaleDateString()})</span></p>
+      </div>
+      <div>
+        <p className="font-semibold text-gray-700">Distance</p>
+        <p className="text-gray-500">{result.distance_m ? `${result.distance_m.toFixed(2)} m` : 'N/A'}</p>
+      </div>
+      <div>
+        <p className="font-semibold text-gray-700">Condition</p>
+        <p className="text-gray-500">{result.condition || 'N/A'}</p>
+      </div>
+      <div>
+        <p className="font-semibold text-gray-700">Ownership</p>
+        <p className="text-gray-500">{result.ownership || 'N/A'}</p>
+      </div>
+      <div className="col-span-2 sm:col-span-3">
+        <p className="font-semibold text-gray-700">Location</p>
+         {result.latitude && result.longitude ? (
+            <a href={`https://www.google.com/maps/search/?api=1&query=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+              <MapPin size={12}/> {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}
+            </a>
+        ) : <p className="text-gray-500">N/A</p>}
+      </div>
+      {result.remarks && (
+        <div className="col-span-2 sm:col-span-3">
+          <p className="font-semibold text-gray-700">Remarks</p>
+          <p className="text-gray-500 whitespace-pre-wrap break-words">{result.remarks}</p>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+
 export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
-  const [sortConfig, setSortConfig] = useState<{ key: SortableKeys; direction: 'ascending' | 'descending' } | null>({ key: 'created_at' as any, direction: 'descending' });
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  
+  // Default sort by creation date (newest first)
+  const sortedResults = [...results].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  const sortedResults = useMemo(() => {
-    let sortableItems = [...results];
-    if (sortConfig !== null) {
-      sortableItems.sort((a, b) => {
-        let aValue: string | number | Date;
-        let bValue: string | number | Date;
-        
-        if (sortConfig.key === 'file_name') { aValue = a.file_name.toLowerCase(); bValue = b.file_name.toLowerCase(); }
-        else if (sortConfig.key === 'species') { aValue = a.species?.scientificName.toLowerCase() ?? ''; bValue = b.species?.scientificName.toLowerCase() ?? ''; }
-        else if (sortConfig.key === 'wood_density') { aValue = a.wood_density?.value ?? -1; bValue = b.wood_density?.value ?? -1; }
-        else if (sortConfig.key === 'co2') { aValue = a.co2_sequestered_kg ?? -1; bValue = b.co2_sequestered_kg ?? -1; }
-        else if (sortConfig.key === 'condition') { aValue = a.condition?.toLowerCase() ?? ''; bValue = b.condition?.toLowerCase() ?? ''; }
-        else if (sortConfig.key === 'ownership') { aValue = a.ownership?.toLowerCase() ?? ''; bValue = b.ownership?.toLowerCase() ?? ''; }
-        else if (sortConfig.key === 'location') { aValue = a.latitude ?? -91; bValue = b.latitude ?? -91; }
-        else if (sortConfig.key === ('created_at' as any)) { aValue = new Date(a.created_at); bValue = new Date(b.created_at); }
-        else { aValue = a.metrics[sortConfig.key as keyof Metrics]; bValue = b.metrics[sortConfig.key as keyof Metrics]; }
-
-        if (aValue < bValue) { return sortConfig.direction === 'ascending' ? -1 : 1; }
-        if (aValue > bValue) { return sortConfig.direction === 'ascending' ? 1 : -1; }
-        return 0;
-      });
-    }
-    return sortableItems;
-  }, [results, sortConfig]);
-
-  const requestSort = (key: SortableKeys) => {
-    let direction: 'ascending' | 'descending' = 'ascending';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') { direction = 'descending'; }
-    setSortConfig({ key, direction });
+  const handleRowClick = (resultId: string) => {
+    setExpandedRowId(prevId => (prevId === resultId ? null : resultId));
   };
-
-  const getSortIcon = (key: SortableKeys) => {
-    if (!sortConfig || sortConfig.key !== key) { return <ChevronDown className="w-3 h-3 text-gray-400 opacity-50" />; }
-    return sortConfig.direction === 'ascending' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />;
-  };
-
+  
   if (results.length === 0) { 
     return (
         <div>
@@ -69,69 +77,95 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
         <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
       </div>
-      <div className="md:overflow-x-auto md:bg-white md:rounded-lg md:border md:border-gray-200">
-        <table className="min-w-full text-sm mobile-cards-table">
-          <thead className="hidden md:table-header-group bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
+
+      {/* --- MODIFIED: Restructured for Desktop & Mobile --- */}
+      {/* Desktop View: Table */}
+      <div className="hidden md:block border border-gray-200 rounded-lg overflow-hidden">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
             <tr>
-              {/* --- MODIFIED: Added Image column header --- */}
-              <th scope="col" className="px-4 py-3 text-left">Image</th>
-              <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('file_name')} className="flex items-center gap-1">File Name {getSortIcon('file_name')}</button></th>
-              <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('species')} className="flex items-center gap-1">Species {getSortIcon('species')}</button></th>
-              <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('condition')} className="flex items-center gap-1">Condition {getSortIcon('condition')}</button></th>
-              <th scope="col" className="px-4 py-3 text-right"><button onClick={() => requestSort('co2')} className="flex items-center gap-1 w-full justify-end">CO₂ (kg) {getSortIcon('co2')}</button></th>
-              <th scope="col" className="px-4 py-3 text-left"><button onClick={() => requestSort('location')} className="flex items-center gap-1">Location {getSortIcon('location')}</button></th>
+              <th scope="col" className="w-12 px-4 py-3"></th>
+              <th scope="col" className="w-16 px-2 py-3"></th>
+              <th scope="col" className="px-4 py-3 text-left">Species</th>
+              <th scope="col" className="px-4 py-3 text-right">Height (m)</th>
+              <th scope="col" className="px-4 py-3 text-right">Canopy (m)</th>
+              <th scope="col" className="px-4 py-3 text-right">DBH (cm)</th>
+              <th scope="col" className="px-4 py-3 text-right">CO₂ (kg)</th>
               <th scope="col" className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="md:divide-y md:divide-gray-200">
+          <tbody className="divide-y divide-gray-200 bg-white">
             {sortedResults.map((result) => (
-              <tr key={result.id} className="md:hover:bg-gray-50">
-                {/* --- MODIFIED: Added Image data cell --- */}
-                <td data-label="Image" className="px-4 py-3">
-                  <div className="flex items-center justify-center md:justify-start">
+              <React.Fragment key={result.id}>
+                <tr onClick={() => handleRowClick(result.id)} className="cursor-pointer hover:bg-gray-50">
+                  <td className="px-4 py-2 text-center">
+                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
+                  </td>
+                  <td className="px-2 py-2">
                     {result.image_url ? (
-                      <a href={result.image_url} target="_blank" rel="noopener noreferrer">
-                        <img 
-                          src={result.image_url} 
-                          alt={`Thumbnail for ${result.file_name}`} 
-                          className="h-12 w-12 object-cover rounded-md bg-gray-100 shadow-sm hover:scale-105 transition-transform"
-                        />
-                      </a>
+                        <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-gray-100"/>
                     ) : (
-                      <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400">
-                        <ImageIcon className="w-6 h-6" />
-                      </div>
+                      <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-6 h-6" /></div>
                     )}
-                  </div>
-                </td>
-                <td data-label="File" className="px-4 py-3 font-medium text-gray-900"><span className="truncate">{result.file_name}</span></td>
-                <td data-label="Species" className="px-4 py-3 font-medium text-gray-800 italic"><span className="truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</span></td>
-                <td data-label="Condition" className="px-4 py-3 text-gray-600"><span>{result.condition || <span className="text-gray-400">N/A</span>}</span></td>
-                <td data-label="CO₂ (kg)" className="px-4 py-3 font-mono font-semibold text-sky-800"><span>{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400 font-mono">N/A</span>}</span></td>
-                <td data-label="Location" className="px-4 py-3 font-mono">
-                    <span>
-                      {result.latitude && result.longitude ? (
-                          <a href={`https://www.google.com/maps/search/?api=1&query=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                              {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}
-                          </a>
-                      ) : <span className="text-gray-400">N/A</span>}
-                    </span>
-                </td>
-                <td data-label="Actions" className="px-4 py-3">
-                  <div className="flex justify-end items-center gap-2">
-                    <button onClick={() => onEditResult(result)} className="p-1 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result">
-                        <Edit className="w-5 h-5" />
-                    </button>
-                    <button onClick={() => onDeleteResult(result.id)} className="p-1 text-gray-400 hover:text-red-600 rounded-md" aria-label="Delete result">
-                        <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-gray-800 italic">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics.height_m.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics.canopy_m.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono">{result.metrics.dbh_cm.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-sky-800">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400">N/A</span>}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end items-center gap-2">
+                      <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-gray-400 hover:text-red-600 rounded-md" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
+                    </div>
+                  </td>
+                </tr>
+                {expandedRowId === result.id && (
+                  <tr>
+                    <td colSpan={8} className="p-0"><DetailRow result={result} /></td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Mobile View: Cards */}
+      <div className="md:hidden space-y-3">
+        {sortedResults.map(result => (
+          <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="p-3">
+              <div className="flex gap-4">
+                {result.image_url ? (
+                  <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-gray-100 flex-shrink-0"/>
+                ) : (
+                  <div className="h-20 w-20 flex items-center justify-center bg-gray-100 rounded-md text-gray-400 flex-shrink-0"><ImageIcon className="w-8 h-8" /></div>
+                )}
+                <div className="flex-grow">
+                  <p className="font-semibold text-gray-800 italic truncate">{result.species?.scientificName ?? 'Unknown Species'}</p>
+                  <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
+                      <div><p className="font-medium text-gray-500">Height</p><p className="font-mono">{result.metrics.height_m.toFixed(1)}m</p></div>
+                      <div><p className="font-medium text-gray-500">Canopy</p><p className="font-mono">{result.metrics.canopy_m.toFixed(1)}m</p></div>
+                      <div><p className="font-medium text-gray-500">DBH</p><p className="font-mono">{result.metrics.dbh_cm.toFixed(1)}cm</p></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {expandedRowId === result.id && <DetailRow result={result} />}
+            <div className="border-t bg-gray-50/50 flex justify-between items-center px-3 py-1 rounded-b-lg">
+                <button onClick={() => handleRowClick(result.id)} className="flex items-center gap-1.5 text-xs font-medium text-blue-600 p-1">
+                  {expandedRowId === result.id ? <><Minimize2 size={12}/>Hide</> : <><Maximize2 size={12}/>Show</>} Details
+                </button>
+                <div className="flex items-center">
+                    <button onClick={() => onEditResult(result)} className="p-2 text-gray-500 hover:text-blue-600" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
+                    <button onClick={() => onDeleteResult(result.id)} className="p-2 text-gray-500 hover:text-red-600" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
+                </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* --- END MODIFIED BLOCK --- */}
     </div>
   );
 }
