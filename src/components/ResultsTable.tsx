@@ -52,7 +52,6 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
 export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   
-  // Default sort by creation date (newest first)
   const sortedResults = [...results].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const handleRowClick = (resultId: string) => {
@@ -78,20 +77,20 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
       </div>
 
-      {/* --- MODIFIED: Restructured for Desktop & Mobile --- */}
-      {/* Desktop View: Table */}
-      <div className="hidden md:block border border-gray-200 rounded-lg overflow-hidden">
-        <table className="min-w-full text-sm">
+      <div className="hidden md:block border border-gray-200 rounded-lg overflow-x-auto">
+        <table className="min-w-full text-sm table-fixed">
           <thead className="bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
             <tr>
+              {/* --- MODIFIED: Added specific widths for a stable layout --- */}
               <th scope="col" className="w-12 px-4 py-3"></th>
-              <th scope="col" className="w-16 px-2 py-3"></th>
+              <th scope="col" className="w-20 px-2 py-3"></th>
               <th scope="col" className="px-4 py-3 text-left">Species</th>
-              <th scope="col" className="px-4 py-3 text-right">Height (m)</th>
-              <th scope="col" className="px-4 py-3 text-right">Canopy (m)</th>
-              <th scope="col" className="px-4 py-3 text-right">DBH (cm)</th>
-              <th scope="col" className="px-4 py-3 text-right">CO₂ (kg)</th>
-              <th scope="col" className="px-4 py-3 text-right">Actions</th>
+              <th scope="col" className="w-24 px-4 py-3 text-right">Height (m)</th>
+              <th scope="col" className="w-24 px-4 py-3 text-right">Canopy (m)</th>
+              <th scope="col" className="w-24 px-4 py-3 text-right">DBH (cm)</th>
+              <th scope="col" className="w-24 px-4 py-3 text-right">CO₂ (kg)</th>
+              <th scope="col" className="w-28 px-4 py-3 text-right">Actions</th>
+              {/* --- END MODIFIED BLOCK --- */}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
@@ -102,13 +101,16 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
                   </td>
                   <td className="px-2 py-2">
-                    {result.image_url ? (
-                        <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-gray-100"/>
-                    ) : (
-                      <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-6 h-6" /></div>
-                    )}
+                    {/* --- MODIFIED: Added stopPropagation to the link's onClick --- */}
+                    <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                      {result.image_url ? (
+                          <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-gray-100 transition-transform hover:scale-105"/>
+                      ) : (
+                        <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-6 h-6" /></div>
+                      )}
+                    </a>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-800 italic">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800 italic truncate">{result.species?.scientificName ?? <span className="text-gray-400 not-italic">N/A</span>}</td>
                   <td className="px-4 py-3 text-right font-mono">{result.metrics.height_m.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono">{result.metrics.canopy_m.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono">{result.metrics.dbh_cm.toFixed(2)}</td>
@@ -131,18 +133,20 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         </table>
       </div>
 
-      {/* Mobile View: Cards */}
       <div className="md:hidden space-y-3">
         {sortedResults.map(result => (
           <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-3">
               <div className="flex gap-4">
-                {result.image_url ? (
-                  <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-gray-100 flex-shrink-0"/>
-                ) : (
-                  <div className="h-20 w-20 flex items-center justify-center bg-gray-100 rounded-md text-gray-400 flex-shrink-0"><ImageIcon className="w-8 h-8" /></div>
-                )}
-                <div className="flex-grow">
+                 {/* --- MODIFIED: Added stopPropagation to the mobile link's onClick --- */}
+                <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+                  {result.image_url ? (
+                    <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-gray-100"/>
+                  ) : (
+                    <div className="h-20 w-20 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-8 h-8" /></div>
+                  )}
+                </a>
+                <div className="flex-grow min-w-0">
                   <p className="font-semibold text-gray-800 italic truncate">{result.species?.scientificName ?? 'Unknown Species'}</p>
                   <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
                       <div><p className="font-medium text-gray-500">Height</p><p className="font-mono">{result.metrics.height_m.toFixed(1)}m</p></div>
@@ -158,14 +162,13 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                   {expandedRowId === result.id ? <><Minimize2 size={12}/>Hide</> : <><Maximize2 size={12}/>Show</>} Details
                 </button>
                 <div className="flex items-center">
-                    <button onClick={() => onEditResult(result)} className="p-2 text-gray-500 hover:text-blue-600" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
-                    <button onClick={() => onDeleteResult(result.id)} className="p-2 text-gray-500 hover:text-red-600" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-gray-500 hover:text-blue-600" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-gray-500 hover:text-red-600" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
                 </div>
             </div>
           </div>
         ))}
       </div>
-      {/* --- END MODIFIED BLOCK --- */}
     </div>
   );
 }
