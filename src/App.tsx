@@ -574,6 +574,15 @@ function App() {
     try {
       const res = await claimTree(treeId, session.access_token);
       const claimedData = res.data;
+
+      // --- START: SURGICAL ADDITION ---
+      // Surgically added check to ensure critical data is present before proceeding.
+      if (!claimedData || claimedData.distance_m == null || claimedData.scale_factor == null) {
+        console.error("Claim response missing critical data:", claimedData);
+        throw new Error("Failed to claim tree: The record is missing essential measurement data and cannot be analyzed.");
+      }
+      // --- END: SURGICAL ADDITION ---
+
       setClaimedTree(claimedData);
 
       const img = new Image();
