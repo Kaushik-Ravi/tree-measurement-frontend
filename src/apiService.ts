@@ -65,6 +65,12 @@ export interface UpdateTreeResultPayload {
 export interface CommunityAnalysisPayload {
   metrics: Metrics;
   species?: SpeciesInfo | null;
+  // --- START: SURGICAL ADDITION ---
+  // Add the optional fields to match the backend Pydantic model.
+  condition?: string;
+  ownership?: string;
+  remarks?: string;
+  // --- END: SURGICAL ADDITION ---
 }
 // --- END NEW BLOCK ---
 

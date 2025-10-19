@@ -575,15 +575,23 @@ function App() {
       const res = await claimTree(treeId, session.access_token);
       const claimedData = res.data;
 
-      // --- START: SURGICAL ADDITION ---
-      // Surgically added check to ensure critical data is present before proceeding.
       if (!claimedData || claimedData.distance_m == null || claimedData.scale_factor == null) {
         console.error("Claim response missing critical data:", claimedData);
         throw new Error("Failed to claim tree: The record is missing essential measurement data and cannot be analyzed.");
       }
-      // --- END: SURGICAL ADDITION ---
-
+      
       setClaimedTree(claimedData);
+
+      // --- START: SURGICAL ADDITION ---
+      // Part 1: Convert URL to File to enable SpeciesIdentifier cropping.
+      // Reset additional data form state for the new analysis.
+      const response = await fetch(claimedData.image_url);
+      const blob = await response.blob();
+      const fileName = claimedData.image_url.split('/').pop() || 'claimed-tree.jpg';
+      const file = new File([blob], fileName, { type: blob.type });
+      setCurrentMeasurementFile(file);
+      setAdditionalData(initialAdditionalData); 
+      // --- END: SURGICAL ADDITION ---
 
       const img = new Image();
       img.crossOrigin = "Anonymous"; // Important for canvas
@@ -612,10 +620,14 @@ function App() {
     if (!claimedTree || !currentMetrics || !session?.access_token) return;
     setAppStatus('SAVING');
     try {
+      // --- START: SURGICAL ADDITION ---
+      // Part 4: Add additional data to the submission payload.
       const payload: CommunityAnalysisPayload = {
         metrics: currentMetrics,
-        species: currentIdentification?.bestMatch
+        species: currentIdentification?.bestMatch,
+        ...additionalData,
       };
+      // --- END: SURGICAL ADDITION ---
       await submitCommunityAnalysis(claimedTree.id, payload, session.access_token);
       softReset('COMMUNITY_ANALYSIS');
     } catch(e: any) {
@@ -783,9 +795,6 @@ function App() {
         <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'FETCHING_GROVE'} onClaimTree={handleClaimTree} onBack={handleReturnToModeSelect} />
       )}
 
-      {/* --- SURGICAL CHANGE IS HERE --- */}
-      {/* The condition below was changed from `appStatus === 'COMMUNITY_ANALYSIS_ACTIVE'` to `(appMode === 'COMMUNITY_ANALYSIS' && claimedTree)`. */}
-      {/* This ensures the workbench stays visible throughout the entire analysis workflow, not just on the first screen. */}
       {isWorkbenchVisible && (
           <>
             <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
@@ -836,7 +845,29 @@ function App() {
                     </div>
                   )}
 
-                  {currentMetrics && (appStatus === 'AUTO_RESULT_SHOWN') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {appMode === 'FULL_ANALYSIS' && appStatus === 'AUTO_RESULT_SHOWN' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} <div className="space-y-4 border-t pt-4"> <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> {appMode === 'FULL_ANALYSIS' && <><button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} </button><AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} /></>} </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(appMode)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{appMode === 'COMMUNITY_ANALYSIS' ? 'Cancel & Exit' : 'Measure Another'}</button> {appMode === 'FULL_ANALYSIS' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {appMode === 'COMMUNITY_ANALYSIS' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
+                  {currentMetrics && (appStatus === 'AUTO_RESULT_SHOWN') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">DBH:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {appMode === 'FULL_ANALYSIS' && appStatus === 'AUTO_RESULT_SHOWN' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} 
+                  <div className="space-y-4 border-t pt-4"> 
+                    <SpeciesIdentifier 
+                      onIdentificationComplete={setCurrentIdentification} 
+                      onClear={() => setCurrentIdentification(null)} 
+                      existingResult={currentIdentification} 
+                      mainImageFile={currentMeasurementFile} 
+                      mainImageSrc={originalImageSrc} 
+                    /> 
+                    <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
+                    {/* --- START: SURGICAL ADDITION --- */}
+                    {/* Part 2: Render AdditionalDetailsForm for Community Analysis as well. */}
+                    {appMode === 'FULL_ANALYSIS' && 
+                      <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> 
+                        <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} 
+                      </button>
+                    }
+                    {(appMode === 'FULL_ANALYSIS' || appMode === 'COMMUNITY_ANALYSIS') && 
+                      <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
+                    }
+                    {/* --- END: SURGICAL ADDITION --- */}
+                  </div> 
+                  <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(appMode)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{appMode === 'COMMUNITY_ANALYSIS' ? 'Cancel & Exit' : 'Measure Another'}</button> {appMode === 'FULL_ANALYSIS' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {appMode === 'COMMUNITY_ANALYSIS' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
                   
                   {appMode !== 'COMMUNITY_ANALYSIS' && <div className="border-t border-gray-200 mt-6 pt-6"> <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} /> </div>}
                 </div>
