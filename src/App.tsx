@@ -20,9 +20,7 @@ import { EditResultModal } from './components/EditResultModal';
 import { CommunityGroveView } from './components/CommunityGroveView';
 import { supabase } from './supabaseClient';
 import { LeaderboardView } from './components/LeaderboardView';
-// --- START: SURGICAL ADDITION (PERMISSIONS MODAL) ---
 import { PermissionsCheckModal } from './components/PermissionsCheckModal';
-// --- END: SURGICAL ADDITION (PERMISSIONS MODAL) ---
 
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
 
@@ -35,6 +33,9 @@ type AppStatus =
   'SESSION_AWAITING_ANALYSIS_CHOICE' |
   'ANALYSIS_AWAITING_MODE_SELECTION' | 
   'ANALYSIS_AWAITING_INITIAL_CLICK' |
+  // --- START: SURGICAL ADDITION (PHASE 2.1 - STATE MACHINE) ---
+  'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' |
+  // --- END: SURGICAL ADDITION (PHASE 2.1 - STATE MACHINE) ---
   'ANALYSIS_PROCESSING' |
   'ANALYSIS_SAVING' |
   'ANALYSIS_COMPLETE' |
@@ -322,7 +323,6 @@ function App() {
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
-  // --- START: SURGICAL REPLACEMENT (PERMISSIONS MODAL) ---
   const handleStartSession = () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
@@ -376,7 +376,6 @@ function App() {
       setInstructionText("Let's start with a photo of the tree.");
     }
   };
-  // --- END: SURGICAL REPLACEMENT (PERMISSIONS MODAL) ---
 
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
@@ -437,13 +436,14 @@ function App() {
       setCurrentMetrics(metrics); 
       setAppStatus('ANALYSIS_COMPLETE');
       setIsPanelOpen(true); 
-      setInstructionText("Measurement complete. Review the results below."); 
+      setInstructionText("Measurement complete. Review the results below and identify the species to save."); 
   };
   
-  const handleCanvasClick = async (event: React.MouseEvent<HTMLCanvasElement>) => {
+  // --- START: SURGICAL REPLACEMENT (PHASE 2.1 - INTERACTION LOGIC) ---
+  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     setShowInstructionToast(false);
     const canvas = event.currentTarget;
-    if (!imageDimensions || !canvas || !scaleFactor || !session?.access_token) return;
+    if (!imageDimensions || !canvas) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -454,37 +454,48 @@ function App() {
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
 
     if (appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK') {
-        setIsPanelOpen(true); 
-        setInstructionText("Running automatic segmentation..."); 
         setTransientPoint(clickPoint);
-        setAppStatus('ANALYSIS_PROCESSING'); 
+        setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION');
+        setInstructionText("Confirm the point on the trunk, or undo to select again.");
+        setIsPanelOpen(false);
+        setShowInstructionToast(true);
+    } else if (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') { 
+        setRefinePoints(prev => [...prev, clickPoint]);
+    } else if (isManualMode(appStatus)) { 
+        handleManualPointCollection(clickPoint); 
+    }
+  };
 
-        try {
-            let response;
-            if (currentView === 'SESSION' && currentMeasurementFile) {
-                response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor, clickPoint);
-            } else if (currentView === 'COMMUNITY_GROVE' && claimedTree) {
-                response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, clickPoint, session.access_token);
-            } else {
-                throw new Error("Invalid state for auto-segmentation.");
-            }
+  const handleConfirmInitialClick = async () => {
+    if (!transientPoint || !scaleFactor || !session?.access_token) return;
+    setIsPanelOpen(true); 
+    setInstructionText("Running automatic segmentation..."); 
+    setAppStatus('ANALYSIS_PROCESSING'); 
 
-            if (response.status !== 'success') throw new Error(response.message);
-            setMaskGenerated(true);
-            setScaleFactor(response.scale_factor); 
-            setDbhLine(response.dbh_line_coords); 
-            setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
-            handleMeasurementSuccess(response.metrics);
-        } catch (error: any) { 
-            setAppStatus('ERROR'); 
-            setErrorMessage(error.message); 
-        } finally { 
-            setTransientPoint(null); 
+    try {
+        let response;
+        if (currentView === 'SESSION' && currentMeasurementFile) {
+            response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor, transientPoint);
+        } else if (currentView === 'COMMUNITY_GROVE' && claimedTree) {
+            response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, transientPoint, session.access_token);
+        } else {
+            throw new Error("Invalid state for auto-segmentation.");
         }
 
-    } else if (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') { setRefinePoints(prev => [...prev, clickPoint]);
-    } else if (isManualMode(appStatus)) { handleManualPointCollection(clickPoint); }
+        if (response.status !== 'success') throw new Error(response.message);
+        setMaskGenerated(true);
+        setScaleFactor(response.scale_factor); 
+        setDbhLine(response.dbh_line_coords); 
+        setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
+        handleMeasurementSuccess(response.metrics);
+    } catch (error: any) { 
+        setAppStatus('ERROR'); 
+        setErrorMessage(error.message); 
+    } finally { 
+        setTransientPoint(null); 
+    }
   };
+  // --- END: SURGICAL REPLACEMENT (PHASE 2.1 - INTERACTION LOGIC) ---
   
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio); localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
@@ -734,6 +745,15 @@ function App() {
 
   const handleUndo = () => {
     switch (appStatus) {
+      // --- START: SURGICAL ADDITION (PHASE 2.1 - UNDO LOGIC) ---
+      case 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION':
+        setTransientPoint(null);
+        setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK');
+        setInstructionText("Tap the main trunk of the tree to begin.");
+        setShowInstructionToast(true);
+        break;
+      // --- END: SURGICAL ADDITION (PHASE 2.1 - UNDO LOGIC) ---
+      
       case 'ANALYSIS_AWAITING_REFINE_POINTS':
         setRefinePoints(p => p.slice(0, -1));
         break;
@@ -804,7 +824,6 @@ function App() {
 
   const renderSessionView = () => (
     <>
-      {/* --- START: SURGICAL ADDITION (PERMISSIONS MODAL) --- */}
       {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
         <PermissionsCheckModal 
           locationStatus={prereqStatus.location}
@@ -813,23 +832,22 @@ function App() {
           onConfirm={handlePermissionsConfirmed}
         />
       )}
-      {/* --- END: SURGICAL ADDITION (PERMISSIONS MODAL) --- */}
 
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
           {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
           {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : (
             originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} />
           )}
-          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || isManualMode(appStatus)) && (
+          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || isManualMode(appStatus) || appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION') && (
             <FloatingInteractionControls 
               onUndo={handleUndo}
-              onConfirm={handleApplyRefinements}
-              showConfirm={appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS'}
+              onConfirm={appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ? handleConfirmInitialClick : handleApplyRefinements}
+              showConfirm={appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION'}
               undoDisabled={
                 (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' && refinePoints.length === 0) ||
                 (isManualMode(appStatus) && manualPoints.height.length === 0 && manualPoints.canopy.length === 0 && manualPoints.girth.length === 0)
               }
-              confirmDisabled={refinePoints.length === 0}
+              confirmDisabled={refinePoints.length === 0 && appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS'}
             />
           )}
       </div>
@@ -873,10 +891,11 @@ function App() {
             {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-brand-amber text-white rounded-lg font-semibold hover:bg-brand-amber-dark disabled:bg-gray-300"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
             {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> 
+            {/* --- START: SURGICAL REPLACEMENT (PHASE 2.2 - LABEL & LAYOUT) --- */}
             <div className="flex justify-between items-center p-3 bg-white rounded-lg border">
-              <div className="flex items-center gap-2 relative group">
-                <label className="font-medium text-gray-700">Trunk Width (at chest height):</label>
-                <Info className="w-4 h-4 text-gray-400 cursor-pointer" />
+              <div className="flex items-center gap-2 relative group min-w-0">
+                <label className="font-medium text-gray-700 truncate">Diameter at Breast Height (DBH):</label>
+                <Info className="w-4 h-4 text-gray-400 cursor-pointer flex-shrink-0" />
                 <div className="absolute bottom-full mb-2 w-60 bg-slate-800 text-white text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                   Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
                   <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-slate-800"></div>
@@ -884,6 +903,7 @@ function App() {
               </div>
               <span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
             </div>
+            {/* --- END: SURGICAL REPLACEMENT (PHASE 2.2 - LABEL & LAYOUT) --- */}
             </div> 
             {maskGenerated && <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-blue-600 hover:underline">View Masked Image</button>}
             </div> 
@@ -891,12 +911,20 @@ function App() {
               {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-indigo text-white rounded-lg hover:bg-brand-indigo-dark text-sm">Correct Outline</button>}
             <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-amber text-white rounded-lg hover:bg-brand-amber-dark text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t pt-4"> 
-              <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> 
+              {/* --- START: SURGICAL MODIFICATION (PHASE 3.3 - PROP) --- */}
+              <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
+              {/* --- END: SURGICAL MODIFICATION (PHASE 3.3 - PROP) --- */}
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
               {currentView === 'SESSION' && <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add/Edit Location'} </button>}
               {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />}
             </div> 
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(currentView)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{currentView === 'COMMUNITY_GROVE' ? 'Cancel & Exit' : 'Finish & Go to Hub'}</button> {currentView === 'SESSION' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark"><Plus className="w-5 h-5" />Save to History</button>} {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
+            {/* --- START: SURGICAL REPLACEMENT (PHASE 3.1 & 3.2 - BUTTON LOGIC) --- */}
+            <div className="pt-4 border-t">
+              {currentView === 'SESSION' && <button onClick={handleSaveResult} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark disabled:bg-gray-400 disabled:cursor-not-allowed"><Plus className="w-5 h-5" />Save to History</button>} 
+              {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark disabled:bg-gray-400 disabled:cursor-not-allowed"><GitMerge className="w-5 h-5" />Submit Analysis</button>}
+            </div>
+            {/* --- END: SURGICAL REPLACEMENT (PHASE 3.1 & 3.2 - BUTTON LOGIC) --- */}
+            </div> )}
           </div>
         </div>
       )}
@@ -930,7 +958,9 @@ function App() {
                     </button>
                 </div>
               </div>
-              <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} />
+              {/* --- START: SURGICAL MODIFICATION (PHASE 4.1 - PROP) --- */}
+              <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} isLoading={isHistoryLoading} />
+              {/* --- END: SURGICAL MODIFICATION (PHASE 4.1 - PROP) --- */}
             </main>
         </div>
       )}

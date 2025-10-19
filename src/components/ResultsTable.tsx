@@ -1,6 +1,6 @@
 // src/components/ResultsTable.tsx
 import React, { useState } from 'react';
-import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2, Users, GitCommitVertical } from 'lucide-react';
+import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2, Users, GitCommitVertical, Loader2 } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
 import { TreeResult } from '../apiService';
 
@@ -8,6 +8,9 @@ interface ResultsTableProps {
   results: TreeResult[];
   onDeleteResult: (id: string) => void;
   onEditResult: (result: TreeResult) => void;
+  // --- START: SURGICAL ADDITION (PHASE 4.1 - PROP DECLARATION) ---
+  isLoading: boolean;
+  // --- END: SURGICAL ADDITION (PHASE 4.1 - PROP DECLARATION) ---
 }
 
 // A new component for the expandable details section
@@ -89,17 +92,30 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
 };
 
 
-export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
+export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading }: ResultsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-  // --- START: SURGICAL ADDITION (PERFORMANCE) ---
   const [showAll, setShowAll] = useState(false);
-  // --- END: SURGICAL ADDITION (PERFORMANCE) ---
   
   const sortedResults = [...results].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const handleRowClick = (resultId: string) => {
     setExpandedRowId(prevId => (prevId === resultId ? null : resultId));
   };
+  
+  // --- START: SURGICAL REPLACEMENT (PHASE 4.1 - LOADING STATE) ---
+  const renderLoadingState = () => (
+    <div>
+      <div className="flex items-center gap-3 mb-4"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
+      <div className="text-center py-10 px-4 border-2 border-dashed rounded-lg">
+          <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto mb-2" />
+          <p className="text-gray-500">Loading your history...</p>
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return renderLoadingState();
+  }
   
   if (results.length === 0) { 
     return (
@@ -112,10 +128,9 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         </div>
     ); 
   }
+  // --- END: SURGICAL REPLACEMENT (PHASE 4.1 - LOADING STATE) ---
 
-  // --- START: SURGICAL ADDITION (PERFORMANCE) ---
   const resultsToShow = showAll ? sortedResults : sortedResults.slice(0, 3);
-  // --- END: SURGICAL ADDITION (PERFORMANCE) ---
 
   return (
     <div>
@@ -140,9 +155,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
-            {/* --- START: SURGICAL REPLACEMENT (PERFORMANCE) --- */}
             {resultsToShow.map((result) => (
-            // --- END: SURGICAL REPLACEMENT (PERFORMANCE) ---
               <React.Fragment key={result.id}>
                 <tr onClick={() => handleRowClick(result.id)} className="cursor-pointer hover:bg-base-200/50 transition-colors duration-150">
                   <td className="px-4 py-2 text-center">
@@ -187,9 +200,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
       </div>
 
       <div className="md:hidden space-y-3">
-        {/* --- START: SURGICAL REPLACEMENT (PERFORMANCE) --- */}
         {resultsToShow.map(result => (
-        // --- END: SURGICAL REPLACEMENT (PERFORMANCE) ---
           <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-3">
               <div className="flex gap-4">
@@ -232,7 +243,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
         ))}
       </div>
       
-      {/* --- START: SURGICAL ADDITION (PERFORMANCE) --- */}
       {!showAll && sortedResults.length > 3 && (
         <div className="mt-6 text-center">
           <button 
@@ -243,7 +253,6 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
           </button>
         </div>
       )}
-      {/* --- END: SURGICAL ADDITION (PERFORMANCE) --- */}
     </div>
   );
 }

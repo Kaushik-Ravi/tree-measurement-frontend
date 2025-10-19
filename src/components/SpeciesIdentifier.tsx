@@ -12,12 +12,15 @@ interface SpeciesIdentifierProps {
   existingResult: IdentificationData;
   mainImageFile: File | null;
   mainImageSrc: string; // This will now be the original, unmodified image source
+  // --- START: SURGICAL ADDITION (PHASE 3.3 - PROP DECLARATION) ---
+  analysisMode: 'session' | 'community';
+  // --- END: SURGICAL ADDITION (PHASE 3.3 - PROP DECLARATION) ---
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
 type Mode = 'idle' | 'uploading' | 'cropping';
 
-export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc }: SpeciesIdentifierProps) {
+export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +132,9 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       )}
 
       <div className="flex justify-between items-center">
-        <p className="text-sm font-medium text-gray-700">Optional: Identify species</p>
+        {/* --- START: SURGICAL REPLACEMENT (PHASE 3.1 - LABEL) --- */}
+        <p className="text-sm font-medium text-gray-700">Identify Species (Required to Save)</p>
+        {/* --- END: SURGICAL REPLACEMENT (PHASE 3.1 - LABEL) --- */}
         {mode === 'uploading' && (
            <button onClick={() => { setImageFile(null); setImagePreview(''); setMode('idle'); }} className="text-xs text-blue-600 hover:underline">Back to options</button>
         )}
@@ -142,14 +147,17 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       )}
 
       {mode === 'idle' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-           <button onClick={() => setMode('uploading')} className="relative text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
-              <div className="flex items-center gap-2">
-                <UploadCloud className="w-5 h-5" />
-                <span className="text-sm font-semibold">Upload Close-up</span>
-              </div>
-              <span className="text-xs text-green-700 font-medium mt-1 pl-px">Recommended for best accuracy</span>
-           </button>
+        // --- START: SURGICAL REPLACEMENT (PHASE 3.3 - LOGIC) ---
+        <div className={`grid grid-cols-1 ${analysisMode === 'session' ? 'sm:grid-cols-2' : ''} gap-3 pt-2`}>
+           {analysisMode === 'session' && (
+              <button onClick={() => setMode('uploading')} className="relative text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
+                <div className="flex items-center gap-2">
+                  <UploadCloud className="w-5 h-5" />
+                  <span className="text-sm font-semibold">Upload Close-up</span>
+                </div>
+                <span className="text-xs text-green-700 font-medium mt-1 pl-px">Recommended for best accuracy</span>
+              </button>
+           )}
            <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300 text-gray-600 disabled:text-gray-400">
               <div className="flex items-center gap-2">
                 <CropIcon className="w-5 h-5" />
@@ -158,6 +166,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
                <span className="text-xs text-gray-500 mt-1 pl-px">A convenient option</span>
            </button>
         </div>
+        // --- END: SURGICAL REPLACEMENT (PHASE 3.3 - LOGIC) ---
       )}
 
       {mode === 'uploading' && (
