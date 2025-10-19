@@ -63,6 +63,8 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
                     Pending
                 </span>
             );
+        // --- START: SURGICAL ADDITION ---
+        // Add the 'In Progress' status to the badge component for completeness.
         case 'ANALYSIS_IN_PROGRESS':
              return (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
@@ -70,6 +72,7 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
                     In Progress
                 </span>
             );
+        // --- END: SURGICAL ADDITION ---
         case 'VERIFIED':
             return (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
@@ -199,11 +202,14 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     </p>
                     <StatusBadge status={result.status} />
                   </div>
+                  {/* --- START: SURGICAL ADDITION --- */}
+                  {/* Update labels for mobile view to be more descriptive. */}
                   <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
-                      <div><p className="font-medium text-gray-500">Height</p><p className="font-mono">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
-                      <div><p className="font-medium text-gray-500">Canopy</p><p className="font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
-                      <div><p className="font-medium text-gray-500">DBH</p><p className="font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
+                      <div><p className="font-medium text-gray-500">Tree Height</p><p className="font-mono">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-gray-500">Canopy Width</p><p className="font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-gray-500">Trunk Width</p><p className="font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
                   </div>
+                  {/* --- END: SURGICAL ADDITION --- */}
                 </div>
               </div>
             </div>
