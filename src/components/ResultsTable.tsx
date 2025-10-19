@@ -63,8 +63,6 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
                     Pending
                 </span>
             );
-        // --- START: SURGICAL ADDITION ---
-        // Add the 'In Progress' status to the badge component for completeness.
         case 'ANALYSIS_IN_PROGRESS':
              return (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
@@ -72,7 +70,6 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
                     In Progress
                 </span>
             );
-        // --- END: SURGICAL ADDITION ---
         case 'VERIFIED':
             return (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
@@ -94,6 +91,9 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
 
 export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  // --- START: SURGICAL ADDITION (PERFORMANCE) ---
+  const [showAll, setShowAll] = useState(false);
+  // --- END: SURGICAL ADDITION (PERFORMANCE) ---
   
   const sortedResults = [...results].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -113,13 +113,15 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
     ); 
   }
 
+  // --- START: SURGICAL ADDITION (PERFORMANCE) ---
+  const resultsToShow = showAll ? sortedResults : sortedResults.slice(0, 3);
+  // --- END: SURGICAL ADDITION (PERFORMANCE) ---
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
-        {/* --- START: SURGICAL REPLACEMENT --- */}
         <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
-        {/* --- END: SURGICAL REPLACEMENT --- */}
       </div>
 
       <div className="hidden md:block border border-gray-200 rounded-lg overflow-x-auto">
@@ -138,11 +140,11 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
-            {sortedResults.map((result) => (
+            {/* --- START: SURGICAL REPLACEMENT (PERFORMANCE) --- */}
+            {resultsToShow.map((result) => (
+            // --- END: SURGICAL REPLACEMENT (PERFORMANCE) ---
               <React.Fragment key={result.id}>
-                {/* --- START: SURGICAL REPLACEMENT --- */}
                 <tr onClick={() => handleRowClick(result.id)} className="cursor-pointer hover:bg-base-200/50 transition-colors duration-150">
-                {/* --- END: SURGICAL REPLACEMENT --- */}
                   <td className="px-4 py-2 text-center">
                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
                   </td>
@@ -185,7 +187,9 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
       </div>
 
       <div className="md:hidden space-y-3">
-        {sortedResults.map(result => (
+        {/* --- START: SURGICAL REPLACEMENT (PERFORMANCE) --- */}
+        {resultsToShow.map(result => (
+        // --- END: SURGICAL REPLACEMENT (PERFORMANCE) ---
           <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
             <div className="p-3">
               <div className="flex gap-4">
@@ -206,14 +210,11 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
                     </p>
                     <StatusBadge status={result.status} />
                   </div>
-                  {/* --- START: SURGICAL ADDITION --- */}
-                  {/* Update labels for mobile view to be more descriptive. */}
                   <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
                       <div><p className="font-medium text-gray-500">Tree Height</p><p className="font-mono">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
                       <div><p className="font-medium text-gray-500">Canopy Width</p><p className="font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
                       <div><p className="font-medium text-gray-500">Trunk Width</p><p className="font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
                   </div>
-                  {/* --- END: SURGICAL ADDITION --- */}
                 </div>
               </div>
             </div>
@@ -230,6 +231,19 @@ export function ResultsTable({ results, onDeleteResult, onEditResult }: ResultsT
           </div>
         ))}
       </div>
+      
+      {/* --- START: SURGICAL ADDITION (PERFORMANCE) --- */}
+      {!showAll && sortedResults.length > 3 && (
+        <div className="mt-6 text-center">
+          <button 
+            onClick={() => setShowAll(true)}
+            className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+          >
+            Show All ({sortedResults.length})
+          </button>
+        </div>
+      )}
+      {/* --- END: SURGICAL ADDITION (PERFORMANCE) --- */}
     </div>
   );
 }

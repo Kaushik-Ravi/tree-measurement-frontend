@@ -51,37 +51,34 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                             <p className="text-xs text-gray-500">Help verify pending tree measurements.</p>
                          </div>
                     </div>
-                    {/* --- START: SURGICAL REPLACEMENT --- */}
                     <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 p-2 rounded-lg">
                         <ArrowLeft size={16} /> Back to Hub
                     </button>
-                    {/* --- END: SURGICAL REPLACEMENT --- */}
                 </div>
             </header>
 
             <main className="flex-grow overflow-y-auto p-4 md:p-6">
-                {isLoading && (
+                {/* --- START: SURGICAL REPLACEMENT (LOADING STATE LOGIC) --- */}
+                {isLoading ? (
                     <div className="flex justify-center items-center h-full">
                         <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                        <span className="ml-2 text-gray-500">Loading Grove...</span>
                     </div>
-                )}
-
-                {!isLoading && pendingTrees.length === 0 && (
+                ) : pendingTrees.length === 0 ? (
                     <div className="text-center py-16 px-4">
                         <h2 className="text-lg font-semibold text-gray-700">All Saplings Analyzed!</h2>
                         <p className="text-gray-500 mt-2 max-w-md mx-auto">
                             There are currently no pending trees in the grove. Check back later, or contribute a new one using the "Quick Capture" mode.
                         </p>
                     </div>
-                )}
-
-                {!isLoading && pendingTrees.length > 0 && (
+                ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {pendingTrees.map(tree => (
                             <TreeCard key={tree.id} tree={tree} onClaimTree={onClaimTree} />
                         ))}
                     </div>
                 )}
+                {/* --- END: SURGICAL REPLACEMENT (LOADING STATE LOGIC) --- */}
             </main>
         </div>
     );

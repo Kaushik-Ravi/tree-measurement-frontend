@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -20,8 +20,10 @@ import { EditResultModal } from './components/EditResultModal';
 import { CommunityGroveView } from './components/CommunityGroveView';
 import { supabase } from './supabaseClient';
 import { LeaderboardView } from './components/LeaderboardView';
+// --- START: SURGICAL ADDITION (PERMISSIONS MODAL) ---
+import { PermissionsCheckModal } from './components/PermissionsCheckModal';
+// --- END: SURGICAL ADDITION (PERMISSIONS MODAL) ---
 
-// --- START: SURGICAL REFACTOR (ARCHITECTURE) ---
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
 
 type AppStatus = 
@@ -42,8 +44,8 @@ type AppStatus =
   'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS' |
   'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' |
   'ANALYSIS_MANUAL_READY_TO_CALCULATE' |
+  'COMMUNITY_GROVE_LOADING' |
   'ERROR';
-// --- END: SURGICAL REFACTOR (ARCHITECTURE) ---
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
@@ -53,6 +55,32 @@ type PrerequisiteStatus = {
   compass: SensorStatus;
 };
 type UserProfile = { id: string; full_name: string; avatar_url: string; sapling_points: number; rank: string; } | null;
+
+interface FloatingInteractionControlsProps {
+  onUndo: () => void;
+  onConfirm: () => void;
+  showConfirm: boolean;
+  undoDisabled: boolean;
+  confirmDisabled: boolean;
+}
+
+const FloatingInteractionControls = ({ onUndo, onConfirm, showConfirm, undoDisabled, confirmDisabled }: FloatingInteractionControlsProps) => {
+  return (
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-slate-800/90 text-white p-2 rounded-xl shadow-lg backdrop-blur-sm">
+      <button onClick={onUndo} disabled={undoDisabled} className="p-3 rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+        <RotateCcw size={20} />
+      </button>
+      {showConfirm && (
+        <>
+          <div className="w-px h-6 bg-slate-600" />
+          <button onClick={onConfirm} disabled={confirmDisabled} className="p-3 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors">
+            <Check size={20} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
 
 
 const isManualMode = (status: AppStatus) => status.startsWith('ANALYSIS_MANUAL_');
@@ -67,12 +95,10 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
   if (user && profile) {
     return (
       <div className="flex items-center gap-3">
-        {/* --- START: SURGICAL REPLACEMENT --- */}
         <div className="text-right hidden sm:block">
             <p className="text-xs font-bold text-brand-green-dark">{profile.sapling_points} SP</p>
             <p className="text-xs text-gray-500 -mt-1">{profile.rank}</p>
         </div>
-        {/* --- END: SURGICAL REPLACEMENT --- */}
         <img src={user.user_metadata.avatar_url} alt="User avatar" className="w-8 h-8 rounded-full border-2 border-green-200" />
         <button onClick={signOut} className="p-2 text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 flex items-center gap-2" title="Sign Out">
           <LogOut className="w-4 h-4" />
@@ -131,6 +157,7 @@ function App() {
   const [transientPoint, setTransientPoint] = useState<Point | null>(null);
   const [dbhLine, setDbhLine] = useState<{x1: number, y1: number, x2: number, y2: number} | null>(null);
   const [dbhGuideRect, setDbhGuideRect] = useState<{x:number, y:number, width:number, height:number} | null>(null);
+  const [maskGenerated, setMaskGenerated] = useState<boolean>(false);
 
   const [allResults, setAllResults] = useState<TreeResult[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
@@ -157,7 +184,9 @@ function App() {
     const handleLiveOrientation = (event: DeviceOrientationEvent) => {
       if (event.alpha !== null) {
         setDeviceHeading(event.alpha);
-        setPrereqStatus(prev => prev.compass === 'GRANTED' ? prev : { ...prev, compass: 'GRANTED' });
+        if (prereqStatus.compass !== 'GRANTED') {
+            setPrereqStatus(prev => ({ ...prev, compass: 'GRANTED' }));
+        }
       }
     };
     window.addEventListener('deviceorientation', handleLiveOrientation, true);
@@ -165,9 +194,8 @@ function App() {
     return () => {
       window.removeEventListener('deviceorientation', handleLiveOrientation, true);
     };
-  }, []);
+  }, [prereqStatus.compass]);
 
-  // --- START: SURGICAL ADDITION (BROWSER BACK BUTTON) ---
   const handleReturnToHub = () => {
     softReset(currentView);
   };
@@ -188,7 +216,6 @@ function App() {
           window.history.pushState({ view: currentView }, '');
       }
   }, [currentView]);
-  // --- END: SURGICAL ADDITION (BROWSER BACK BUTTON) ---
 
 
   useEffect(() => {
@@ -295,12 +322,17 @@ function App() {
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
-  const handleStartSession = async () => {
+  // --- START: SURGICAL REPLACEMENT (PERMISSIONS MODAL) ---
+  const handleStartSession = () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
-    setInstructionText("Checking device permissions...");
+    setInstructionText("Please grant the requested permissions to proceed.");
     setIsPanelOpen(true);
-  
+    setPrereqStatus({ location: 'PENDING', compass: 'PENDING' });
+  };
+
+  const handleRequestPermissions = async () => {
+    // Location
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -312,25 +344,40 @@ function App() {
       setCurrentLocation(userLoc);
       setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
     } catch (error) {
-      setErrorMessage("Location access is required to map a tree. Please enable it in your browser settings.");
-      setAppStatus('ERROR');
-      return;
+      setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
     }
   
+    // Compass
     // @ts-ignore
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       try {
         // @ts-ignore
         const permissionState = await DeviceOrientationEvent.requestPermission();
-        if (permissionState !== 'granted') throw new Error("Permission denied.");
+        if (permissionState === 'granted') {
+          setPrereqStatus(prev => ({ ...prev, compass: 'GRANTED' }));
+        } else {
+          setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
+        }
       } catch (err) {
         setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
       }
+    } else {
+      // For non-iOS devices, permission is often granted by default if available
+      // The useEffect listener will update the status to GRANTED if it gets a reading
+      setTimeout(() => {
+        setPrereqStatus(prev => prev.compass === 'PENDING' ? { ...prev, compass: 'GRANTED' } : prev);
+      }, 1000); // Give it a second to get a reading
     }
-    
-    setAppStatus('SESSION_AWAITING_PHOTO');
-    setInstructionText("Let's start with a photo of the tree.");
   };
+  
+  const handlePermissionsConfirmed = () => {
+    if (prereqStatus.location === 'GRANTED') {
+      setAppStatus('SESSION_AWAITING_PHOTO');
+      setInstructionText("Let's start with a photo of the tree.");
+    }
+  };
+  // --- END: SURGICAL REPLACEMENT (PERMISSIONS MODAL) ---
+
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
     const file = event.target.files?.[0]; 
@@ -423,6 +470,7 @@ function App() {
             }
 
             if (response.status !== 'success') throw new Error(response.message);
+            setMaskGenerated(true);
             setScaleFactor(response.scale_factor); 
             setDbhLine(response.dbh_line_coords); 
             setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
@@ -479,6 +527,7 @@ function App() {
   const handleStartManualMeasurement = () => { 
       const imageToUse = currentView === 'COMMUNITY_GROVE' ? claimedTree?.image_url : originalImageSrc;
       if (prepareMeasurementSession() && imageToUse) { 
+          setMaskGenerated(false);
           setResultImageSrc(imageToUse); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); 
           setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); 
       } 
@@ -566,11 +615,12 @@ function App() {
   const handleNavigateToGrove = async () => {
     if (!session?.access_token) return;
     setCurrentView('COMMUNITY_GROVE');
-    setAppStatus('IDLE'); 
+    setAppStatus('COMMUNITY_GROVE_LOADING'); 
     setInstructionText("Fetching pending saplings from the Community Grove...");
     try {
       const trees = await getPendingTrees(session.access_token);
       setPendingTrees(trees);
+      setAppStatus('IDLE'); // Transition to IDLE after success
     } catch(e: any) {
       setErrorMessage(`Failed to load grove: ${e.message}`);
       setAppStatus('ERROR');
@@ -664,6 +714,7 @@ function App() {
     setCapturedHeading(null);
     setIsPanelOpen(false);
     setClaimedTree(null);
+    setMaskGenerated(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -681,14 +732,57 @@ function App() {
     }
   };
 
+  const handleUndo = () => {
+    switch (appStatus) {
+      case 'ANALYSIS_AWAITING_REFINE_POINTS':
+        setRefinePoints(p => p.slice(0, -1));
+        break;
+
+      case 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS':
+        if (manualPoints.height.length > 0) {
+          setManualPoints(p => ({ ...p, height: p.height.slice(0, -1) }));
+        }
+        break;
+      
+      case 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS':
+        if (manualPoints.canopy.length > 0) {
+          setManualPoints(p => ({ ...p, canopy: p.canopy.slice(0, -1) }));
+        } else {
+          setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS');
+          setInstructionText("STEP 1/3 (Height): Click highest and lowest points.");
+        }
+        break;
+      
+      case 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS':
+        if (manualPoints.girth.length > 0) {
+          setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
+        } else {
+          setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS');
+          setInstructionText("STEP 2/3 (Canopy): Click widest points.");
+        }
+        break;
+
+      case 'ANALYSIS_MANUAL_READY_TO_CALCULATE':
+        setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
+        setInstructionText("STEP 3/3 (Girth): Use guide to click trunk's width.");
+        setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
+        break;
+    }
+  };
+
+  const handleDistanceEntered = () => {
+    setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE');
+    setInstructionText("Choose how you want to proceed with the analysis.");
+  }
+
   const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
   
   if (currentView === 'CALIBRATION') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
-  if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} /> }
+  if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'COMMUNITY_GROVE_LOADING' || appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} /> }
 
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
-  const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING', 'SESSION_PROCESSING_PHOTO'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
+  const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING', 'SESSION_PROCESSING_PHOTO', 'COMMUNITY_GROVE_LOADING'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
 
   const renderFloatingActionButton = () => {
     if (!isSessionActive || isPanelOpen || window.innerWidth >= 768) {
@@ -710,10 +804,33 @@ function App() {
 
   const renderSessionView = () => (
     <>
+      {/* --- START: SURGICAL ADDITION (PERMISSIONS MODAL) --- */}
+      {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
+        <PermissionsCheckModal 
+          locationStatus={prereqStatus.location}
+          compassStatus={prereqStatus.compass}
+          onRequestPermissions={handleRequestPermissions}
+          onConfirm={handlePermissionsConfirmed}
+        />
+      )}
+      {/* --- END: SURGICAL ADDITION (PERMISSIONS MODAL) --- */}
+
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
           {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
           {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : (
-            originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') ? 'cursor-crosshair' : ''}`} />
+            originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} />
+          )}
+          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || isManualMode(appStatus)) && (
+            <FloatingInteractionControls 
+              onUndo={handleUndo}
+              onConfirm={handleApplyRefinements}
+              showConfirm={appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS'}
+              undoDisabled={
+                (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' && refinePoints.length === 0) ||
+                (isManualMode(appStatus) && manualPoints.height.length === 0 && manualPoints.canopy.length === 0 && manualPoints.girth.length === 0)
+              }
+              confirmDisabled={refinePoints.length === 0}
+            />
           )}
       </div>
       
@@ -741,10 +858,9 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">Choose Image File</span> </button> </div> )}
 
-            {/* --- START: SURGICAL REPLACEMENT --- */}
-            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" /> </div> <ARLinks /> <button onClick={() => setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE')} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-green text-white rounded-lg font-semibold hover:bg-brand-green-dark disabled:bg-gray-300"> Continue </button> </div> )}
+            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" /> </div> <ARLinks /> <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-green text-white rounded-lg font-semibold hover:bg-brand-green-dark disabled:bg-gray-300"> Continue </button> </div> )}
             
-            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t"> <h3 className="text-base font-semibold text-center text-gray-800">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-brand-indigo text-white rounded-lg hover:bg-brand-indigo-dark transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-brand-indigo px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs text-indigo-200">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION')} className="w-full text-left p-4 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-brand-green px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
+            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t"> <h3 className="text-base font-semibold text-center text-gray-800">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-brand-indigo text-white rounded-lg hover:bg-brand-indigo-dark transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-brand-indigo px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs text-indigo-200">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => {setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION'); setInstructionText("Select your preferred analysis method.");}} className="w-full text-left p-4 bg-brand-green text-white rounded-lg hover:bg-brand-green-dark transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-brand-green px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
 
             {appStatus === 'ANALYSIS_AWAITING_MODE_SELECTION' && (
                <div className="space-y-3 pt-6 border-t mt-6"> 
@@ -768,7 +884,12 @@ function App() {
               </div>
               <span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
             </div>
-            </div> <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-blue-600 hover:underline">View Masked Image</button> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-indigo text-white rounded-lg hover:bg-brand-indigo-dark text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-amber text-white rounded-lg hover:bg-brand-amber-dark text-sm">Restart in Manual</button> </div>
+            </div> 
+            {maskGenerated && <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-blue-600 hover:underline">View Masked Image</button>}
+            </div> 
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t"> 
+              {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-indigo text-white rounded-lg hover:bg-brand-indigo-dark text-sm">Correct Outline</button>}
+            <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-amber text-white rounded-lg hover:bg-brand-amber-dark text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
@@ -776,7 +897,6 @@ function App() {
               {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />}
             </div> 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(currentView)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{currentView === 'COMMUNITY_GROVE' ? 'Cancel & Exit' : 'Finish & Go to Hub'}</button> {currentView === 'SESSION' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark"><Plus className="w-5 h-5" />Save to History</button>} {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
-            {/* --- END: SURGICAL REPLACEMENT --- */}
           </div>
         </div>
       )}
@@ -790,7 +910,6 @@ function App() {
       
       {isSessionActive ? renderSessionView() : (
         <div className="w-full flex flex-col h-full">
-            {/* --- START: SURGICAL REPLACEMENT --- */}
             <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-base-300 bg-white/50">
                 <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-brand-green" /><h1 className="text-xl font-semibold text-slate-900">Elite Tree Measurement</h1></div>
                 <AuthComponent profile={userProfile} />
@@ -813,7 +932,6 @@ function App() {
               </div>
               <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} />
             </main>
-            {/* --- END: SURGICAL REPLACEMENT --- */}
         </div>
       )}
     </div>
