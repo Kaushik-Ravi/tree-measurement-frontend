@@ -3,14 +3,80 @@
 @tailwind utilities;
 
 @layer base {
+  /* --- START: SURGICAL ADDITION --- */
+  /* 
+    ==============================================
+    PROFESSIONAL COLOR & THEME SYSTEM (LIGHT & DARK)
+    ==============================================
+  */
+  :root {
+    /* -- Brand Colors -- */
+    --brand-primary: 46 125 50; /* A deep, trustworthy green for primary actions. */
+    --brand-primary-hover: 27 94 32; /* A darker shade for hover states. */
+    --brand-secondary: 79 70 229; /* A vibrant indigo for community features. */
+    --brand-secondary-hover: 67 56 202;
+    --brand-accent: 245 158 11; /* A warm amber for accents and warnings. */
+    --brand-accent-hover: 217 119 6;
+
+    /* -- Backgrounds -- */
+    --bg-default: 248 250 252; /* slate-50 */
+    --bg-subtle: 241 245 249; /* slate-100 */
+    --bg-inset: 226 232 240; /* slate-200 */
+
+    /* -- Content (Text) -- */
+    --content-default: 30 41 59; /* slate-800 */
+    --content-subtle: 71 85 105; /* slate-600 */
+    --content-on-brand: 255 255 255; /* white */
+    
+    /* -- Borders -- */
+    --stroke-default: 203 213 225; /* slate-300 */
+    --stroke-subtle: 226 232 240; /* slate-200 */
+
+    /* -- Status -- */
+    --status-success: 34 197 94;
+    --status-warning: 234 179 8;
+    --status-error: 239 68 68;
+    --status-info: 59 130 246;
+  }
+
+  :root.dark {
+    /* -- Brand Colors -- */
+    --brand-primary: 52 211 153; /* A brighter, more vivid green for dark mode contrast. */
+    --brand-primary-hover: 16 185 129;
+    --brand-secondary: 99 102 241; /* A slightly brighter indigo. */
+    --brand-secondary-hover: 129 140 248;
+    --brand-accent: 251 191 36; /* A brighter amber. */
+    --brand-accent-hover: 252 211 77;
+
+    /* -- Backgrounds -- */
+    --bg-default: 15 23 42; /* slate-900 */
+    --bg-subtle: 30 41 59; /* slate-800 */
+    --bg-inset: 51 65 85; /* slate-700 */
+
+    /* -- Content (Text) -- */
+    --content-default: 226 232 240; /* slate-200 */
+    --content-subtle: 148 163 184; /* slate-400 */
+    --content-on-brand: 15 23 42; /* slate-900, for primary buttons in dark mode */
+
+    /* -- Borders -- */
+    --stroke-default: 51 65 85; /* slate-700 */
+    --stroke-subtle: 47 55 73; /* A custom shade between slate-700/800 */
+
+    /* -- Status -- */
+    --status-success: 74 222 128;
+    --status-warning: 250 204 21;
+    --status-error: 248 113 113;
+    --status-info: 96 165 250;
+  }
+  /* --- END: SURGICAL ADDITION --- */
+
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* --- START: SURGICAL ADDITION --- */
-    /* Applying a subtle gradient background for a more premium, less sterile feel.
-       This creates a soft, inviting canvas for the application content. */
-    @apply bg-gradient-to-br from-base-100 to-base-200 text-slate-800;
-    /* --- END: SURGICAL ADDITION --- */
+    /* --- START: SURGICAL REPLACEMENT --- */
+    /* Applying a theme-aware background using our new CSS variables. */
+    @apply bg-background-default text-content-default;
+    /* --- END: SURGICAL REPLACEMENT --- */
   }
 }
 
@@ -21,16 +87,18 @@
   ==============================================
 */
 .progress-bar-container {
-  @apply w-full bg-neutral-200 rounded-full h-2.5 overflow-hidden;
+  /* --- START: SURGICAL MODIFICATION --- */
+  @apply w-full bg-background-inset rounded-full h-2.5 overflow-hidden;
+  /* --- END: SURGICAL MODIFICATION --- */
 }
 
 .progress-bar-animated {
   @apply h-full w-full;
   background-image: linear-gradient(
     90deg,
-    #2E8540,
-    #3395FF,
-    #2E8540
+    rgb(var(--brand-primary)),
+    rgb(var(--brand-secondary)),
+    rgb(var(--brand-primary))
   );
   background-size: 300% 100%;
   animation: progress-animation 2.5s ease-in-out infinite;
@@ -48,10 +116,14 @@
   ==============================================
 */
 .leaflet-control-layers {
-  @apply bg-white/80 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.05)] border-none rounded-xl p-1;
+  /* --- START: SURGICAL MODIFICATION --- */
+  @apply bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.05)] border-stroke-default rounded-xl p-1;
+  /* --- END: SURGICAL MODIFICATION --- */
 }
 .leaflet-control-layers-base label span {
-  @apply text-neutral-800 font-medium text-sm;
+  /* --- START: SURGICAL MODIFICATION --- */
+  @apply text-content-default font-medium text-sm;
+  /* --- END: SURGICAL MODIFICATION --- */
 }
 .leaflet-control-layers-selector {
   @apply mt-0.5;
@@ -89,8 +161,10 @@
   /* When a measurement is active, the layout transforms. The canvas fills the screen,
      and the controls are presented in an ergonomic sheet at the bottom. */
   .mobile-focus-view #control-panel {
-    @apply absolute bottom-0 left-0 w-full bg-gray-50 z-20;
-    @apply border-t border-gray-200 rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)];
+    /* --- START: SURGICAL MODIFICATION --- */
+    @apply absolute bottom-0 left-0 w-full bg-background-subtle z-20;
+    @apply border-t border-stroke-default rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)];
+    /* --- END: SURGICAL MODIFICATION --- */
     max-height: 85vh;
     overflow-y: auto;
     transition: transform 0.3s ease-in-out;
@@ -111,17 +185,23 @@
     @apply hidden;
   }
   .mobile-cards-table tr {
-    @apply block border border-gray-200 rounded-xl mb-4 shadow-sm bg-white;
+    /* --- START: SURGICAL MODIFICATION --- */
+    @apply block border border-stroke-default rounded-xl mb-4 shadow-sm bg-background-default;
+    /* --- END: SURGICAL MODIFICATION --- */
   }
   .mobile-cards-table td {
-    @apply flex justify-between items-center p-3 border-b border-gray-100 text-sm;
+    /* --- START: SURGICAL MODIFICATION --- */
+    @apply flex justify-between items-center p-3 border-b border-stroke-subtle text-sm;
+    /* --- END: SURGICAL MODIFICATION --- */
   }
   .mobile-cards-table td:last-child {
     @apply border-b-0;
   }
   .mobile-cards-table td::before {
     content: attr(data-label);
-    @apply font-semibold text-gray-600 text-left pr-4;
+    /* --- START: SURGICAL MODIFICATION --- */
+    @apply font-semibold text-content-subtle text-left pr-4;
+    /* --- END: SURGICAL MODIFICATION --- */
   }
   .mobile-cards-table td > * {
     @apply text-right;

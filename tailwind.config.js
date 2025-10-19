@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // --- START: SURGICAL ADDITION ---
+  // Enabling class-based dark mode to respect user's system preference via a script.
+  darkMode: 'class',
+  // --- END: SURGICAL ADDITION ---
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
@@ -7,23 +11,42 @@ export default {
         'inter': ['Inter', 'sans-serif'],
       },
       // --- START: SURGICAL REPLACEMENT ---
-      // Replacing the limited, default green colors with a more comprehensive and professional brand palette.
-      // This establishes a design system for consistent UI enhancements.
+      // Replacing the entire color palette with a new, professional, theme-aware system
+      // built on CSS variables for seamless light/dark mode switching.
       colors: {
-        'brand': {
-          green: '#2E7D32',       // A deep, trustworthy green for primary actions.
-          'green-dark': '#1B5E20',  // For hover states.
-          indigo: '#4F46E5',      // A vibrant secondary color for community features.
-          'indigo-dark': '#4338CA',
-          amber: '#F59E0B',       // For accents and warnings.
-          'amber-dark': '#D97706',
+        // Brand colors for primary actions and accents.
+        brand: {
+          primary: 'rgb(var(--brand-primary) / <alpha-value>)',
+          'primary-hover': 'rgb(var(--brand-primary-hover) / <alpha-value>)',
+          secondary: 'rgb(var(--brand-secondary) / <alpha-value>)',
+          'secondary-hover': 'rgb(var(--brand-secondary-hover) / <alpha-value>)',
+          accent: 'rgb(var(--brand-accent) / <alpha-value>)',
+          'accent-hover': 'rgb(var(--brand-accent-hover) / <alpha-value>)',
         },
-        'base': {
-          100: '#F8FAFC', // slate-50
-          200: '#F1F5F9', // slate-100
-          300: '#E2E8F0', // slate-200
-          400: '#CBD5E1', // slate-300
+        // Background colors for UI surfaces.
+        background: {
+          default: 'rgb(var(--bg-default) / <alpha-value>)',
+          subtle: 'rgb(var(--bg-subtle) / <alpha-value>)',
+          inset: 'rgb(var(--bg-inset) / <alpha-value>)',
         },
+        // Content (Text) colors for typography.
+        content: {
+          default: 'rgb(var(--content-default) / <alpha-value>)',
+          subtle: 'rgb(var(--content-subtle) / <alpha-value>)',
+          'on-brand': 'rgb(var(--content-on-brand) / <alpha-value>)',
+        },
+        // Border colors for dividers and outlines.
+        stroke: {
+          default: 'rgb(var(--stroke-default) / <alpha-value>)',
+          subtle: 'rgb(var(--stroke-subtle) / <alpha-value>)',
+        },
+        // Status colors
+        status: {
+          success: 'rgb(var(--status-success) / <alpha-value>)',
+          warning: 'rgb(var(--status-warning) / <alpha-value>)',
+          error: 'rgb(var(--status-error) / <alpha-value>)',
+          info: 'rgb(var(--status-info) / <alpha-value>)',
+        }
       },
       // --- END: SURGICAL REPLACEMENT ---
     },

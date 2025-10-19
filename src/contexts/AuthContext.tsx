@@ -54,9 +54,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Function to initiate Google sign-in
   const signInWithGoogle = async () => {
+    // --- START: SURGICAL MODIFICATION ---
+    // Added options to the OAuth call. The `prompt: 'select_account'` query
+    // parameter forces Google to always show the account chooser, allowing users
+    // to switch accounts instead of being automatically logged into their
+    // default Google session.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: {
+        queryParams: {
+          prompt: 'select_account',
+        },
+      },
     });
+    // --- END: SURGICAL MODIFICATION ---
     if (error) {
       console.error('Error signing in with Google:', error.message);
     }
