@@ -1,7 +1,7 @@
 // src/components/CommunityGroveView.tsx
 import React from 'react';
 import { PendingTree } from '../apiService';
-import { MapPin, Users, GitMerge, Loader2, ListTree } from 'lucide-react';
+import { MapPin, Users, GitMerge, Loader2, ListTree, ArrowLeft } from 'lucide-react';
 
 interface CommunityGroveViewProps {
   pendingTrees: PendingTree[];
@@ -51,9 +51,11 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                             <p className="text-xs text-gray-500">Help verify pending tree measurements.</p>
                          </div>
                     </div>
-                    <button onClick={onBack} className="text-sm font-medium text-blue-600 hover:underline">
-                        &lt; Back
+                    {/* --- START: SURGICAL REPLACEMENT --- */}
+                    <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 p-2 rounded-lg">
+                        <ArrowLeft size={16} /> Back to Hub
                     </button>
+                    {/* --- END: SURGICAL REPLACEMENT --- */}
                 </div>
             </header>
 

@@ -94,9 +94,11 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
               <p className="text-xs text-gray-500">Top contributors to the Grove.</p>
             </div>
           </div>
-          <button onClick={onBack} className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">
-            <ArrowLeft size={14} /> Back
+          {/* --- START: SURGICAL REPLACEMENT --- */}
+          <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 p-2 rounded-lg">
+            <ArrowLeft size={16} /> Back to Hub
           </button>
+          {/* --- END: SURGICAL REPLACEMENT --- */}
         </div>
       </header>
 

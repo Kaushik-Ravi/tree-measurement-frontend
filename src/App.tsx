@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2 } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft } from 'lucide-react';
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -21,19 +21,18 @@ import { CommunityGroveView } from './components/CommunityGroveView';
 import { supabase } from './supabaseClient';
 import { LeaderboardView } from './components/LeaderboardView';
 
-// --- START: SURGICAL ADDITION ---
-// Major architectural change: From "Modes" to a linear "Journey"
-// AppMode is being deprecated in favor of a simpler View + Status model.
+// --- START: SURGICAL REFACTOR (ARCHITECTURE) ---
+// Replacing "AppMode" with a more robust "View" and "Status" system.
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
 
-// The AppStatus is now more linear, representing steps in the measurement session.
 type AppStatus = 
-  'IDLE' | // Represents the Hub view
+  'IDLE' | 
   'SESSION_AWAITING_PERMISSIONS' |
   'SESSION_AWAITING_PHOTO' |
   'SESSION_PROCESSING_PHOTO' |
   'SESSION_AWAITING_DISTANCE' |
   'SESSION_AWAITING_ANALYSIS_CHOICE' |
+  'ANALYSIS_AWAITING_MODE_SELECTION' | // New state for community analysis
   'ANALYSIS_AWAITING_INITIAL_CLICK' |
   'ANALYSIS_PROCESSING' |
   'ANALYSIS_SAVING' |
@@ -45,7 +44,7 @@ type AppStatus =
   'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' |
   'ANALYSIS_MANUAL_READY_TO_CALCULATE' |
   'ERROR';
-// --- END: SURGICAL ADDITION ---
+// --- END: SURGICAL REFACTOR (ARCHITECTURE) ---
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
@@ -100,13 +99,10 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
 function App() {
   const { user, session } = useAuth();
   
-  // --- START: SURGICAL REFACTOR ---
-  // State management is updated to reflect the new "View" and "Status" architecture.
   const [currentView, setCurrentView] = useState<AppView>('HUB');
   const [appStatus, setAppStatus] = useState<AppStatus>('IDLE');
-  // --- END: SURGICAL REFACTOR ---
 
-  const [instructionText, setInstructionText] = useState("Welcome! Please select a measurement mode to begin.");
+  const [instructionText, setInstructionText] = useState("Welcome! Click 'Start Mapping a Tree' to begin.");
   const [errorMessage, setErrorMessage] = useState('');
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [showInstructionToast, setShowInstructionToast] = useState(false);
@@ -156,15 +152,10 @@ function App() {
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
 
-  // --- START: SURGICAL REFACTOR ---
-  // Pre-flight checks are now part of the session start, not on initial load.
-  // This logic is moved into the `handleStartSession` function.
-  // This useEffect is now only for the live compass heading.
   useEffect(() => {
     const handleLiveOrientation = (event: DeviceOrientationEvent) => {
       if (event.alpha !== null) {
         setDeviceHeading(event.alpha);
-        // We only need to confirm the sensor works once.
         setPrereqStatus(prev => prev.compass === 'GRANTED' ? prev : { ...prev, compass: 'GRANTED' });
       }
     };
@@ -174,7 +165,6 @@ function App() {
       window.removeEventListener('deviceorientation', handleLiveOrientation, true);
     };
   }, []);
-  // --- END: SURGICAL REFACTOR ---
 
 
   useEffect(() => {
@@ -212,9 +202,6 @@ function App() {
     triggerCO2Calculation();
   }, [currentMetrics, currentIdentification]);
 
-  // --- START: SURGICAL REFACTOR ---
-  // The monolithic image processing useEffect is now tied to a specific app status,
-  // making the state machine more robust and predictable.
   useEffect(() => {
     if (appStatus !== 'SESSION_PROCESSING_PHOTO' || !currentMeasurementFile) return;
     const processImage = async () => {
@@ -249,11 +236,9 @@ function App() {
           } else {
             setPendingTreeFile(currentMeasurementFile);
             if (fovRatio) { 
-              // We will eventually add a choice here, for now, we proceed.
               setAppStatus('SESSION_AWAITING_DISTANCE'); 
               setInstructionText("No camera data found, but we can use your saved calibration. Please enter the distance."); 
             } else { 
-              // Force calibration
               setCurrentView('CALIBRATION');
             }
           }
@@ -262,7 +247,6 @@ function App() {
     };
     processImage();
   }, [currentMeasurementFile, appStatus, fovRatio]);
-  // --- END: SURGICAL REFACTOR ---
 
   useEffect(() => {
     if (isLocationPickerActive) return;
@@ -287,14 +271,13 @@ function App() {
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
-  // --- START: SURGICAL REFACTOR ---
-  // The old `handleModeSelect` is removed. This new function starts the entire guided journey.
+  // --- START: SURGICAL REFACTOR (GUIDED JOURNEY) ---
   const handleStartSession = async () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
     setInstructionText("Checking device permissions...");
+    setIsPanelOpen(true);
   
-    // 1. Location Check
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -311,7 +294,6 @@ function App() {
       return;
     }
   
-    // 2. Compass Check (using device orientation listener)
     // @ts-ignore
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       try {
@@ -319,24 +301,19 @@ function App() {
         const permissionState = await DeviceOrientationEvent.requestPermission();
         if (permissionState !== 'granted') throw new Error("Permission denied.");
       } catch (err) {
-        setErrorMessage("Compass access is recommended for accurate mapping. You can continue without it.");
         setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
       }
     }
-    // The useEffect listener for 'deviceorientation' will update the status to GRANTED if successful.
     
-    // 3. Proceed to Photo
     setAppStatus('SESSION_AWAITING_PHOTO');
     setInstructionText("Let's start with a photo of the tree.");
   };
-  // --- END: SURGICAL REFACTOR ---
-
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => { 
     const file = event.target.files?.[0]; 
     if (!file) return;
 
-    setCapturedHeading(deviceHeading); // Lock in the heading value on upload.
+    setCapturedHeading(deviceHeading); 
 
     setAppStatus('SESSION_PROCESSING_PHOTO');
     setErrorMessage('');
@@ -440,7 +417,7 @@ function App() {
   
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio); localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
-    setCurrentView('SESSION'); // Return to the session
+    setCurrentView('SESSION'); 
     setAppStatus('SESSION_AWAITING_DISTANCE');
     setInstructionText("Calibration complete! Now, please enter the distance to the tree's base.");
   };
@@ -460,12 +437,10 @@ function App() {
     } else if (fovRatio) {
         cameraConstant = fovRatio;
     } else if (currentView === 'COMMUNITY_GROVE' && claimedTree?.scale_factor && claimedTree?.distance_m) {
-        // In community mode, we can derive a synthetic camera constant to ensure manual mode works correctly.
         const horizontalPixels = Math.max(dims.w, dims.h);
         cameraConstant = (claimedTree.scale_factor * horizontalPixels) / (claimedTree.distance_m * 1000);
     } else {
-        setAppStatus('ERROR');
-        setErrorMessage("Calibration data missing. Please calibrate your camera first.");
+        setCurrentView('CALIBRATION');
         return null;
     }
 
@@ -476,7 +451,7 @@ function App() {
     return finalScaleFactor;
   };
   
-  const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Ready. Please click once on the main trunk of the tree."); setShowInstructionToast(true); } };
+  const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Tap the main trunk of the tree to begin."); setShowInstructionToast(true); } };
   
   const handleStartManualMeasurement = () => { 
       const imageToUse = currentView === 'COMMUNITY_GROVE' ? claimedTree?.image_url : originalImageSrc;
@@ -530,8 +505,6 @@ function App() {
     }
   };
 
-  // --- START: SURGICAL REFACTOR ---
-  // Renamed from handleQuickCaptureSubmit to reflect the new user-facing language.
   const handleSubmitForCommunity = async () => {
     if (!currentMeasurementFile || !distance || !userGeoLocation || !session?.access_token) {
       setErrorMessage("Missing required data: image, distance, or location.");
@@ -559,7 +532,6 @@ function App() {
       
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
-      // Pass 'SESSION' to softReset to indicate it's a measurement session concluding.
       softReset('SESSION');
 
     } catch (error: any) {
@@ -567,12 +539,11 @@ function App() {
       setAppStatus('ERROR');
     }
   };
-  // --- END: SURGICAL REFACTOR ---
 
   const handleNavigateToGrove = async () => {
     if (!session?.access_token) return;
     setCurrentView('COMMUNITY_GROVE');
-    setAppStatus('IDLE'); // Grove has its own internal loading state
+    setAppStatus('IDLE'); 
     setInstructionText("Fetching pending saplings from the Community Grove...");
     try {
       const trees = await getPendingTrees(session.access_token);
@@ -585,46 +556,40 @@ function App() {
 
   const handleClaimTree = async (treeId: string) => {
     if (!session?.access_token) return;
-    setAppStatus('ANALYSIS_PROCESSING'); // Use a generic processing state
+    setAppStatus('ANALYSIS_PROCESSING'); 
     try {
       const res = await claimTree(treeId, session.access_token);
       const claimedData = res.data;
 
       if (!claimedData || claimedData.distance_m == null || claimedData.scale_factor == null) {
-        console.error("Claim response missing critical data:", claimedData);
-        throw new Error("Failed to claim tree: The record is missing essential measurement data and cannot be analyzed.");
+        throw new Error("Failed to claim tree: The record is missing essential measurement data.");
       }
       
       setClaimedTree(claimedData);
 
-      // --- START: SURGICAL ADDITION ---
-      // Convert URL to File to enable SpeciesIdentifier cropping.
-      // Reset additional data form state for the new analysis.
       const response = await fetch(claimedData.image_url);
       const blob = await response.blob();
       const fileName = claimedData.image_url.split('/').pop() || 'claimed-tree.jpg';
       const file = new File([blob], fileName, { type: blob.type });
       setCurrentMeasurementFile(file);
       setAdditionalData(initialAdditionalData); 
-      // --- END: SURGICAL ADDITION ---
 
       const img = new Image();
-      img.crossOrigin = "Anonymous"; // Important for canvas
+      img.crossOrigin = "Anonymous";
       img.src = claimedData.image_url;
       img.onload = () => {
         setImageDimensions({w: img.naturalWidth, h: img.naturalHeight});
         setOriginalImageSrc(claimedData.image_url);
-        setResultImageSrc(claimedData.image_url); // Set both for initial display
+        setResultImageSrc(claimedData.image_url);
         setCurrentLocation(claimedData.latitude && claimedData.longitude ? {lat: claimedData.latitude, lng: claimedData.longitude} : null);
         setDistance(claimedData.distance_m ? String(claimedData.distance_m) : '');
 
-        setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE');
+        // --- FIX: Correct state transition for Community Analysis ---
+        setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION');
         setIsPanelOpen(true);
         setInstructionText(`Tree claimed. You have 10 minutes to analyze. Start by selecting a measurement mode below.`);
       };
-      img.onerror = () => {
-        throw new Error("Could not load tree image.");
-      }
+      img.onerror = () => { throw new Error("Could not load tree image."); }
     } catch(e: any) {
       setErrorMessage(e.message);
       handleReturnToHub();
@@ -635,14 +600,11 @@ function App() {
     if (!claimedTree || !currentMetrics || !session?.access_token) return;
     setAppStatus('ANALYSIS_SAVING');
     try {
-      // --- START: SURGICAL ADDITION ---
-      // Add additional data to the submission payload.
       const payload: CommunityAnalysisPayload = {
         metrics: currentMetrics,
         species: currentIdentification?.bestMatch,
         ...additionalData,
       };
-      // --- END: SURGICAL ADDITION ---
       await submitCommunityAnalysis(claimedTree.id, payload, session.access_token);
       softReset('COMMUNITY_GROVE');
     } catch(e: any) {
@@ -652,16 +614,10 @@ function App() {
   };
 
 
-  const softReset = (originView: AppView) => {
-    const isCommunityMode = originView === 'COMMUNITY_GROVE';
-    
-    // Always return to the Hub
+  const softReset = (originView: AppView | 'SESSION') => {
     setCurrentView('HUB');
     setAppStatus('IDLE');
-    setInstructionText(
-        isCommunityMode ? 'Analysis submitted! Returning to the Hub.' :
-        'Session complete! Ready to map another tree.'
-    );
+    setInstructionText( "Session complete! Ready to map another tree.");
     
     setErrorMessage('');
     setCurrentMeasurementFile(null);
@@ -684,21 +640,14 @@ function App() {
     setPendingTreeFile(null);
     setImageDimensions(null);
     setCapturedHeading(null);
-    setIsPanelOpen(false); // Hide panel on session end
+    setIsPanelOpen(false);
     setClaimedTree(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   
-  // --- START: SURGICAL REFACTOR ---
-  // Replaced `handleReturnToModeSelect` with a simpler `handleReturnToHub`
   const handleReturnToHub = () => {
-    // Soft reset handles most of the state clearing.
-    // This function is now simpler and just ensures the view is correct.
     softReset(currentView);
-    setCurrentView('HUB');
-    setAppStatus('IDLE');
   };
-  // --- END: SURGICAL REFACTOR ---
 
   const handleManualPointCollection = async (point: Point) => { 
     if (!scaleFactor || !imageDimensions) return;
@@ -720,43 +669,48 @@ function App() {
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
   if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} /> }
 
-  // --- START: SURGICAL REFACTOR ---
-  // The main return block is now structured around the Home Hub and the Measurement Session.
-  // This is the core of the new user flow.
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
-  const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
+  const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING', 'SESSION_PROCESSING_PHOTO'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
 
   const renderSessionView = () => (
     <>
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
-          {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Upload an image to start</p></div>}
+          {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-gray-400"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
           {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : (
-            originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING') ? 'cursor-crosshair' : ''}`} />
+            originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') ? 'cursor-crosshair' : ''}`} />
           )}
       </div>
         
-      {isSessionActive && !isPanelOpen && !isLocationPickerActive && ( <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform"> <Menu size={24} /> </button> )}
+      {isSessionActive && !isPanelOpen && !isLocationPickerActive && ( 
+        <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform flex items-center gap-2"> 
+          <Menu size={24} /> 
+          <span className="text-sm font-semibold">
+            {appStatus === 'ANALYSIS_COMPLETE' ? 'Review & Correct' : 'Show Panel'}
+          </span>
+        </button> 
+      )}
 
       {(!isLocationPickerActive || window.innerWidth >= 768) && (
-        <div id="control-panel" className={` bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 fixed z-20 inset-0 ${isPanelOpen || !isSessionActive ? 'translate-y-0' : 'translate-y-full'} `} >
+        // --- FIX: Desktop Layout Restoration ---
+        <div id="control-panel" className={`bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out fixed z-20 inset-0 md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`} >
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
-              {isSessionActive ? ( <> <AuthComponent profile={userProfile} /> <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button> </> ) : ( <div className="w-full flex justify-between items-center"> <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Tree Measurement</h1></div> <AuthComponent profile={userProfile} /> </div> )}
+              <AuthComponent profile={userProfile} /> 
+              <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button>
           </div>
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <div className="hidden md:flex justify-between items-center mb-6">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold text-gray-900">{claimedTree ? 'Community Analysis' : 'New Measurement'}</h1>
-              </div>
+              <h1 className="text-2xl font-semibold text-gray-900">{claimedTree ? 'Community Analysis' : 'New Measurement'}</h1>
               <AuthComponent profile={userProfile} />
             </div>
 
-            <button onClick={handleReturnToHub} className="text-sm text-blue-600 hover:underline mb-4">{'<'} Back to Hub</button>
+            <button onClick={handleReturnToHub} className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 p-2 rounded-lg mb-4">
+              <ArrowLeft size={16}/> Back to Hub
+            </button>
             
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
             {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'ANALYSIS_SAVING' ? 'Saving...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
             
-            {/* --- Guided Session Steps --- */}
             {appStatus === 'SESSION_AWAITING_PHOTO' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Photo</label> 
@@ -768,13 +722,10 @@ function App() {
             {appStatus === 'SESSION_AWAITING_DISTANCE' && (
               <div>
                 <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label>
-                <div className="relative">
-                  <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" />
-                </div>
+                <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" /> </div>
                 <ARLinks />
-                <button onClick={() => setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE')} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 disabled:bg-gray-300">
-                  Continue
+                <button onClick={() => { setIsPanelOpen(false); setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE'); }} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 disabled:bg-gray-300">
+                  Continue to Measurement
                 </button>
               </div>
             )}
@@ -784,51 +735,34 @@ function App() {
                   <h3 className="text-base font-semibold text-center text-gray-800">How would you like to proceed?</h3>
                   <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-4">
                     <Navigation className="w-6 h-6 flex-shrink-0" /> 
-                    <div>
-                      <p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-blue-700 px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p>
-                      <p className="text-xs text-blue-200">Quickly tag this tree for others to analyze.</p>
-                    </div>
+                    <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-blue-700 px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs text-blue-200">Quickly tag this tree for others to analyze.</p></div>
                   </button>
-                  <button onClick={() => setIsPanelOpen(false)} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-all flex items-center gap-4">
+                  {/* --- FIX: "Analyze Myself" Button Logic --- */}
+                  <button onClick={() => { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Tap the main trunk of the tree to begin."); setShowInstructionToast(true); }} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-all flex items-center gap-4">
                     <ShieldCheck className="w-6 h-6 flex-shrink-0" /> 
-                    <div>
-                      <p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-green-700 px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p>
-                      <p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p>
-                    </div> 
+                    <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-green-700 px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p></div> 
                   </button>
               </div>
             )}
-
-            {(appStatus.startsWith('ANALYSIS_') && !isManualMode(appStatus) && appStatus !== 'ANALYSIS_COMPLETE') && (
+            
+            {/* --- FIX: Community Analysis Mode Selection --- */}
+            {appStatus === 'ANALYSIS_AWAITING_MODE_SELECTION' && (
                <div className="space-y-3 pt-6 border-t mt-6"> 
                   <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> 
                   <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> 
               </div>
             )}
             
-            {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && (
-              <div className="pt-6 mt-6 border-t">
-                <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:bg-gray-300">
-                  <Ruler className="w-5 h-5" /> Calculate Measurements
-                </button>
-              </div>
-            )}
+            {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:bg-gray-300"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
-            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Current Measurements</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Trunk Width (at chest height):</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> {currentView === 'SESSION' && appStatus === 'ANALYSIS_COMPLETE' && <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline. The *first click* also sets the new height for the DBH measurement."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(URL.createObjectURL(currentMeasurementFile)); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Manual Mode</button> </div>} 
+            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Trunk Width (at chest height):</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
-              {currentView === 'SESSION' && 
-                <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> 
-                  <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add Location'} 
-                </button>
-              }
-              {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && 
-                <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />
-              }
+              {currentView === 'SESSION' && <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"> <MapPin className="w-5 h-5 text-blue-600" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add/Edit Location'} </button>}
+              {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />}
             </div> 
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(currentView)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{currentView === 'COMMUNITY_GROVE' ? 'Cancel & Exit' : 'Measure Another'}</button> {currentView === 'SESSION' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
-            
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => softReset(currentView)} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"><RotateCcw className="w-4 h-4" />{currentView === 'COMMUNITY_GROVE' ? 'Cancel & Exit' : 'Finish & Go to Hub'}</button> {currentView === 'SESSION' && <button onClick={handleSaveResult} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><Plus className="w-5 h-5" />Save to History</button>} {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"><GitMerge className="w-5 h-5" />Submit Analysis</button>}</div> </div> )}
           </div>
         </div>
       )}
@@ -841,10 +775,9 @@ function App() {
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
       
       {isSessionActive ? renderSessionView() : (
-        // Home Hub View
         <div className="flex flex-col h-full">
             <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200">
-                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Tree Measurement</h1></div>
+                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-green-700" /><h1 className="text-xl font-semibold text-gray-900">Elite Tree Measurement</h1></div>
                 <AuthComponent profile={userProfile} />
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6 space-y-8">
@@ -852,9 +785,16 @@ function App() {
                 <button onClick={handleStartSession} className="px-8 py-4 bg-green-700 text-white rounded-lg font-bold text-lg hover:bg-green-800 transition-transform active:scale-95 shadow-lg">
                   Start Mapping a Tree
                 </button>
-                <div className="mt-6 flex justify-center gap-6">
-                  <button onClick={handleNavigateToGrove} className="text-base font-medium text-indigo-600 hover:underline">Visit the Community Grove</button>
-                  <button onClick={() => setCurrentView('LEADERBOARD')} className="text-base font-medium text-indigo-600 hover:underline">View Leaderboard</button>
+                {/* --- FIX: Enhanced Home Hub Links --- */}
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                    <button onClick={handleNavigateToGrove} className="text-left p-4 bg-indigo-50 border border-indigo-200 rounded-lg hover:border-indigo-400 hover:shadow-md transition-all">
+                        <div className="flex items-center gap-3"><Users className="w-6 h-6 text-indigo-600"/> <h3 className="font-semibold text-indigo-900">Community Grove</h3></div>
+                        <p className="text-xs text-indigo-700 mt-1">Help the community by analyzing tree photos submitted by other users.</p>
+                    </button>
+                    <button onClick={() => setCurrentView('LEADERBOARD')} className="text-left p-4 bg-amber-50 border border-amber-200 rounded-lg hover:border-amber-400 hover:shadow-md transition-all">
+                        <div className="flex items-center gap-3"><BarChart2 className="w-6 h-6 text-amber-600"/> <h3 className="font-semibold text-amber-900">Leaderboard</h3></div>
+                        <p className="text-xs text-amber-700 mt-1">See how your contributions rank against other mappers in the community.</p>
+                    </button>
                 </div>
               </div>
               <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} />
@@ -863,7 +803,6 @@ function App() {
       )}
     </div>
   );
-  // --- END: SURGICAL REFACTOR ---
 }
 
 export default App;
