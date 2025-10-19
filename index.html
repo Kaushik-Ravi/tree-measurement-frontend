@@ -14,20 +14,20 @@
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
     
-    <!-- --- START: SURGICAL ADDITION --- -->
-    <!-- This script is critical for theme handling. It runs before React mounts
-         to check the user's OS preference and applies the 'dark' class to the
-         html element, preventing a flash of the wrong theme. -->
+    <!-- --- START: SURGICAL REPLACEMENT --- -->
+    <!-- This script is critical for theme handling. It now defaults to dark mode
+         unless the user has explicitly saved a preference for light mode,
+         preventing a theme flash on initial load. -->
     <script>
       (function() {
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        } else {
+        if (localStorage.getItem('theme') === 'light') {
           document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
         }
       })();
     </script>
-    <!-- --- END: SURGICAL ADDITION --- -->
+    <!-- --- END: SURGICAL REPLACEMENT --- -->
 
   </head>
   <body>
