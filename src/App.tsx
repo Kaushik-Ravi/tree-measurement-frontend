@@ -32,6 +32,7 @@ type AppStatus =
   'SESSION_PROCESSING_PHOTO' |
   'SESSION_AWAITING_DISTANCE' |
   'SESSION_AWAITING_ANALYSIS_CHOICE' |
+  'ANALYSIS_PREPARATION' | // New intermediary step
   'ANALYSIS_AWAITING_MODE_SELECTION' | // New state for community analysis
   'ANALYSIS_AWAITING_INITIAL_CLICK' |
   'ANALYSIS_PROCESSING' |
@@ -166,6 +167,26 @@ function App() {
     };
   }, []);
 
+  // --- START: SURGICAL ADDITION (BROWSER BACK BUTTON) ---
+  useEffect(() => {
+    const handleBrowserBack = () => {
+      // Only act if we are in a sub-view.
+      if (currentView !== 'HUB') {
+        handleReturnToHub();
+      }
+    };
+    window.addEventListener('popstate', handleBrowserBack);
+    return () => window.removeEventListener('popstate', handleBrowserBack);
+  }, [currentView]); // Rerun if the view changes to correctly handle context.
+
+  useEffect(() => {
+      // Push state to browser history when entering a non-hub view
+      if (currentView !== 'HUB' && window.history.state?.view !== currentView) {
+          window.history.pushState({ view: currentView }, '');
+      }
+  }, [currentView]);
+  // --- END: SURGICAL ADDITION (BROWSER BACK BUTTON) ---
+
 
   useEffect(() => {
     const fetchUserResults = async () => {
@@ -271,7 +292,6 @@ function App() {
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
-  // --- START: SURGICAL REFACTOR (GUIDED JOURNEY) ---
   const handleStartSession = async () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
@@ -672,6 +692,26 @@ function App() {
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
   const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING', 'SESSION_PROCESSING_PHOTO'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
 
+  // --- START: SURGICAL REFACTOR (MOBILE UX) ---
+  const renderFloatingActionButton = () => {
+    if (!isSessionActive || isPanelOpen || window.innerWidth >= 768) {
+      return null;
+    }
+
+    let buttonText = "Show Panel";
+    if (appStatus === 'ANALYSIS_COMPLETE') {
+      buttonText = "Review Results & Save";
+    }
+
+    return (
+      <button onClick={() => setIsPanelOpen(true)} className="fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform flex items-center gap-2"> 
+        <Menu size={24} /> 
+        <span className="text-sm font-semibold">{buttonText}</span>
+      </button> 
+    );
+  };
+  // --- END: SURGICAL REFACTOR (MOBILE UX) ---
+
   const renderSessionView = () => (
     <>
       <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
@@ -680,19 +720,12 @@ function App() {
             originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') ? 'cursor-crosshair' : ''}`} />
           )}
       </div>
-        
-      {isSessionActive && !isPanelOpen && !isLocationPickerActive && ( 
-        <button onClick={() => setIsPanelOpen(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform flex items-center gap-2"> 
-          <Menu size={24} /> 
-          <span className="text-sm font-semibold">
-            {appStatus === 'ANALYSIS_COMPLETE' ? 'Review & Correct' : 'Show Panel'}
-          </span>
-        </button> 
-      )}
+      
+      {renderFloatingActionButton()}
 
       {(!isLocationPickerActive || window.innerWidth >= 768) && (
-        // --- FIX: Desktop Layout Restoration ---
-        <div id="control-panel" className={`bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out fixed z-20 inset-0 md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`} >
+        // --- FIX: DESKTOP LAYOUT RESTORATION ---
+        <div id="control-panel" className={`bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out fixed inset-0 z-20 md:static md:w-[35%] md:max-w-xl md:flex-shrink-0 md:translate-y-0 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'}`} >
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
               <AuthComponent profile={userProfile} /> 
               <button onClick={() => setIsPanelOpen(false)} className="p-2 text-gray-500 hover:text-gray-800"><X size={24} /></button>
@@ -711,51 +744,33 @@ function App() {
             <div className="p-4 rounded-lg mb-6 bg-slate-100 border border-slate-200"><h3 className="font-bold text-slate-800">Current Task</h3><div id="status-box" className="text-sm text-slate-600"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-red-600 font-medium mt-1">{errorMessage}</p>}</div>
             {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-gray-500 animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'ANALYSIS_SAVING' ? 'Saving...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
             
-            {appStatus === 'SESSION_AWAITING_PHOTO' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Photo</label> 
-                <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> 
-                <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">Choose Image File</span> </button>
-              </div>
-            )}
+            {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-gray-700 mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50"> <Upload className="w-5 h-5 text-gray-400" /> <span className="text-gray-600">Choose Image File</span> </button> </div> )}
 
-            {appStatus === 'SESSION_AWAITING_DISTANCE' && (
-              <div>
-                <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label>
-                <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" /> </div>
-                <ARLinks />
-                <button onClick={() => { setIsPanelOpen(false); setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE'); }} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 disabled:bg-gray-300">
-                  Continue to Measurement
+            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500" /> </div> <ARLinks /> <button onClick={() => setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE')} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800 disabled:bg-gray-300"> Continue </button> </div> )}
+
+            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t"> <h3 className="text-base font-semibold text-center text-gray-800">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-blue-700 px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs text-blue-200">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => setAppStatus('ANALYSIS_PREPARATION')} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-green-700 px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
+            
+            {/* --- FIX: New Intermediary Step --- */}
+            {appStatus === 'ANALYSIS_PREPARATION' && (
+              <div className="space-y-4 pt-4 border-t text-center">
+                <h3 className="text-base font-semibold text-gray-800">Ready for Analysis</h3>
+                <p className="text-sm text-gray-600">The next step is to mark the tree on the image. Click the button below when you're ready.</p>
+                <button onClick={() => { setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION'); setInstructionText("Select your preferred measurement method below."); }} className="w-full px-6 py-3 bg-green-700 text-white rounded-lg font-semibold hover:bg-green-800">
+                  Continue to Analysis
                 </button>
               </div>
             )}
 
-            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && (
-              <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-base font-semibold text-center text-gray-800">How would you like to proceed?</h3>
-                  <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-4">
-                    <Navigation className="w-6 h-6 flex-shrink-0" /> 
-                    <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-blue-700 px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs text-blue-200">Quickly tag this tree for others to analyze.</p></div>
-                  </button>
-                  {/* --- FIX: "Analyze Myself" Button Logic --- */}
-                  <button onClick={() => { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Tap the main trunk of the tree to begin."); setShowInstructionToast(true); }} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-all flex items-center gap-4">
-                    <ShieldCheck className="w-6 h-6 flex-shrink-0" /> 
-                    <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-green-700 px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs text-green-200">Perform a detailed analysis for immediate results.</p></div> 
-                  </button>
-              </div>
-            )}
-            
-            {/* --- FIX: Community Analysis Mode Selection --- */}
             {appStatus === 'ANALYSIS_AWAITING_MODE_SELECTION' && (
                <div className="space-y-3 pt-6 border-t mt-6"> 
-                  <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Slower, more precise</p></div> </button> 
-                  <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Faster, mark points yourself</p></div> </button> 
+                  <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-green-700 text-white rounded-lg hover:bg-green-800 disabled:bg-gray-300 disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs text-green-200">Tap the trunk once.</p></div> </button> 
+                  <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs text-amber-100">Mark all points yourself.</p></div> </button> 
               </div>
             )}
             
             {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:bg-gray-300"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
-            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Trunk Width (at chest height):</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Restart in Manual</button> </div>
+            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-gray-900">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Height:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Canopy:</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-white rounded-lg border"><label className="font-medium text-gray-700">Trunk Width (at chest height):</label><span className="font-mono text-lg text-gray-800">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span></div> </div> <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-blue-600 hover:underline">View Masked Image</button> </div> <div className="grid grid-cols-2 gap-3 pt-4 border-t"> <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Correct Outline</button> <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
@@ -785,15 +800,14 @@ function App() {
                 <button onClick={handleStartSession} className="px-8 py-4 bg-green-700 text-white rounded-lg font-bold text-lg hover:bg-green-800 transition-transform active:scale-95 shadow-lg">
                   Start Mapping a Tree
                 </button>
-                {/* --- FIX: Enhanced Home Hub Links --- */}
                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
                     <button onClick={handleNavigateToGrove} className="text-left p-4 bg-indigo-50 border border-indigo-200 rounded-lg hover:border-indigo-400 hover:shadow-md transition-all">
                         <div className="flex items-center gap-3"><Users className="w-6 h-6 text-indigo-600"/> <h3 className="font-semibold text-indigo-900">Community Grove</h3></div>
-                        <p className="text-xs text-indigo-700 mt-1">Help the community by analyzing tree photos submitted by other users.</p>
+                        <p className="text-xs text-indigo-700 mt-1">Help analyze tree photos submitted by other users.</p>
                     </button>
                     <button onClick={() => setCurrentView('LEADERBOARD')} className="text-left p-4 bg-amber-50 border border-amber-200 rounded-lg hover:border-amber-400 hover:shadow-md transition-all">
                         <div className="flex items-center gap-3"><BarChart2 className="w-6 h-6 text-amber-600"/> <h3 className="font-semibold text-amber-900">Leaderboard</h3></div>
-                        <p className="text-xs text-amber-700 mt-1">See how your contributions rank against other mappers in the community.</p>
+                        <p className="text-xs text-amber-700 mt-1">See how your contributions rank against others in the community.</p>
                     </button>
                 </div>
               </div>
