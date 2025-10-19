@@ -2,10 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* --- START: SURGICAL ADDITION --- */
+    /* Applying a subtle gradient background for a more premium, less sterile feel.
+       This creates a soft, inviting canvas for the application content. */
+    @apply bg-gradient-to-br from-base-100 to-base-200 text-slate-800;
+    /* --- END: SURGICAL ADDITION --- */
+  }
 }
+
 
 /*
   ==============================================
