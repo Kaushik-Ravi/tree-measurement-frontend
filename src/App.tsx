@@ -1,6 +1,8 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check } from 'lucide-react';
+// --- START: SURGICAL ADDITION (THEME ICONS) ---
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon } from 'lucide-react';
+// --- END: SURGICAL ADDITION (THEME ICONS) ---
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -30,10 +32,7 @@ type AppStatus =
   'SESSION_AWAITING_PHOTO' | 
   'SESSION_PROCESSING_PHOTO' |
   'SESSION_AWAITING_DISTANCE' |
-  // --- START: SURGICAL ADDITION ---
-  // New state to provide a clear choice to the user.
   'SESSION_AWAITING_CALIBRATION_CHOICE' |
-  // --- END: SURGICAL ADDITION ---
   'SESSION_AWAITING_ANALYSIS_CHOICE' |
   'ANALYSIS_AWAITING_MODE_SELECTION' | 
   'ANALYSIS_AWAITING_INITIAL_CLICK' |
@@ -58,6 +57,21 @@ type PrerequisiteStatus = {
   compass: SensorStatus;
 };
 type UserProfile = { id: string; full_name: string; avatar_url: string; sapling_points: number; rank: string; } | null;
+
+// --- START: SURGICAL ADDITION (THEME MANAGEMENT) ---
+type Theme = 'light' | 'dark';
+
+interface ThemeToggleProps {
+  theme: Theme;
+  onToggle: () => void;
+}
+
+const ThemeToggle = ({ theme, onToggle }: ThemeToggleProps) => (
+  <button onClick={onToggle} className="p-2 text-content-subtle bg-background-subtle rounded-lg hover:bg-background-inset" title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+  </button>
+);
+// --- END: SURGICAL ADDITION (THEME MANAGEMENT) ---
 
 interface FloatingInteractionControlsProps {
   onUndo: () => void;
@@ -92,7 +106,8 @@ const ARLinks = () => ( <p className="text-xs text-content-subtle mt-1 pl-1">Nee
 
 const initialAdditionalData: AdditionalData = { condition: '', ownership: '', remarks: '' };
 
-const AuthComponent = ({ profile }: { profile: UserProfile }) => {
+// --- START: SURGICAL REPLACEMENT (AUTH COMPONENT WITH THEME TOGGLE) ---
+const AuthComponent = ({ profile, theme, onThemeToggle }: { profile: UserProfile, theme: Theme, onThemeToggle: () => void }) => {
   const { user, signInWithGoogle, signOut } = useAuth();
 
   if (user && profile) {
@@ -103,6 +118,7 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
             <p className="text-xs text-content-subtle -mt-1">{profile.rank}</p>
         </div>
         <img src={user.user_metadata.avatar_url} alt="User avatar" className="w-8 h-8 rounded-full border-2 border-stroke-subtle" />
+        <ThemeToggle theme={theme} onToggle={onThemeToggle} />
         <button onClick={signOut} className="p-2 text-content-subtle bg-background-subtle rounded-lg hover:bg-background-inset flex items-center gap-2" title="Sign Out">
           <LogOut className="w-4 h-4" />
         </button>
@@ -119,12 +135,16 @@ const AuthComponent = ({ profile }: { profile: UserProfile }) => {
   }
 
   return (
-    <button onClick={signInWithGoogle} className="flex items-center gap-2 px-4 py-2 bg-background-default border border-stroke-default rounded-lg text-sm font-medium text-content-default hover:bg-background-subtle">
-      <LogIn className="w-4 h-4" />
-      Sign In
-    </button>
+     <div className="flex items-center gap-3">
+        <ThemeToggle theme={theme} onToggle={onThemeToggle} />
+        <button onClick={signInWithGoogle} className="flex items-center gap-2 px-4 py-2 bg-background-default border border-stroke-default rounded-lg text-sm font-medium text-content-default hover:bg-background-subtle">
+          <LogIn className="w-4 h-4" />
+          Sign In
+        </button>
+    </div>
   );
 };
+// --- END: SURGICAL REPLACEMENT (AUTH COMPONENT WITH THEME TOGGLE) ---
 
 function App() {
   const { user, session } = useAuth();
@@ -138,6 +158,28 @@ function App() {
   const [showInstructionToast, setShowInstructionToast] = useState(false);
   
   const [fovRatio, setFovRatio] = useState<number | null>(null);
+
+  // --- START: SURGICAL ADDITION (THEME MANAGEMENT STATE & LOGIC) ---
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (localStorage.getItem('theme') === 'light') {
+      return 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  
+  const handleThemeToggle = () => {
+    setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
+  };
+  // --- END: SURGICAL ADDITION (THEME MANAGEMENT STATE & LOGIC) ---
 
   const [currentMeasurementFile, setCurrentMeasurementFile] = useState<File | null>(null);
   const [pendingTreeFile, setPendingTreeFile] = useState<File | null>(null);
@@ -290,8 +332,6 @@ function App() {
             setFocalLength(focalLengthValue); 
             setAppStatus('SESSION_AWAITING_DISTANCE'); 
             setInstructionText("Great! Now, please enter the distance to the tree's base.");
-          // --- START: SURGICAL MODIFICATION ---
-          // Implementing the calibration choice flow.
           } else {
             setPendingTreeFile(currentMeasurementFile);
             if (fovRatio) { 
@@ -301,12 +341,11 @@ function App() {
               setCurrentView('CALIBRATION');
             }
           }
-          // --- END: SURGICAL MODIFICATION ---
         };
       } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); if (currentMeasurementFile) { const objURL = URL.createObjectURL(currentMeasurementFile); setOriginalImageSrc(objURL); setResultImageSrc(objURL); } }
     };
     processImage();
-  }, [currentMeasurementFile, appStatus]); // Removed fovRatio dependency to prevent re-triggering.
+  }, [currentMeasurementFile, appStatus, fovRatio]);
 
   useEffect(() => {
     if (isLocationPickerActive) return;
@@ -326,7 +365,9 @@ function App() {
       const scaleCoords = (p: Point): Point => !imageDimensions ? p : { x: (p.x / imageDimensions.w) * canvas.width, y: (p.y / imageDimensions.h) * canvas.height };
       const drawPoint = (p: Point, color: string) => { const sp = scaleCoords(p); ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke(); };
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
-      if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
+      // --- START: SURGICAL REPLACEMENT (DBH GUIDE COLOR & THICKNESS) ---
+      if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
+      // --- END: SURGICAL REPLACEMENT (DBH GUIDE COLOR & THICKNESS) ---
       refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
@@ -743,7 +784,9 @@ function App() {
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
       setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click widest points."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
-      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use guide to click trunk's width."); } return {...p, canopy: c}; }); 
+      // --- START: SURGICAL REPLACEMENT (INSTRUCTION TEXT) ---
+      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width."); } return {...p, canopy: c}; }); 
+      // --- END: SURGICAL REPLACEMENT (INSTRUCTION TEXT) ---
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
       setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
@@ -788,7 +831,7 @@ function App() {
 
       case 'ANALYSIS_MANUAL_READY_TO_CALCULATE':
         setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
-        setInstructionText("STEP 3/3 (Girth): Use guide to click trunk's width.");
+        setInstructionText("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width.");
         setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         break;
     }
@@ -839,7 +882,7 @@ function App() {
 
       <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
           {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-content-subtle"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
-          {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} /> ) : (
+          {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} theme={theme} /> ) : (
             originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} />
           )}
           {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || isManualMode(appStatus) || appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION') && (
@@ -861,14 +904,14 @@ function App() {
       {(!isLocationPickerActive || window.innerWidth >= 768) && (
         <div id="control-panel" className={`bg-background-default border-r border-stroke-default flex flex-col transition-transform duration-300 ease-in-out md:translate-y-0 md:relative md:w-[35%] md:max-w-xl md:flex-shrink-0 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'} max-md:fixed max-md:inset-0 max-md:z-20`} >
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default md:hidden">
-              <AuthComponent profile={userProfile} /> 
+              <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} /> 
               <button onClick={() => setIsPanelOpen(false)} className="p-2 text-content-subtle hover:text-content-default"><X size={24} /></button>
           </div>
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <div className="hidden md:flex justify-between items-center mb-6">
               <h1 className="text-2xl font-semibold text-content-default">{claimedTree ? 'Community Analysis' : 'New Measurement'}</h1>
-              <AuthComponent profile={userProfile} />
+              <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} />
             </div>
 
             <button onClick={handleReturnToHub} className="flex items-center gap-1.5 text-sm font-medium text-brand-secondary hover:bg-brand-secondary/10 p-2 rounded-lg mb-4">
@@ -880,15 +923,14 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> </div> )}
 
-            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-content-default mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" /> </div> <ARLinks /> <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-content-on-brand rounded-lg font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle"> Continue </button> </div> )}
+            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-content-default mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" /> </div> <ARLinks /> <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle"> Continue </button> </div> )}
             
-            {/* --- START: SURGICAL ADDITION --- */}
             {appStatus === 'SESSION_AWAITING_CALIBRATION_CHOICE' && (
               <div className="space-y-4 pt-4 border-t border-stroke-subtle">
                 <h3 className="text-base font-semibold text-center text-content-default">Use Existing Calibration?</h3>
                 <button 
                   onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setInstructionText("Using saved calibration. Please enter the distance."); }}
-                  className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"
+                  className="w-full text-left p-4 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"
                 >
                   <ShieldCheck className="w-6 h-6 flex-shrink-0" />
                   <div>
@@ -908,9 +950,10 @@ function App() {
                 </button>
               </div>
             )}
-            {/* --- END: SURGICAL ADDITION --- */}
             
-            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t border-stroke-subtle"> <h3 className="text-base font-semibold text-center text-content-default">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-brand-secondary text-content-on-brand rounded-lg hover:bg-brand-secondary-hover transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-brand-secondary px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs opacity-80">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => {setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION'); setInstructionText("Select your preferred analysis method.");}} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-brand-primary px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs opacity-80">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
+            {/* --- START: SURGICAL REPLACEMENT (BUTTON TEXT COLOR) --- */}
+            {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t border-stroke-subtle"> <h3 className="text-base font-semibold text-center text-content-default">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-brand-secondary px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs opacity-80">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => {setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION'); setInstructionText("Select your preferred analysis method.");}} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-brand-primary px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs opacity-80">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
+            {/* --- END: SURGICAL REPLACEMENT (BUTTON TEXT COLOR) --- */}
 
             {appStatus === 'ANALYSIS_AWAITING_MODE_SELECTION' && (
                <div className="space-y-3 pt-6 border-t border-stroke-subtle mt-6"> 
@@ -922,6 +965,7 @@ function App() {
             
             {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t border-stroke-subtle"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-brand-accent text-white rounded-lg font-semibold hover:bg-brand-accent-hover disabled:bg-background-inset"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
+            {/* --- START: SURGICAL REPLACEMENT (BUTTON STYLING & TEXT) --- */}
             {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-content-default">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Height:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Canopy:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> 
             <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle">
               <div className="flex items-center gap-2 relative group min-w-0">
@@ -938,7 +982,7 @@ function App() {
             {maskGenerated && <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-brand-secondary hover:underline">View Masked Image</button>}
             </div> 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stroke-subtle"> 
-              {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-secondary text-content-on-brand rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
+              {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
             <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t border-stroke-subtle pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
@@ -951,6 +995,7 @@ function App() {
               {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"><GitMerge className="w-5 h-5" />Submit Analysis</button>}
             </div>
             </div> )}
+            {/* --- END: SURGICAL REPLACEMENT (BUTTON STYLING & TEXT) --- */}
           </div>
         </div>
       )}
@@ -966,7 +1011,7 @@ function App() {
         <div className="w-full flex flex-col h-full">
             <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default bg-background-default/80 backdrop-blur-sm sticky top-0 z-10">
                 <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-brand-primary" /><h1 className="text-xl font-semibold text-content-default">Elite Tree Measurement</h1></div>
-                <AuthComponent profile={userProfile} />
+                <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} />
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6 bg-background-subtle">
               <div className="max-w-4xl mx-auto text-center py-8 md:py-16">
@@ -979,16 +1024,18 @@ function App() {
                 </button>
               </div>
 
+              {/* --- START: SURGICAL REPLACEMENT (HUB CARD TERMINOLOGY) --- */}
               <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
                   <button onClick={handleNavigateToGrove} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-secondary/50 hover:shadow-xl transition-all hover:-translate-y-1">
-                      <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">Community Grove</h3></div>
-                      <p className="text-sm text-content-subtle mt-2">Lend your expertise. Help analyze tree photos submitted by other users to build a verified, open-source dataset.</p>
+                      <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">The Community Grove</h3></div>
+                      <p className="text-sm text-content-subtle mt-2">Can't do a full measurement? Help our community by analyzing trees that others have submitted.</p>
                   </button>
                   <button onClick={() => setCurrentView('LEADERBOARD')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-accent/50 hover:shadow-xl transition-all hover:-translate-y-1">
                       <div className="flex items-center gap-3"><BarChart2 className="w-7 h-7 text-brand-accent"/> <h3 className="text-lg font-semibold text-content-default">Leaderboard</h3></div>
                       <p className="text-sm text-content-subtle mt-2">See how your contributions rank. Earn Sapling Points for each tree you map and analyze.</p>
                   </button>
               </div>
+              {/* --- END: SURGICAL REPLACEMENT (HUB CARD TERMINOLOGY) --- */}
               <div className="max-w-7xl mx-auto">
                 <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} isLoading={isHistoryLoading} />
               </div>

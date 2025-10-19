@@ -9,6 +9,9 @@ import 'leaflet-geosearch/dist/geosearch.css';
 
 interface MapFeaturesProps {
   onLocationSelected: (location: { lat: number, lng: number }) => void;
+  // --- START: SURGICAL ADDITION (THEME PROP) ---
+  theme: 'light' | 'dark';
+  // --- END: SURGICAL ADDITION (THEME PROP) ---
 }
 
 // This custom hook delays updating a value until a certain amount of time has passed
@@ -31,7 +34,8 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
+// --- START: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---
+const MapFeatures = ({ onLocationSelected, theme }: MapFeaturesProps) => {
   const map = useMap();
   const provider = useRef(new OpenStreetMapProvider());
   const [query, setQuery] = useState('');
@@ -75,8 +79,11 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
   return (
     <>
       <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Light">
+        <LayersControl.BaseLayer checked={theme === 'light'} name="Light">
           <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer checked={theme === 'dark'} name="Dark">
+          <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         </LayersControl.BaseLayer>
         <LayersControl.BaseLayer name="Satellite">
           <TileLayer attribution='Tiles © Esri' url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' />
@@ -86,34 +93,33 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
         </LayersControl.BaseLayer>
       </LayersControl>
       
-      {/* --- MODIFIED BLOCK FOR RESPONSIVENESS --- */}
       <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
         <div className="relative w-full">
-          <div className="bg-white shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-blue-500 transition-all">
-              <div className="pl-3 pr-2 text-gray-400">
+          <div className="bg-background-default shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-brand-secondary transition-all">
+              <div className="pl-3 pr-2 text-content-subtle">
                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
               </div>
               <input
                   ref={searchInputRef}
                   type="text"
                   placeholder="Search for a location..."
-                  className="h-12 pr-10 border-none text-sm font-sans placeholder-gray-500 w-full md:w-80 bg-transparent outline-none"
+                  className="h-12 pr-10 border-none text-sm placeholder:text-content-subtle w-full md:w-80 bg-transparent outline-none text-content-default"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
               />
               {query && (
-                  <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-500 hover:bg-gray-100">
+                  <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-content-subtle hover:bg-background-inset">
                       <X size={16} />
                   </button>
               )}
           </div>
 
           {results.length > 0 && (
-              <div className="absolute top-full mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 z-[1000] max-h-60 overflow-y-auto">
+              <div className="absolute top-full mt-1 w-full bg-background-default shadow-lg rounded-md border border-stroke-default z-[1000] max-h-60 overflow-y-auto">
                   {results.map((result) => (
                       <div
                           key={result.raw.place_id}
-                          className="text-sm px-4 py-2 border-b border-gray-100 cursor-pointer hover:bg-blue-500 hover:text-white"
+                          className="text-sm px-4 py-2 border-b border-stroke-subtle cursor-pointer hover:bg-brand-secondary hover:text-white text-content-default"
                           onClick={() => handleSelectResult(result)}
                       >
                           {result.label}
@@ -123,9 +129,9 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
           )}
         </div>
       </div>
-      {/* --- END MODIFIED BLOCK --- */}
     </>
   );
 };
 
 export default MapFeatures;
+// --- END: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---

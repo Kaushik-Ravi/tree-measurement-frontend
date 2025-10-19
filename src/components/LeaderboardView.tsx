@@ -2,12 +2,10 @@
 import React from 'react';
 import { supabase } from '../supabaseClient';
 import { Crown, BarChart2, Loader2, AlertTriangle, ArrowLeft, Star } from 'lucide-react';
-// --- START: SURGICAL ADDITION ---
-// Importing the useAuth hook to identify the current user.
 import { useAuth } from '../contexts/AuthContext';
-// --- END: SURGICAL ADDITION ---
 
-// --- START: SURGICAL REPLACEMENT (Component Refactor from previous step, now with highlighting logic) ---
+
+// --- START: SURGICAL REPLACEMENT (THEMING) ---
 
 // Define the shape of a user profile for the leaderboard
 interface UserProfile {
@@ -85,7 +83,7 @@ const UserRow = ({ profile, rankNumber, isCurrentUser }: { profile: UserProfile;
     <div className={`
       flex items-center p-3 rounded-lg border shadow-sm transition-all
       ${isCurrentUser 
-        ? 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700/50 ring-2 ring-amber-200 dark:ring-amber-600/60' 
+        ? 'bg-brand-accent/10 border-brand-accent/50 ring-2 ring-brand-accent/20' 
         : 'bg-background-default border-stroke-subtle'}
     `}>
       <div className="w-8 text-center text-sm font-semibold text-content-subtle">{getRankIcon()}</div>
@@ -120,7 +118,7 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
       <header className="flex-shrink-0 p-4 border-b border-stroke-default bg-background-default/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <BarChart2 className="w-7 h-7 text-brand-secondary" />
+            <BarChart2 className="w-7 h-7 text-brand-accent" />
             <div>
               <h1 className="text-xl font-semibold text-content-default">Community Leaderboard</h1>
               <p className="text-xs text-content-subtle">Top contributors to the Grove.</p>
@@ -172,7 +170,6 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
               );
             })}
 
-            {/* --- START: SURGICAL REPLACEMENT (RANK LEGEND REDESIGN) --- */}
             <div className="pt-8 mt-8 border-t border-stroke-default">
               <h3 className="text-base font-semibold text-center text-content-default mb-6">Rank Progression</h3>
               <div className="w-full flex items-center justify-between text-xs text-center font-semibold text-content-subtle px-2">
@@ -187,7 +184,6 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
                 ))}
               </div>
             </div>
-            {/* --- END: SURGICAL REPLACEMENT (RANK LEGEND REDESIGN) --- */}
 
           </div>
         )}
@@ -196,4 +192,4 @@ export function LeaderboardView({ onBack }: LeaderboardViewProps) {
   );
 }
 
-// --- END: SURGICAL REPLACEMENT ---
+// --- END: SURGICAL REPLACEMENT (THEMING) ---

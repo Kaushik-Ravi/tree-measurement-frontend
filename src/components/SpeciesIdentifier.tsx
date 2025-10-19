@@ -12,14 +12,13 @@ interface SpeciesIdentifierProps {
   existingResult: IdentificationData;
   mainImageFile: File | null;
   mainImageSrc: string; // This will now be the original, unmodified image source
-  // --- START: SURGICAL ADDITION (PHASE 3.3 - PROP DECLARATION) ---
   analysisMode: 'session' | 'community';
-  // --- END: SURGICAL ADDITION (PHASE 3.3 - PROP DECLARATION) ---
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
 type Mode = 'idle' | 'uploading' | 'cropping';
 
+// --- START: SURGICAL REPLACEMENT (THEMING) ---
 export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
@@ -91,37 +90,37 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
 
   if (existingResult && existingResult.bestMatch) {
     return (
-      <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded-lg">
+      <div className="p-4 bg-status-success/10 border-l-4 border-status-success rounded-lg">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Species Identified</p>
-            <p className="font-bold text-green-900 text-lg">{existingResult.bestMatch.scientificName}</p>
+            <p className="text-xs font-semibold text-status-success uppercase tracking-wide">Species Identified</p>
+            <p className="font-bold text-content-default text-lg">{existingResult.bestMatch.scientificName}</p>
             {existingResult.bestMatch.commonNames && existingResult.bestMatch.commonNames.length > 0 && (
-                 <p className="text-sm text-gray-600 capitalize">{existingResult.bestMatch.commonNames.join(', ')}</p>
+                 <p className="text-sm text-content-subtle capitalize">{existingResult.bestMatch.commonNames.join(', ')}</p>
             )}
             <div className="mt-2 space-y-1">
               {existingResult.woodDensity ? (
                 <>
-                  <p className="text-sm text-gray-700">Wood Density: <span className="font-medium">{existingResult.woodDensity.value.toFixed(2)} {existingResult.woodDensity.unit}</span></p>
-                  <p className="flex items-center gap-1.5 text-xs text-gray-500"><MapPin className="w-3 h-3"/> Source: {existingResult.woodDensity.sourceRegion}</p>
+                  <p className="text-sm text-content-default">Wood Density: <span className="font-medium">{existingResult.woodDensity.value.toFixed(2)} {existingResult.woodDensity.unit}</span></p>
+                  <p className="flex items-center gap-1.5 text-xs text-content-subtle"><MapPin className="w-3 h-3"/> Source: {existingResult.woodDensity.sourceRegion}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-500 italic mt-1">Wood Density: Not found in database.</p>
+                <p className="text-sm text-content-subtle italic mt-1">Wood Density: Not found in database.</p>
               )}
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${(existingResult.bestMatch.score || 0) * 100}%` }}></div>
+            <div className="w-full bg-background-inset rounded-full h-1.5 mt-2">
+                <div className="bg-status-success h-1.5 rounded-full" style={{ width: `${(existingResult.bestMatch.score || 0) * 100}%` }}></div>
             </div>
-            <p className="text-xs text-right text-gray-500 mt-1">Confidence: {((existingResult.bestMatch.score || 0) * 100).toFixed(1)}%</p>
+            <p className="text-xs text-right text-content-subtle mt-1">Confidence: {((existingResult.bestMatch.score || 0) * 100).toFixed(1)}%</p>
           </div>
-          <button onClick={handleReset} className="p-1 text-gray-500 hover:text-red-600 rounded-full"><X className="w-4 h-4" /></button>
+          <button onClick={handleReset} className="p-1 text-content-subtle hover:text-status-error rounded-full"><X className="w-4 h-4" /></button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 p-4 bg-white rounded-lg border">
+    <div className="space-y-3 p-4 bg-background-default rounded-lg border border-stroke-default">
       {mode === 'cropping' && mainImageFile && (
         <ImageCropper 
           src={mainImageSrc}
@@ -132,69 +131,66 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       )}
 
       <div className="flex justify-between items-center">
-        {/* --- START: SURGICAL REPLACEMENT (PHASE 3.1 - LABEL) --- */}
-        <p className="text-sm font-medium text-gray-700">Identify Species (Required to Save)</p>
-        {/* --- END: SURGICAL REPLACEMENT (PHASE 3.1 - LABEL) --- */}
+        <p className="text-sm font-medium text-content-default">Identify Species (Required to Save)</p>
         {mode === 'uploading' && (
-           <button onClick={() => { setImageFile(null); setImagePreview(''); setMode('idle'); }} className="text-xs text-blue-600 hover:underline">Back to options</button>
+           <button onClick={() => { setImageFile(null); setImagePreview(''); setMode('idle'); }} className="text-xs text-brand-secondary hover:underline">Back to options</button>
         )}
       </div>
 
       {remainingQuota !== null && remainingQuota < 50 && (
-        <div className="p-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md">
+        <div className="p-2 bg-status-warning/10 border border-status-warning/50 text-status-warning text-xs rounded-md">
           <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> <p>Low daily quota: {remainingQuota} requests left.</p></div>
         </div>
       )}
 
       {mode === 'idle' && (
-        // --- START: SURGICAL REPLACEMENT (PHASE 3.3 - LOGIC) ---
         <div className={`grid grid-cols-1 ${analysisMode === 'session' ? 'sm:grid-cols-2' : ''} gap-3 pt-2`}>
            {analysisMode === 'session' && (
-              <button onClick={() => setMode('uploading')} className="relative text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50 text-gray-600">
+              <button onClick={() => setMode('uploading')} className="relative text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10 text-content-default">
                 <div className="flex items-center gap-2">
                   <UploadCloud className="w-5 h-5" />
                   <span className="text-sm font-semibold">Upload Close-up</span>
                 </div>
-                <span className="text-xs text-green-700 font-medium mt-1 pl-px">Recommended for best accuracy</span>
+                <span className="text-xs text-brand-primary font-medium mt-1 pl-px">Recommended for best accuracy</span>
               </button>
            )}
-           <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 disabled:bg-gray-100 disabled:cursor-not-allowed disabled:hover:border-gray-300 text-gray-600 disabled:text-gray-400">
+           <button onClick={() => setMode('cropping')} disabled={!mainImageFile} className="text-left flex flex-col items-start justify-start p-3 border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-secondary hover:bg-brand-secondary/10 disabled:bg-background-inset disabled:cursor-not-allowed disabled:hover:border-stroke-default text-content-default disabled:text-content-subtle">
               <div className="flex items-center gap-2">
                 <CropIcon className="w-5 h-5" />
                 <span className="text-sm font-semibold">Crop from Main Image</span>
               </div>
-               <span className="text-xs text-gray-500 mt-1 pl-px">A convenient option</span>
+               <span className="text-xs text-content-subtle mt-1 pl-px">A convenient option</span>
            </button>
         </div>
-        // --- END: SURGICAL REPLACEMENT (PHASE 3.3 - LOGIC) ---
       )}
 
       {mode === 'uploading' && (
         <>
           <div>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stroke-default border-dashed rounded-md">
               <div className="space-y-1 text-center">
-                {imagePreview ? <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" /> : <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />}
-                <div className="flex text-sm text-gray-600"><label htmlFor="species-file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500"><span>{imageFile ? 'Change image' : 'Upload a close-up'}</span><input ref={fileInputRef} id="species-file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" /></label></div>
+                {imagePreview ? <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" /> : <UploadCloud className="mx-auto h-12 w-12 text-content-subtle" />}
+                <div className="flex text-sm text-content-subtle"><label htmlFor="species-file-upload" className="relative cursor-pointer bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover"><span>{imageFile ? 'Change image' : 'Upload a close-up'}</span><input ref={fileInputRef} id="species-file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" /></label></div>
               </div>
             </div>
           </div>
           <div>
             <div className="grid grid-cols-2 gap-3">
               {organOptions.map(({ name, icon }) => (
-                <button key={name} onClick={() => setSelectedOrgan(name)} className={`flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition-all ${selectedOrgan === name ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white hover:bg-gray-100'}`}>
+                <button key={name} onClick={() => setSelectedOrgan(name)} className={`flex items-center justify-center gap-2 p-3 rounded-md border text-sm font-medium transition-all ${selectedOrgan === name ? 'bg-brand-secondary text-white border-brand-secondary shadow-md' : 'bg-background-default text-content-default border-stroke-default hover:bg-background-inset'}`}>
                   {icon}
                   {name.charAt(0).toUpperCase() + name.slice(1)}
                 </button>
               ))}
             </div>
           </div>
-          <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300">
+          <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
             {isLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> Identifying...</> : <><Sparkles className="w-5 h-5" /> Identify</>}
           </button>
-          {error && <div className="text-xs text-red-600 text-center pt-1">{error}</div>}
+          {error && <div className="text-xs text-status-error text-center pt-1">{error}</div>}
         </>
       )}
     </div>
   );
 }
+// --- END: SURGICAL REPLACEMENT (THEMING) ---

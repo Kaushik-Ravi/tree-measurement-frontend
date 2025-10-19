@@ -40,6 +40,7 @@ function centerAspectCrop(
   );
 }
 
+// --- START: SURGICAL REPLACEMENT (THEMING) ---
 export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }: ImageCropperProps) {
   const imgRef = useRef<HTMLImageElement>(null);
   const [crop, setCrop] = useState<Crop>();
@@ -49,7 +50,6 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   
-  // State for the smart quality warning
   const [showQualityWarning, setShowQualityWarning] = useState(false);
 
   function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
@@ -57,21 +57,15 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
     setCrop(centerAspectCrop(width, height, 1));
   }
   
-  // This handler now also checks the crop quality to provide a user warning
   const handleCropUpdate = (pixelCrop: PixelCrop) => {
     setCompletedCrop(pixelCrop);
 
     if (imgRef.current) {
-      // Create a temporary image to get the original dimensions
       const sourceImage = new Image();
       sourceImage.src = src;
-      // Calculate the scaling factor between the displayed image and the original image
       const scaleX = sourceImage.naturalWidth / imgRef.current.width;
-      
-      // Calculate the final pixel width of the crop on the original image
       const finalWidth = pixelCrop.width * scaleX;
       
-      // Show warning if the crop is too small
       if (finalWidth < MIN_CROP_DIMENSION && pixelCrop.width > 0) {
         setShowQualityWarning(true);
       } else {
@@ -80,14 +74,13 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
     }
   };
 
-  // This handler now uses the new, robust utility function to ensure high quality
   async function handleConfirmCrop() {
     if (completedCrop?.width && completedCrop?.height && imgRef.current) {
       try {
         const croppedFile = await getCroppedImg(
-          src, // Pass the original, full-res image source
+          src,
           completedCrop,
-          imgRef.current, // Pass the on-screen image element for scaling reference
+          imgRef.current,
           `cropped_${originalFileName}`
         );
         onCropComplete(croppedFile);
@@ -97,7 +90,6 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
     }
   }
 
-  // Zoom and pan logic remains unchanged
   const handleZoomChange = (newZoom: number) => {
     setZoom(newZoom);
     setPan({ x: 0, y: 0 });
@@ -128,14 +120,14 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-800">Crop Image</h3>
-          <p className="text-sm text-gray-500">Zoom and pan to select a part of the image for identification.</p>
+      <div className="bg-background-default rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="p-4 border-b border-stroke-default">
+          <h3 className="text-lg font-semibold text-content-default">Crop Image</h3>
+          <p className="text-sm text-content-subtle">Zoom and pan to select a part of the image for identification.</p>
         </div>
 
         <div
-          className="flex-grow p-4 overflow-hidden flex items-center justify-center bg-gray-100 relative"
+          className="flex-grow p-4 overflow-hidden flex items-center justify-center bg-background-inset relative"
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUpOrLeave}
@@ -164,7 +156,6 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
             />
           </ReactCrop>
 
-           {/* Smart Warning Message */}
            {showQualityWarning && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-auto px-4 py-2 bg-amber-500/90 text-white text-xs font-semibold rounded-full flex items-center gap-2 shadow-lg animate-fade-in-down">
               <AlertTriangle className="w-4 h-4" />
@@ -173,9 +164,9 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
           )}
         </div>
         
-        <div className="flex-shrink-0 p-3 border-t bg-gray-50 flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-lg">
+        <div className="flex-shrink-0 p-3 border-t border-stroke-default bg-background-subtle flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-lg">
           <div className="flex items-center gap-2 w-full sm:w-auto">
-              <ZoomOut className="w-5 h-5 text-gray-500" />
+              <ZoomOut className="w-5 h-5 text-content-subtle" />
               <input
                 type="range"
                 min="1"
@@ -183,18 +174,18 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
                 step="0.1"
                 value={zoom}
                 onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-background-inset rounded-lg appearance-none cursor-pointer"
                 aria-label="Zoom slider"
               />
-              <ZoomIn className="w-5 h-5 text-gray-500" />
-              <button onClick={resetView} className="p-2 text-gray-600 hover:bg-gray-200 rounded-full" aria-label="Reset view">
+              <ZoomIn className="w-5 h-5 text-content-subtle" />
+              <button onClick={resetView} className="p-2 text-content-subtle hover:bg-background-inset rounded-full" aria-label="Reset view">
                   <RefreshCw className="w-4 h-4" />
               </button>
           </div>
           <div className="flex justify-end gap-3 w-full sm:w-auto">
             <button
               onClick={onCancel}
-              className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-content-default bg-background-inset rounded-lg hover:opacity-80"
             >
               <X className="w-4 h-4" />
               Cancel
@@ -202,7 +193,7 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
             <button
               onClick={handleConfirmCrop}
               disabled={!completedCrop?.width || !completedCrop?.height}
-              className="flex items-center justify-center gap-2 px-6 py-2 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-400"
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle"
             >
               <Check className="w-4 h-4" />
               Confirm Crop
@@ -213,3 +204,4 @@ export function ImageCropper({ src, originalFileName, onCropComplete, onCancel }
     </div>
   );
 }
+// --- END: SURGICAL REPLACEMENT (THEMING) ---

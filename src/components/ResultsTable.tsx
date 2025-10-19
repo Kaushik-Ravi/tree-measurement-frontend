@@ -8,74 +8,74 @@ interface ResultsTableProps {
   results: TreeResult[];
   onDeleteResult: (id: string) => void;
   onEditResult: (result: TreeResult) => void;
-  // --- START: SURGICAL ADDITION (PHASE 4.1 - PROP DECLARATION) ---
   isLoading: boolean;
-  // --- END: SURGICAL ADDITION (PHASE 4.1 - PROP DECLARATION) ---
 }
 
-// A new component for the expandable details section
+// --- START: SURGICAL REPLACEMENT (THEMING) ---
 const DetailRow = ({ result }: { result: TreeResult }) => (
-  <div className="bg-slate-50 p-4">
+  <div className="bg-background-subtle p-4">
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs">
       <div className="col-span-2 sm:col-span-3">
-        <p className="font-semibold text-gray-700">File & Date</p>
-        <p className="text-gray-500 truncate">{result.file_name} <span className="text-gray-400">({new Date(result.created_at).toLocaleDateString()})</span></p>
+        <p className="font-semibold text-content-default">File & Date</p>
+        <p className="text-content-subtle truncate">{result.file_name} <span className="text-gray-400">({new Date(result.created_at).toLocaleDateString()})</span></p>
       </div>
       <div>
-        <p className="font-semibold text-gray-700">Distance</p>
-        <p className="text-gray-500">{result.distance_m ? `${result.distance_m.toFixed(2)} m` : 'N/A'}</p>
+        <p className="font-semibold text-content-default">Distance</p>
+        <p className="text-content-subtle">{result.distance_m ? `${result.distance_m.toFixed(2)} m` : 'N/A'}</p>
       </div>
       <div>
-        <p className="font-semibold text-gray-700">Condition</p>
-        <p className="text-gray-500">{result.condition || 'N/A'}</p>
+        <p className="font-semibold text-content-default">Condition</p>
+        <p className="text-content-subtle">{result.condition || 'N/A'}</p>
       </div>
       <div>
-        <p className="font-semibold text-gray-700">Ownership</p>
-        <p className="text-gray-500">{result.ownership || 'N/A'}</p>
+        <p className="font-semibold text-content-default">Ownership</p>
+        <p className="text-content-subtle">{result.ownership || 'N/A'}</p>
       </div>
       {result.status === 'VERIFIED' && result.confidence && (
         <div className="col-span-2 sm:col-span-1">
-            <p className="font-semibold text-gray-700">Community Verified</p>
-            <p className="text-gray-500 flex items-center gap-1"><Users size={12} /> {result.confidence.analysesCount} analyses</p>
+            <p className="font-semibold text-content-default">Community Verified</p>
+            <p className="text-content-subtle flex items-center gap-1"><Users size={12} /> {result.confidence.analysesCount} analyses</p>
         </div>
       )}
       <div className="col-span-2 sm:col-span-3">
-        <p className="font-semibold text-gray-700">Location</p>
+        <p className="font-semibold text-content-default">Location</p>
          {result.latitude && result.longitude ? (
-            <a href={`https://www.google.com/maps/search/?api=1&query=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+            <a href={`https://www.google.com/maps/search/?api=1&query=${result.latitude},${result.longitude}`} target="_blank" rel="noopener noreferrer" className="text-brand-secondary hover:underline flex items-center gap-1">
               <MapPin size={12}/> {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}
             </a>
-        ) : <p className="text-gray-500">N/A</p>}
+        ) : <p className="text-content-subtle">N/A</p>}
       </div>
       {result.remarks && (
         <div className="col-span-2 sm:col-span-3">
-          <p className="font-semibold text-gray-700">Remarks</p>
-          <p className="text-gray-500 whitespace-pre-wrap break-words">{result.remarks}</p>
+          <p className="font-semibold text-content-default">Remarks</p>
+          <p className="text-content-subtle whitespace-pre-wrap break-words">{result.remarks}</p>
         </div>
       )}
     </div>
   </div>
 );
+// --- END: SURGICAL REPLACEMENT (THEMING) ---
+
 
 const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
     switch (status) {
         case 'PENDING_ANALYSIS':
             return (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-400">
                     <Clock className="h-3 w-3" />
                     Pending
                 </span>
             );
         case 'ANALYSIS_IN_PROGRESS':
              return (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 dark:bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-800 dark:text-blue-400">
                     <GitCommitVertical className="h-3 w-3" />
                     In Progress
                 </span>
             );
         case 'VERIFIED':
             return (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 dark:bg-indigo-500/10 px-2 py-1 text-xs font-medium text-indigo-800 dark:text-indigo-400">
                     <Users className="h-3 w-3" />
                     Verified
                 </span>
@@ -83,7 +83,7 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
         case 'COMPLETE':
         default:
             return (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 dark:bg-green-500/10 px-2 py-1 text-xs font-medium text-green-800 dark:text-green-400">
                     <CheckCircle2 className="h-3 w-3" />
                     Complete
                 </span>
@@ -102,13 +102,13 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
     setExpandedRowId(prevId => (prevId === resultId ? null : resultId));
   };
   
-  // --- START: SURGICAL REPLACEMENT (PHASE 4.1 - LOADING STATE) ---
+  // --- START: SURGICAL REPLACEMENT (LOADING & EMPTY STATE THEMING) ---
   const renderLoadingState = () => (
-    <div>
-      <div className="flex items-center gap-3 mb-4"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
-      <div className="text-center py-10 px-4 border-2 border-dashed rounded-lg">
-          <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto mb-2" />
-          <p className="text-gray-500">Loading your history...</p>
+    <div className="mt-8">
+      <div className="flex items-center gap-3 mb-4"><LayoutList className="w-6 h-6 text-content-default" /><h2 className="text-lg font-semibold text-content-default">Your Mapped Trees</h2></div>
+      <div className="text-center py-10 px-4 border-2 border-dashed border-stroke-default rounded-lg bg-background-default">
+          <Loader2 className="w-6 h-6 text-content-subtle animate-spin mx-auto mb-2" />
+          <p className="text-content-subtle">Loading your history...</p>
       </div>
     </div>
   );
@@ -119,29 +119,29 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
   
   if (results.length === 0) { 
     return (
-        <div>
-            <div className="flex items-center gap-3 mb-4"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
-            <div className="text-center py-10 px-4 border-2 border-dashed rounded-lg">
-                <p className="text-gray-500">Your measurement history is empty.</p>
-                <p className="text-sm text-gray-400 mt-1">Saved results will appear here.</p>
+        <div className="mt-8">
+            <div className="flex items-center gap-3 mb-4"><LayoutList className="w-6 h-6 text-content-default" /><h2 className="text-lg font-semibold text-content-default">Your Mapped Trees</h2></div>
+            <div className="text-center py-10 px-4 border-2 border-dashed border-stroke-default rounded-lg bg-background-default">
+                <p className="text-content-subtle">Your measurement history is empty.</p>
+                <p className="text-sm text-content-subtle/70 mt-1">Saved results will appear here.</p>
             </div>
         </div>
     ); 
   }
-  // --- END: SURGICAL REPLACEMENT (PHASE 4.1 - LOADING STATE) ---
+  // --- END: SURGICAL REPLACEMENT (LOADING & EMPTY STATE THEMING) ---
 
   const resultsToShow = showAll ? sortedResults : sortedResults.slice(0, 3);
 
   return (
-    <div>
+    <div className="mt-8">
       <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-gray-700" /><h2 className="text-lg font-semibold text-gray-900">Measurement History</h2></div>
-        <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-brand-indigo text-white rounded-lg font-medium hover:bg-brand-indigo-dark text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
+        <div className="flex items-center gap-3"><LayoutList className="w-6 h-6 text-content-default" /><h2 className="text-lg font-semibold text-content-default">Your Mapped Trees</h2></div>
+        <button onClick={() => downloadResultsAsCSV(sortedResults)} className="flex items-center gap-2 px-3 py-2 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover text-sm"><Download className="w-4 h-4" /> <span className="hidden sm:inline">Download CSV</span></button>
       </div>
 
-      <div className="hidden md:block border border-gray-200 rounded-lg overflow-x-auto">
+      <div className="hidden md:block border border-stroke-default rounded-lg overflow-x-auto bg-background-default">
         <table className="min-w-full text-sm table-fixed">
-          <thead className="bg-gray-50 text-xs text-gray-600 uppercase tracking-wider">
+          <thead className="bg-background-subtle text-xs text-content-subtle uppercase tracking-wider">
             <tr>
               <th scope="col" className="w-12 px-4 py-3"></th>
               <th scope="col" className="w-20 px-2 py-3"></th>
@@ -154,37 +154,37 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
               <th scope="col" className="w-28 px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <tbody className="divide-y divide-stroke-subtle">
             {resultsToShow.map((result) => (
               <React.Fragment key={result.id}>
-                <tr onClick={() => handleRowClick(result.id)} className="cursor-pointer hover:bg-base-200/50 transition-colors duration-150">
+                <tr onClick={() => handleRowClick(result.id)} className="cursor-pointer hover:bg-background-inset transition-colors duration-150">
                   <td className="px-4 py-2 text-center">
-                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform duration-200 ${expandedRowId === result.id ? 'rotate-180' : ''}`} />
                   </td>
                   <td className="px-2 py-2">
                     <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
                       {result.image_url ? (
-                          <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-gray-100 transition-transform hover:scale-105"/>
+                          <img src={result.image_url} alt={result.file_name} className="h-12 w-12 object-cover rounded-md bg-background-inset transition-transform hover:scale-105"/>
                       ) : (
-                        <div className="h-12 w-12 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-6 h-6" /></div>
+                        <div className="h-12 w-12 flex items-center justify-center bg-background-inset rounded-md text-content-subtle"><ImageIcon className="w-6 h-6" /></div>
                       )}
                     </a>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-800 italic truncate">
+                  <td className="px-4 py-3 font-medium text-content-default italic truncate">
                     {(result.status === 'PENDING_ANALYSIS' || !result.species?.scientificName)
-                        ? <span className="text-gray-500 not-italic font-mono text-xs block">{result.id.substring(0, 8)}...</span> 
+                        ? <span className="text-content-subtle not-italic font-mono text-xs block">{result.id.substring(0, 8)}...</span> 
                         : result.species.scientificName
                     }
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.height_m.toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-right font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(2) : '-'}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-sky-800">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-gray-400">N/A</span>}</td>
+                  <td className="px-4 py-3 text-right font-mono text-content-default">{result.metrics ? result.metrics.height_m.toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-right font-mono text-content-default">{result.metrics ? result.metrics.canopy_m.toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-right font-mono text-content-default">{result.metrics ? result.metrics.dbh_cm.toFixed(2) : '-'}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-sky-600 dark:text-sky-400">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-content-subtle">N/A</span>}</td>
                   <td className="px-4 py-3 text-center"><StatusBadge status={result.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end items-center gap-2">
-                      <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-gray-400 hover:text-blue-600 rounded-md" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
-                      <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-gray-400 hover:text-red-600 rounded-md" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-content-subtle hover:text-brand-secondary rounded-md" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-content-subtle hover:text-status-error rounded-md" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
                     </div>
                   </td>
                 </tr>
@@ -201,42 +201,42 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
 
       <div className="md:hidden space-y-3">
         {resultsToShow.map(result => (
-          <div key={result.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          <div key={result.id} className="bg-background-default border border-stroke-default rounded-lg shadow-sm">
             <div className="p-3">
               <div className="flex gap-4">
                 <a href={result.image_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
                   {result.image_url ? (
-                    <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-gray-100"/>
+                    <img src={result.image_url} alt={result.file_name} className="h-20 w-20 object-cover rounded-md bg-background-inset"/>
                   ) : (
-                    <div className="h-20 w-20 flex items-center justify-center bg-gray-100 rounded-md text-gray-400"><ImageIcon className="w-8 h-8" /></div>
+                    <div className="h-20 w-20 flex items-center justify-center bg-background-inset rounded-md text-content-subtle"><ImageIcon className="w-8 h-8" /></div>
                   )}
                 </a>
                 <div className="flex-grow min-w-0">
                   <div className="flex justify-between items-start">
-                    <p className="font-semibold text-gray-800 italic truncate pr-2">
+                    <p className="font-semibold text-content-default italic truncate pr-2">
                         {(result.status === 'PENDING_ANALYSIS' || !result.species?.scientificName)
-                            ? <span className="text-gray-500 not-italic">Pending...</span> 
+                            ? <span className="text-content-subtle not-italic">Pending...</span> 
                             : result.species.scientificName
                         }
                     </p>
                     <StatusBadge status={result.status} />
                   </div>
                   <div className="grid grid-cols-3 gap-x-2 text-xs mt-2 text-center">
-                      <div><p className="font-medium text-gray-500">Tree Height</p><p className="font-mono">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
-                      <div><p className="font-medium text-gray-500">Canopy Width</p><p className="font-mono">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
-                      <div><p className="font-medium text-gray-500">Trunk Width</p><p className="font-mono">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
+                      <div><p className="font-medium text-content-subtle">Tree Height</p><p className="font-mono text-content-default">{result.metrics ? result.metrics.height_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-content-subtle">Canopy Width</p><p className="font-mono text-content-default">{result.metrics ? result.metrics.canopy_m.toFixed(1) + 'm' : '-'}</p></div>
+                      <div><p className="font-medium text-content-subtle">Trunk Width</p><p className="font-mono text-content-default">{result.metrics ? result.metrics.dbh_cm.toFixed(1) + 'cm' : '-'}</p></div>
                   </div>
                 </div>
               </div>
             </div>
             {expandedRowId === result.id && <DetailRow result={result} />}
-            <div className="border-t bg-gray-50/50 flex justify-between items-center px-3 py-1 rounded-b-lg">
-                <button onClick={() => handleRowClick(result.id)} className="flex items-center gap-1.5 text-xs font-medium text-blue-600 p-1">
+            <div className="border-t border-stroke-default bg-background-subtle/50 flex justify-between items-center px-3 py-1 rounded-b-lg">
+                <button onClick={() => handleRowClick(result.id)} className="flex items-center gap-1.5 text-xs font-medium text-brand-secondary p-1">
                   {expandedRowId === result.id ? <><Minimize2 size={12}/>Hide</> : <><Maximize2 size={12}/>Show</>} Details
                 </button>
                 <div className="flex items-center">
-                    <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-gray-500 hover:text-blue-600" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-gray-500 hover:text-red-600" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-content-subtle hover:text-brand-secondary" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-content-subtle hover:text-status-error" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
                 </div>
             </div>
           </div>
@@ -247,7 +247,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
         <div className="mt-6 text-center">
           <button 
             onClick={() => setShowAll(true)}
-            className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+            className="px-4 py-2 text-sm font-medium text-brand-secondary bg-brand-secondary/10 rounded-lg hover:bg-brand-secondary/20"
           >
             Show All ({sortedResults.length})
           </button>

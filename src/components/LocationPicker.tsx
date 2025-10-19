@@ -8,6 +8,9 @@ interface LocationPickerProps {
   onCancel: () => void;
   onConfirm: (location: { lat: number; lng: number }) => void;
   initialLocation: { lat: number; lng: number } | null;
+  // --- START: SURGICAL ADDITION (THEME PROP) ---
+  theme: 'light' | 'dark';
+  // --- END: SURGICAL ADDITION (THEME PROP) ---
 }
 
 const DEFAULT_CENTER: [number, number] = [20.5937, 78.9629];
@@ -33,6 +36,7 @@ function MapEventsHandler({ setPinnedPosition }: {
   return null;
 }
 
+// --- START: SURGICAL REPLACEMENT (THEMING) ---
 function LocateControl() {
   const map = useMap();
   const handleLocateMe = (e: React.MouseEvent) => {
@@ -45,17 +49,17 @@ function LocateControl() {
     <div className="absolute top-20 right-4 z-[1000]">
        <button
         onClick={handleLocateMe}
-        className="p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+        className="p-3 bg-background-default rounded-full shadow-lg hover:bg-background-inset transition-colors border border-stroke-default"
         title="Find my location"
         aria-label="Find my location"
       >
-        <Crosshair className="w-5 h-5 text-gray-800" />
+        <Crosshair className="w-5 h-5 text-content-default" />
       </button>
     </div>
   );
 }
 
-export function LocationPicker({ onCancel, onConfirm, initialLocation }: LocationPickerProps) {
+export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: LocationPickerProps) {
   const [pinnedPosition, setPinnedPosition] = useState<[number, number] | null>(
     initialLocation ? [initialLocation.lat, initialLocation.lng] : null
   );
@@ -68,9 +72,9 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation }: Locatio
   };
 
   return (
-    <div className="w-full h-full bg-gray-200 rounded-lg shadow-inner relative overflow-hidden">
+    <div className="w-full h-full bg-background-inset rounded-lg shadow-inner relative overflow-hidden">
       <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }} zoomControl={true}>
-        <MapFeatures onLocationSelected={handleLocationSelect} />
+        <MapFeatures onLocationSelected={handleLocationSelect} theme={theme} />
         <MapEventsHandler setPinnedPosition={setPinnedPosition} />
         
         <LocateControl />
@@ -82,28 +86,27 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation }: Locatio
         )}
       </MapContainer>
       
-      {/* --- MODIFIED BLOCK FOR RESPONSIVENESS --- */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col items-center z-[1000] pointer-events-none gap-3">
-        <p className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-gray-600 pointer-events-auto w-full text-center">
+        <p className="bg-background-default/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-content-subtle pointer-events-auto w-full text-center border border-stroke-default">
             {pinnedPosition ? `Selected: ${pinnedPosition[0].toFixed(4)}, ${pinnedPosition[1].toFixed(4)}` : "Click on the map or use search"}
         </p>
-        <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex flex-col sm:flex-row items-center gap-2 pointer-events-auto w-full">
+        <div className="bg-background-default/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex flex-col sm:flex-row items-center gap-2 pointer-events-auto w-full border border-stroke-default">
             <button
                 onClick={onCancel}
-                className="w-full sm:w-auto flex-1 px-4 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 text-sm"
+                className="w-full sm:w-auto flex-1 px-4 py-3 bg-background-inset text-content-default font-medium rounded-md hover:opacity-80 text-sm"
             >
                 Cancel
             </button>
             <button
                 onClick={() => { if(pinnedPosition) onConfirm({ lat: pinnedPosition[0], lng: pinnedPosition[1] }) }}
                 disabled={!pinnedPosition}
-                className="w-full sm:w-auto flex-1 px-6 py-3 bg-green-700 text-white font-medium rounded-md hover:bg-green-800 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                className="w-full sm:w-auto flex-1 px-6 py-3 bg-brand-primary text-content-on-brand font-medium rounded-md hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed text-sm"
             >
                 Confirm Location
             </button>
         </div>
       </div>
-       {/* --- END MODIFIED BLOCK --- */}
     </div>
   );
 }
+// --- END: SURGICAL REPLACEMENT (THEMING) ---

@@ -78,6 +78,28 @@
     @apply bg-background-default text-content-default;
     /* --- END: SURGICAL REPLACEMENT --- */
   }
+
+  /* --- START: SURGICAL ADDITION (BROWSER STYLE OVERRIDE) --- */
+  /*
+    ==============================================
+    CUSTOM FORM & BROWSER OVERRIDES
+    ==============================================
+  */
+  html {
+    /* This ensures form elements respect the dark/light mode */
+    color-scheme: light dark;
+  }
+  
+  /* Hide ugly default arrows on number inputs */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  /* --- END: SURGICAL ADDITION (BROWSER STYLE OVERRIDE) --- */
 }
 
 
@@ -115,19 +137,26 @@
   CUSTOM MAP CONTROL STYLES
   ==============================================
 */
-.leaflet-control-layers {
-  /* --- START: SURGICAL MODIFICATION --- */
-  @apply bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.05)] border-stroke-default rounded-xl p-1;
-  /* --- END: SURGICAL MODIFICATION --- */
+/* --- START: SURGICAL REPLACEMENT (THEME-AWARE MAP CONTROLS) --- */
+.leaflet-control-layers,
+.leaflet-control-zoom {
+  @apply bg-background-default/80 dark:bg-background-subtle/80 backdrop-blur-md shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-stroke-default rounded-lg;
 }
-.leaflet-control-layers-base label span {
-  /* --- START: SURGICAL MODIFICATION --- */
-  @apply text-content-default font-medium text-sm;
-  /* --- END: SURGICAL MODIFICATION --- */
+
+.leaflet-control-layers-base label span,
+.leaflet-control-zoom a {
+  @apply !text-content-default;
 }
+
 .leaflet-control-layers-selector {
   @apply mt-0.5;
 }
+
+.leaflet-control-zoom-in, .leaflet-control-zoom-out {
+    @apply !bg-transparent hover:!bg-background-inset;
+}
+/* --- END: SURGICAL REPLACEMENT (THEME-AWARE MAP CONTROLS) --- */
+
 
 /*
   ==============================================
