@@ -104,5 +104,5 @@ export function PermissionsCheckModal({
       </div>
     </div>
   );
-  // --- END: SURGICAL REPLACEMENT (THEMING & CONTENT REFINEMENT) ---
+  // --- END: SURGICAL REPLACEMENT (THEMING & CONTENT REFINEMENT) ----
 }
