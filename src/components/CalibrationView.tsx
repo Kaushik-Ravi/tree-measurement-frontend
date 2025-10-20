@@ -1,8 +1,8 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
-// --- START: SURGICAL ADDITION ---
-import { Settings, Upload, Menu, X, Zap, RotateCcw, Check } from 'lucide-react';
-// --- END: SURGICAL ADDITION ---
+// --- START: SURGICAL MODIFICATION ---
+import { Settings, Upload, X, Zap, RotateCcw } from 'lucide-react';
+// --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 
 interface Point { x: number; y: number; }
@@ -11,8 +11,8 @@ interface CalibrationViewProps {
   onCalibrationComplete: (fovRatio: number) => void;
 }
 
-// --- START: SURGICAL REPLACEMENT ---
 const ARLinks = () => (
+  // --- START: SURGICAL MODIFICATION ---
   <p className="text-xs text-content-subtle mt-2">
     Need help measuring? Try an AR app: {' '}
     <a href="https://play.google.com/store/apps/details?id=com.grymala.aruler&pcampaignid=web_share" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-secondary hover:underline">
@@ -23,6 +23,7 @@ const ARLinks = () => (
       iOS
     </a>
   </p>
+  // --- END: SURGICAL MODIFICATION ---
 );
 
 export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps) {
@@ -48,12 +49,17 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   useEffect(() => {
     if (!calibFile) return;
     const tempImage = new Image();
-    tempImage.src = URL.createObjectURL(calibFile);
+    const objectURL = URL.createObjectURL(calibFile);
+    tempImage.src = objectURL;
     tempImage.onload = () => {
         setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
         setCalibImageSrc(tempImage.src);
         setInstruction("Image loaded. Enter distance and size details.");
     }
+    // --- START: SURGICAL ADDITION ---
+    // Clean up the object URL when the component unmounts or the file changes
+    return () => URL.revokeObjectURL(objectURL);
+    // --- END: SURGICAL ADDITION ---
   }, [calibFile]);
 
   useEffect(() => {
@@ -73,7 +79,9 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         
         points.forEach(p => {
             const sp = { x: (p.x / imageDimensions!.w) * canvas.width, y: (p.y / imageDimensions!.h) * canvas.height };
+            // --- START: SURGICAL MODIFICATION ---
             ctx.beginPath(); ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); ctx.fillStyle = 'rgb(var(--status-error))'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
+            // --- END: SURGICAL MODIFICATION ---
         });
     }
   }, [calibImageSrc, points, imageDimensions]);
@@ -84,7 +92,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   };
 
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    setShowInstructionToast(false); // Hide toast on interaction
+    setShowInstructionToast(false);
     if (points.length >= 2 || !imageDimensions || !canvasRef.current) return;
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
@@ -104,24 +112,32 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         setInstruction("First point selected. Click the second endpoint or undo."); 
         setShowInstructionToast(true);
     }
+    if (newPoints.length === 2) { 
+        calculateAndFinish(newPoints); 
+    }
   };
   
+  // --- START: SURGICAL ADDITION ---
   const handleUndo = () => {
+    if (points.length > 0) {
       setPoints(p => p.slice(0, -1));
-      setInstruction("Please click the two endpoints of your known object in the image.");
+      setInstruction("Previous point removed. Click to place the first point.");
+      setShowInstructionToast(true);
+    }
   };
+  // --- END: SURGICAL ADDITION ---
 
-  const calculateAndFinish = () => {
-    if (!imageDimensions || !distance || !realSize || points.length !== 2) return;
+  const calculateAndFinish = (finalPoints: Point[]) => {
+    if (!imageDimensions || !distance || !realSize) return;
     setInstruction("Calibration complete! You can now measure trees.");
     setIsPanelVisible(true);
     const r = parseFloat(realSize); const D = parseFloat(distance);
     const w = Math.max(imageDimensions.w, imageDimensions.h);
-    const n = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    const n = Math.hypot(finalPoints[0].x - finalPoints[1].x, finalPoints[0].y - finalPoints[1].y);
     const D_in_cm = D * 100;
     const cameraConstant = (r * w) / (n * D_in_cm);
     console.log(`Final Calculated Camera Constant (FOV Ratio): ${cameraConstant}`);
-    setTimeout(() => onCalibrationComplete(cameraConstant), 500); // Delay to show final message
+    setTimeout(() => onCalibrationComplete(cameraConstant), 1500); // Delay to show final message
   };
 
   const canSelectPoints = !!(calibFile && distance && realSize);
@@ -134,10 +150,10 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   };
   
   return (
+    // --- START: SURGICAL REPLACEMENT ---
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       <InstructionToast message={instruction} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
-      {/* --- Display Panel --- */}
       <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
         {!calibFile && (
           <div className="hidden md:flex flex-col items-center text-content-subtle">
@@ -150,33 +166,15 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           onClick={canSelectPoints ? handleCanvasClick : undefined} 
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
-        {/* --- START: SURGICAL ADDITION --- */}
-        {!isPanelVisible && points.length > 0 && (
-             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-background-subtle/90 text-content-default p-2 rounded-xl shadow-lg backdrop-blur-sm border border-stroke-default">
-                <button onClick={handleUndo} disabled={points.length === 0} className="p-3 rounded-lg hover:bg-background-inset disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+        {points.length > 0 && !isPanelVisible && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+                <button onClick={handleUndo} className="p-3 bg-background-subtle/90 text-content-default rounded-lg shadow-lg backdrop-blur-sm border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors">
                     <RotateCcw size={20} />
                 </button>
-                {points.length === 2 && (
-                    <>
-                        <div className="w-px h-6 bg-stroke-default" />
-                        <button onClick={calculateAndFinish} className="p-3 rounded-lg bg-status-success text-white hover:opacity-90 transition-colors">
-                            <Check size={20} />
-                        </button>
-                    </>
-                )}
             </div>
         )}
-        {/* --- END: SURGICAL ADDITION --- */}
       </div>
       
-      {/* --- Mobile Controls (Hamburger Button) --- */}
-      {calibFile && !isPanelVisible && (
-        <button onClick={() => setIsPanelVisible(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-lg hover:bg-brand-primary-hover active:scale-95 transition-transform">
-          <Menu size={24} />
-        </button>
-      )}
-
-      {/* --- Control Panel --- */}
       <div 
         id="calibration-control-panel" 
         className={`
@@ -186,7 +184,6 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           ${isPanelVisible ? 'translate-y-0' : 'translate-y-full'}
         `}
       >
-        {/* Mobile Header */}
         <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default md:hidden">
           <h2 className="font-semibold text-lg text-content-default">Camera Calibration</h2>
           {calibFile && (
@@ -196,11 +193,10 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           )}
         </div>
         
-        {/* Panel Content */}
         <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <header className="flex-shrink-0">
                 <div className="hidden md:flex items-center gap-3 mb-6"><Settings className="w-8 h-8 text-brand-primary" /><h1 className="text-2xl font-semibold text-content-default">Camera Calibration</h1></div>
-                <div className="p-4 rounded-lg mb-6 bg-status-info/10 border border-status-info/20 text-status-info/90">
+                <div className="p-4 rounded-lg mb-6 bg-status-info/10 border border-status-info/20 text-status-info/80">
                     <p className="font-bold">Instructions</p>
                     <p className="text-sm">{instruction}</p>
                 </div>
@@ -227,15 +223,15 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 <button 
                   onClick={handlePrepareCalibration} 
                   disabled={!canSelectPoints} 
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle transition-all"
                 >
                   <Zap className="w-5 h-5" />
-                  Prepare for Calibration
+                  Start Calibration
                 </button>
             </main>
         </div>
       </div>
     </div>
+    // --- END: SURGICAL REPLACEMENT ---
   );
 }
-// --- END: SURGICAL REPLACEMENT ---
