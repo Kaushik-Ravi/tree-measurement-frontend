@@ -1,6 +1,8 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings, Upload, Menu, X, Zap } from 'lucide-react';
+// --- START: SURGICAL ADDITION ---
+import { Settings, Upload, Menu, X, Zap, RotateCcw, Check } from 'lucide-react';
+// --- END: SURGICAL ADDITION ---
 import { InstructionToast } from './InstructionToast';
 
 interface Point { x: number; y: number; }
@@ -9,14 +11,15 @@ interface CalibrationViewProps {
   onCalibrationComplete: (fovRatio: number) => void;
 }
 
+// --- START: SURGICAL REPLACEMENT ---
 const ARLinks = () => (
-  <p className="text-xs text-neutral-500 mt-2">
+  <p className="text-xs text-content-subtle mt-2">
     Need help measuring? Try an AR app: {' '}
-    <a href="https://play.google.com/store/apps/details?id=com.grymala.aruler&pcampaignid=web_share" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">
+    <a href="https://play.google.com/store/apps/details?id=com.grymala.aruler&pcampaignid=web_share" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-secondary hover:underline">
       Android
     </a>
     {' / '}
-    <a href="https://apps.apple.com/us/app/ar-ruler-digital-tape-measure/id1326773975?platform=iphone" target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">
+    <a href="https://apps.apple.com/us/app/ar-ruler-digital-tape-measure/id1326773975?platform=iphone" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-secondary hover:underline">
       iOS
     </a>
   </p>
@@ -70,7 +73,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         
         points.forEach(p => {
             const sp = { x: (p.x / imageDimensions!.w) * canvas.width, y: (p.y / imageDimensions!.h) * canvas.height };
-            ctx.beginPath(); ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); ctx.fillStyle = '#FF3B30'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.beginPath(); ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); ctx.fillStyle = 'rgb(var(--status-error))'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
         });
     }
   }, [calibImageSrc, points, imageDimensions]);
@@ -98,21 +101,23 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
     const newPoints = [...points, clickPoint];
     setPoints(newPoints);
     if (newPoints.length === 1) { 
-        setInstruction("First point selected. Click the second endpoint."); 
+        setInstruction("First point selected. Click the second endpoint or undo."); 
         setShowInstructionToast(true);
     }
-    if (newPoints.length === 2) { 
-        calculateAndFinish(newPoints); 
-    }
+  };
+  
+  const handleUndo = () => {
+      setPoints(p => p.slice(0, -1));
+      setInstruction("Please click the two endpoints of your known object in the image.");
   };
 
-  const calculateAndFinish = (finalPoints: Point[]) => {
-    if (!imageDimensions || !distance || !realSize) return;
+  const calculateAndFinish = () => {
+    if (!imageDimensions || !distance || !realSize || points.length !== 2) return;
     setInstruction("Calibration complete! You can now measure trees.");
     setIsPanelVisible(true);
     const r = parseFloat(realSize); const D = parseFloat(distance);
     const w = Math.max(imageDimensions.w, imageDimensions.h);
-    const n = Math.hypot(finalPoints[0].x - finalPoints[1].x, finalPoints[0].y - finalPoints[1].y);
+    const n = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
     const D_in_cm = D * 100;
     const cameraConstant = (r * w) / (n * D_in_cm);
     console.log(`Final Calculated Camera Constant (FOV Ratio): ${cameraConstant}`);
@@ -129,13 +134,13 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   };
   
   return (
-    <div className="h-screen w-screen bg-white font-inter flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       <InstructionToast message={instruction} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
         
       {/* --- Display Panel --- */}
-      <div id="display-panel" className="flex-1 bg-gray-100 flex items-center justify-center relative">
+      <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
         {!calibFile && (
-          <div className="hidden md:flex flex-col items-center text-gray-400">
+          <div className="hidden md:flex flex-col items-center text-content-subtle">
             <Settings size={64}/>
             <p className="mt-4 text-lg">Upload a photo to calibrate</p>
           </div>
@@ -145,11 +150,28 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           onClick={canSelectPoints ? handleCanvasClick : undefined} 
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
+        {/* --- START: SURGICAL ADDITION --- */}
+        {!isPanelVisible && points.length > 0 && (
+             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-background-subtle/90 text-content-default p-2 rounded-xl shadow-lg backdrop-blur-sm border border-stroke-default">
+                <button onClick={handleUndo} disabled={points.length === 0} className="p-3 rounded-lg hover:bg-background-inset disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    <RotateCcw size={20} />
+                </button>
+                {points.length === 2 && (
+                    <>
+                        <div className="w-px h-6 bg-stroke-default" />
+                        <button onClick={calculateAndFinish} className="p-3 rounded-lg bg-status-success text-white hover:opacity-90 transition-colors">
+                            <Check size={20} />
+                        </button>
+                    </>
+                )}
+            </div>
+        )}
+        {/* --- END: SURGICAL ADDITION --- */}
       </div>
       
       {/* --- Mobile Controls (Hamburger Button) --- */}
       {calibFile && !isPanelVisible && (
-        <button onClick={() => setIsPanelVisible(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-green-700 text-white rounded-full shadow-lg hover:bg-green-800 active:scale-95 transition-transform">
+        <button onClick={() => setIsPanelVisible(true)} className="md:hidden fixed bottom-6 right-6 z-30 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-lg hover:bg-brand-primary-hover active:scale-95 transition-transform">
           <Menu size={24} />
         </button>
       )}
@@ -158,17 +180,17 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
       <div 
         id="calibration-control-panel" 
         className={`
-          bg-gray-50 border-r border-gray-200 flex flex-col transition-transform duration-300 ease-in-out 
+          bg-background-default border-r border-stroke-default flex flex-col transition-transform duration-300 ease-in-out 
           md:static md:w-[28rem] md:translate-y-0
           w-full fixed z-20 inset-0
           ${isPanelVisible ? 'translate-y-0' : 'translate-y-full'}
         `}
       >
         {/* Mobile Header */}
-        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 md:hidden">
-          <h2 className="font-semibold text-lg text-gray-800">Camera Calibration</h2>
+        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default md:hidden">
+          <h2 className="font-semibold text-lg text-content-default">Camera Calibration</h2>
           {calibFile && (
-            <button onClick={() => setIsPanelVisible(false)} className="p-2 text-gray-500 hover:text-gray-800">
+            <button onClick={() => setIsPanelVisible(false)} className="p-2 text-content-subtle hover:text-content-default">
               <X size={24} />
             </button>
           )}
@@ -177,35 +199,35 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         {/* Panel Content */}
         <div className="flex-grow overflow-y-auto p-4 md:p-6">
             <header className="flex-shrink-0">
-                <div className="hidden md:flex items-center gap-3 mb-6"><Settings className="w-8 h-8 text-green-700" /><h1 className="text-2xl font-semibold text-gray-900">Camera Calibration</h1></div>
-                <div className="p-4 rounded-lg mb-6 bg-blue-50 border border-blue-200 text-blue-800">
+                <div className="hidden md:flex items-center gap-3 mb-6"><Settings className="w-8 h-8 text-brand-primary" /><h1 className="text-2xl font-semibold text-content-default">Camera Calibration</h1></div>
+                <div className="p-4 rounded-lg mb-6 bg-status-info/10 border border-status-info/20 text-status-info/90">
                     <p className="font-bold">Instructions</p>
                     <p className="text-sm">{instruction}</p>
                 </div>
             </header>
             <main className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">1. Calibration Photo</label>
+                  <label className="block text-sm font-medium text-content-default mb-2">1. Calibration Photo</label>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:border-green-400 hover:bg-green-50">
-                    <Upload className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-600 font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
+                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10">
+                    <Upload className="w-5 h-5 text-content-subtle" />
+                    <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
                   </button>
-                  <p className="text-xs text-gray-500 mt-2">Tip: Use a photo of a standard A4 paper for best results.</p>
+                  <p className="text-xs text-content-subtle mt-2">Tip: Use a photo of a standard A4 paper for best results.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">2. Distance to Object (meters)</label>
-                  <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="w-full text-base px-4 py-3 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-green-500" />
+                  <label className="block text-sm font-medium text-content-default mb-2">2. Distance to Object (meters)</label>
+                  <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
                   <ARLinks />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">3. Object's Real Size (cm)</label>
-                  <input type="number" value={realSize} onChange={e => setRealSize(e.target.value)} placeholder="e.g., 29.7 for A4 paper" className="w-full text-base px-4 py-3 border border-gray-300 bg-white rounded-lg focus:ring-2 focus:ring-green-500"/>
+                  <label className="block text-sm font-medium text-content-default mb-2">3. Object's Real Size (cm)</label>
+                  <input type="number" value={realSize} onChange={e => setRealSize(e.target.value)} placeholder="e.g., 29.7 for A4 paper" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary"/>
                 </div>
                 <button 
                   onClick={handlePrepareCalibration} 
                   disabled={!canSelectPoints} 
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-700 text-white rounded-lg font-medium hover:bg-green-800 disabled:bg-gray-300 transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed transition-all"
                 >
                   <Zap className="w-5 h-5" />
                   Prepare for Calibration
@@ -216,3 +238,4 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
     </div>
   );
 }
+// --- END: SURGICAL REPLACEMENT ---

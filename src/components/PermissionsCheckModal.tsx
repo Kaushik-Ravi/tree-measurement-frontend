@@ -1,6 +1,6 @@
 // src/components/PermissionsCheckModal.tsx
 import React from 'react';
-import { MapPin, Compass, CheckCircle2, XCircle, Loader2, ShieldQuestion } from 'lucide-react';
+import { MapPin, Compass, CheckCircle2, XCircle, Loader2, ShieldQuestion, AlertTriangle } from 'lucide-react';
 
 type SensorStatus = 'PENDING' | 'GRANTED' | 'DENIED';
 
@@ -77,22 +77,30 @@ export function PermissionsCheckModal({
               </div>
             </div>
           </div>
+          {/* --- START: SURGICAL ADDITION --- */}
           {locationStatus === 'DENIED' && (
-             <div className="p-3 bg-status-error/10 border-l-4 border-status-error text-status-error text-sm">
-                <p><span className="font-bold">Location is required.</span> Please enable location access for this site in your browser's settings to continue.</p>
+             <div className="p-3 bg-status-error/10 border-l-4 border-status-error text-status-error text-sm rounded-r-md">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <div>
+                    <p className="font-bold">Location Access is Required</p>
+                    <p>To continue, please enable location access for this site in your browser's settings and then click "Grant Permissions" again.</p>
+                  </div>
+                </div>
              </div>
           )}
+          {/* --- END: SURGICAL ADDITION --- */}
         </main>
         
         <footer className="flex flex-col sm:flex-row justify-end gap-3 p-4 border-t border-stroke-default bg-background-subtle">
-          {!allRequested && (
+          {!allRequested || locationStatus === 'DENIED' ? (
             <button
               onClick={onRequestPermissions}
               className="w-full sm:w-auto px-6 py-2.5 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover"
             >
               Grant Permissions
             </button>
-          )}
+          ) : null}
            <button
             onClick={onConfirm}
             disabled={!canContinue}

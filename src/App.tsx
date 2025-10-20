@@ -544,12 +544,25 @@ function App() {
     }
   };
   
+  // --- START: SURGICAL MODIFICATION (Calibration Flow) ---
   const onCalibrationComplete = (newFovRatio: number) => {
-    setFovRatio(newFovRatio); localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
-    setCurrentView('SESSION'); 
-    setAppStatus('SESSION_AWAITING_DISTANCE');
-    setInstructionText("Calibration complete! Now, please enter the distance to the tree's base.");
+    setFovRatio(newFovRatio);
+    localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
+    setCurrentView('SESSION');
+
+    // If a pending file exists (meaning calibration was triggered mid-flow),
+    // resume the flow with that file.
+    if (pendingTreeFile) {
+        setCurrentMeasurementFile(pendingTreeFile);
+        setAppStatus('SESSION_AWAITING_DISTANCE');
+        setInstructionText("Calibration complete! Now, please enter the distance to the tree's base.");
+    } else {
+        // If no pending file, just go back to the photo upload step.
+        setAppStatus('SESSION_AWAITING_PHOTO');
+        setInstructionText("Calibration complete! Please select a photo of the tree.");
+    }
   };
+  // --- END: SURGICAL MODIFICATION (Calibration Flow) ---
 
   const prepareMeasurementSession = (): number | null => {
     const distForCalc = currentView === 'COMMUNITY_GROVE' ? claimedTree?.distance_m : parseFloat(distance);
@@ -758,7 +771,9 @@ function App() {
     setCurrentIdentification(null);
     setCurrentCO2(null);
     setAdditionalData(initialAdditionalData);
-    setCurrentLocation(userGeoLocation); 
+    // --- START: SURGICAL MODIFICATION (Location Reset) ---
+    setCurrentLocation(null); 
+    // --- END: SURGICAL MODIFICATION (Location Reset) ---
     setIsLocationPickerActive(false);
     setRefinePoints([]);
     setOriginalImageSrc('');
@@ -959,7 +974,9 @@ function App() {
                <div className="space-y-3 pt-6 border-t border-stroke-subtle mt-6"> 
                   <h3 className="text-base font-semibold text-center text-content-default mb-2">Choose Measurement Method</h3>
                   <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover disabled:bg-background-inset disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs opacity-80">Tap the trunk once for a quick analysis.</p></div> </button> 
+                  {/* --- START: SURGICAL MODIFICATION (Button Color) --- */}
                   <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover disabled:bg-background-inset transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs opacity-80">Mark all points yourself for maximum control.</p></div> </button> 
+                  {/* --- END: SURGICAL MODIFICATION (Button Color) --- */}
               </div>
             )}
             
@@ -983,7 +1000,9 @@ function App() {
             </div> 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stroke-subtle"> 
               {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
+            {/* --- START: SURGICAL MODIFICATION (Button Color) --- */}
             <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
+            {/* --- END: SURGICAL MODIFICATION (Button Color) --- */}
             <div className="space-y-4 border-t border-stroke-subtle pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
