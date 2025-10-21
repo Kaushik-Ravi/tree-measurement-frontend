@@ -3,7 +3,7 @@
 import React from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Check, X, Move3d, RotateCcw, ScanLine, Loader2, XCircle } from 'lucide-react';
+import { Check, X, RotateCcw, Loader2, XCircle } from 'lucide-react';
 
 interface ARMeasureViewProps {
   onDistanceMeasured: (distance: number) => void;
@@ -14,31 +14,29 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [sessionActive, setSessionActive] = React.useState(false);
   const [distance, setDistance] = React.useState<number | null>(null);
   const [startPoint, setStartPoint] = React.useState<THREE.Vector3 | null>(null);
-  const [instruction, setInstruction] = React.useState("Starting AR Session...");
-  const [isReticleVisible, setIsReticleVisible] = React.useState(false);
+  const [instruction, setInstruction] = React.useState("Initializing AR Session...");
+  const [error, setError] = React.useState<string | null>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const cleanupRef = React.useRef<() => void | null>();
   
   React.useEffect(() => {
-    // This effect runs only once on mount to initialize the entire AR scene.
-    if (cleanupRef.current) return;
-
     let isComponentMounted = true;
-    let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controller: THREE.Group;
-    let reticle: THREE.Mesh;
-    let measurementLine: THREE.Line;
-    let startMarker: THREE.Mesh;
-    let hitTestSource: XRHitTestSource | null = null;
-    let hitTestSourceRequested = false;
+    let renderer: THREE.WebGLRenderer;
+    let arButton: HTMLElement;
 
     const init = () => {
         if (!containerRef.current) return;
+
+        // --- Upfront Support Check ---
+        if (!navigator.xr) {
+            setError("AR is not supported on this browser. Please use a compatible browser like Chrome on Android.");
+            return;
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
@@ -49,7 +47,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         light.position.set(0.5, 1, 0.25);
         scene.add(light);
         
-        reticle = new THREE.Mesh(
+        const reticle = new THREE.Mesh(
           new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
           new THREE.MeshBasicMaterial({ color: 0xffffff })
         );
@@ -57,83 +55,81 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         reticle.visible = false;
         scene.add(reticle);
 
-        measurementLine = new THREE.Line(
-            new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), 
+        const measurementLine = new THREE.Line(
+            new THREE.BufferGeometry(),
             new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 })
         );
         measurementLine.visible = false;
         scene.add(measurementLine);
 
-        startMarker = new THREE.Mesh(
-            new THREE.SphereGeometry(0.02, 16, 16), 
+        const startMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.02, 16, 16),
             new THREE.MeshBasicMaterial({ color: 0x22c55e })
         );
         startMarker.visible = false;
         scene.add(startMarker);
 
+        let localStartPoint: THREE.Vector3 | null = null;
+        
         const onSelect = () => {
           if (reticle.visible) {
             const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-            setStartPoint(point); // This triggers React state update
+            localStartPoint = point; // Use local variable for render loop
+            startMarker.position.copy(point);
+            startMarker.visible = true;
+            measurementLine.visible = true;
+            if (isComponentMounted) setStartPoint(point); // Update React state
           }
         };
 
-        controller = renderer.xr.getController(0);
+        const controller = renderer.xr.getController(0);
         controller.addEventListener('select', onSelect);
         scene.add(controller);
+
+        arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+        arButton.textContent = 'Start AR';
         
-        // --- Headless AR Button Logic ---
-        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
-
-        // This function will be called by ARButton if WebXR is not supported.
-        arButton.onNoXR = () => {
-          // Since this runs outside React's lifecycle, we can't set state directly.
-          // The best we can do is remove the canvas and show a message via DOM manipulation.
-          if (containerRef.current) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = "absolute inset-0 bg-background-default flex flex-col items-center justify-center text-center p-4";
-            errorDiv.innerHTML = `
-              <div class="lucide-icon" style="width: 48px; height: 48px; color: rgb(239, 68, 68); margin-bottom: 16px;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
-              </div>
-              <h2 class="text-xl font-bold text-content-default">AR Not Supported</h2>
-              <p class="max-w-md mt-2 text-content-subtle">This feature requires a compatible browser (like Chrome) on an AR-enabled device.</p>
-              <button id="ar-error-cancel" class="mt-8 px-6 py-3 bg-brand-primary text-content-on-brand font-semibold rounded-lg hover:bg-brand-primary-hover">Return</button>
-            `;
-            containerRef.current.innerHTML = '';
-            containerRef.current.appendChild(errorDiv);
-            containerRef.current.querySelector('#ar-error-cancel')?.addEventListener('click', onCancel);
-          }
-        };
-
+        arButton.style.position = 'absolute';
+        arButton.style.bottom = '50%';
+        arButton.style.left = '50%';
+        arButton.style.transform = 'translate(-50%, 50%)';
+        arButton.style.padding = '12px 24px';
+        arButton.style.backgroundColor = 'rgb(var(--brand-secondary))';
+        arButton.style.color = 'white';
+        arButton.style.border = 'none';
+        arButton.style.borderRadius = '8px';
+        arButton.style.fontWeight = 'bold';
+        
+        containerRef.current.appendChild(arButton);
+        
         renderer.xr.addEventListener('sessionstart', () => {
-            if(isComponentMounted) setSessionActive(true);
+            if(isComponentMounted) {
+                setSessionActive(true);
+                arButton.style.display = 'none';
+            }
         });
         
         renderer.xr.addEventListener('sessionend', () => {
             if(isComponentMounted) {
                 setSessionActive(false);
+                arButton.style.display = 'block';
                 onCancel();
             }
         });
 
-        // Hide and programmatically click the button to start the session flow
-        arButton.style.display = 'none';
-        containerRef.current.appendChild(arButton);
-        arButton.click();
+        let hitTestSource: XRHitTestSource | null = null;
 
         function render(_: any, frame: XRFrame) {
           if (frame) {
             const referenceSpace = renderer.xr.getReferenceSpace();
             const session = renderer.xr.getSession();
 
-            if (!hitTestSourceRequested) {
+            if (hitTestSource === null) {
               session?.requestReferenceSpace('viewer').then((viewerSpace) => {
                 session.requestHitTestSource?.({ space: viewerSpace })?.then((source) => {
                   hitTestSource = source;
                 });
               });
-              hitTestSourceRequested = true;
             }
 
             if (hitTestSource) {
@@ -141,12 +137,36 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               if (hitTestResults.length > 0) {
                 const hit = hitTestResults[0];
                 const pose = hit.getPose(referenceSpace!);
-                reticle.matrix.fromArray(pose!.transform.matrix);
                 reticle.visible = true;
+                reticle.matrix.fromArray(pose!.transform.matrix);
               } else {
                 reticle.visible = false;
               }
-              if(isComponentMounted) setIsReticleVisible(reticle.visible);
+            }
+            
+            // --- Consolidated Logic within Render Loop ---
+            if(localStartPoint) {
+                const xrCamera = renderer.xr.getCamera();
+                const cameraPosition = new THREE.Vector3();
+                xrCamera.getWorldPosition(cameraPosition);
+
+                const currentDistance = localStartPoint.distanceTo(cameraPosition);
+                if(isComponentMounted) setDistance(currentDistance);
+
+                const linePositions = (measurementLine.geometry.attributes.position as THREE.BufferAttribute);
+                linePositions.setXYZ(0, localStartPoint.x, localStartPoint.y, localStartPoint.z);
+                linePositions.setXYZ(1, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+                linePositions.needsUpdate = true;
+            }
+
+            if(isComponentMounted) {
+                if(!sessionActive) {
+                    setInstruction("Click 'Start AR' to begin.");
+                } else if (!localStartPoint) {
+                    setInstruction(reticle.visible ? "Tap to place a marker at the tree's base." : "Point camera at the ground to find a surface.");
+                } else {
+                    setInstruction("Distance from marker is shown below.");
+                }
             }
           }
           renderer.render(scene, camera);
@@ -154,64 +174,23 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         
         renderer.setAnimationLoop(render);
 
-        const onWindowResize = () => {
-            if (renderer.xr.isPresenting) return;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-        window.addEventListener('resize', onWindowResize);
-
-        cleanupRef.current = () => {
+        return () => {
             isComponentMounted = false;
             renderer.setAnimationLoop(null);
-            renderer.xr.getSession()?.end().catch(e => console.warn("Session already ended.", e));
-            if (containerRef.current && renderer.domElement.parentElement) {
-                containerRef.current.removeChild(renderer.domElement);
+            renderer.xr.getSession()?.end();
+            if (containerRef.current) {
+                // Clean up all children to prevent memory leaks
+                while (containerRef.current.firstChild) {
+                    containerRef.current.removeChild(containerRef.current.firstChild);
+                }
             }
-            window.removeEventListener('resize', onWindowResize);
-            controller.removeEventListener('select', onSelect);
             renderer.dispose();
         };
     };
 
-    init();
-
-    return () => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
-    };
+    const cleanup = init();
+    return cleanup;
   }, [onCancel]);
-
-
-  React.useEffect(() => {
-    // This effect handles the logic *during* an active session based on React state
-    if (!sessionActive) return;
-
-    if (!startPoint) {
-        if (!isReticleVisible) {
-            setInstruction("Point camera at the ground to find a surface.");
-        } else {
-            setInstruction("Tap to place a marker at the tree's base.");
-        }
-    } else {
-        setInstruction("Walk to your measurement spot. The distance will update live.");
-        
-        // This is a bit of a hack to get a render loop tied to React
-        let animationFrameId: number;
-        const updateDistance = () => {
-            const cameraPosition = new THREE.Vector3();
-            renderer.xr.getCamera(camera).getWorldPosition(cameraPosition);
-            
-            const currentDistance = startPoint.distanceTo(cameraPosition);
-            setDistance(currentDistance);
-            animationFrameId = requestAnimationFrame(updateDistance);
-        };
-        updateDistance();
-
-        return () => cancelAnimationFrame(animationFrameId);
-    }
-  }, [sessionActive, startPoint, isReticleVisible, renderer]);
 
 
   const handleConfirm = () => {
@@ -219,11 +198,26 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       onDistanceMeasured(distance);
     }
   };
-
+  
   const handleReset = () => {
-    setStartPoint(null);
-    setDistance(null);
-  };
+      // Logic inside the render loop will handle visuals based on startPoint state
+      setStartPoint(null);
+      setDistance(null);
+  }
+  
+  if (error) {
+    return (
+        <div className="fixed inset-0 z-50 bg-background-default flex flex-col items-center justify-center text-center p-4">
+            <XCircle className="w-12 h-12 text-status-error mb-4" />
+            <h2 className="text-xl font-bold text-content-default">AR Not Supported</h2>
+            <p className="max-w-md mt-2 text-content-subtle">{error}</p>
+            <button onClick={onCancel} className="mt-8 px-6 py-3 bg-brand-primary text-content-on-brand font-semibold rounded-lg hover:bg-brand-primary-hover">
+              Return to Manual Entry
+            </button>
+        </div>
+    );
+  }
+
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 bg-black">
@@ -254,10 +248,8 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             </div>
           </div>
         ) : (
-          // Initial loading state before session starts
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <Loader2 className="w-10 h-10 text-white animate-spin" />
-            <p className="ml-4 text-white font-semibold">{instruction}</p>
+          <div className="absolute inset-0 flex items-center justify-center">
+            {!error && <Loader2 className="w-10 h-10 text-white animate-spin" />}
           </div>
         )}
       </div>
