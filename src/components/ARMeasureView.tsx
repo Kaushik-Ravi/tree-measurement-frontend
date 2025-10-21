@@ -1,5 +1,5 @@
 // src/components/ARMeasureView.tsx
-// --- START: SURGICAL ADDITION ---
+// --- START: SURGICAL REPLACEMENT ---
 import React from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
@@ -77,7 +77,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         startMarker.position.copy(point);
         startMarker.visible = true;
         measurementLine.visible = true;
-        setInstruction("Point at your current position to see the distance.");
+        setInstruction("Walk back to your photo spot to see the distance.");
       }
     };
 
@@ -143,6 +143,9 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             const pose = hit.getPose(referenceSpace!);
             reticle.visible = true;
             reticle.matrix.fromArray(pose!.transform.matrix);
+             if (!startPoint) {
+              setInstruction("Tap to place start point at tree base.");
+            }
           } else {
             reticle.visible = false;
           }
@@ -255,4 +258,4 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     </div>
   );
 }
-// --- END: SURGICAL ADDITION ---
+// --- END: SURGICAL REPLACEMENT ---
