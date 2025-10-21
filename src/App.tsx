@@ -1,9 +1,9 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-// --- START: SURGICAL ADDITION (THEME ICONS & AR) ---
+// --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
 import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon, Camera } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
-// --- END: SURGICAL ADDITION (THEME ICONS & AR) ---
+// --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -165,6 +165,7 @@ function App() {
   
   // --- START: SURGICAL ADDITION (AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
+  const [startArSession, setStartArSession] = useState(false);
   const [isArSupported, setIsArSupported] = useState(false);
   // --- END: SURGICAL ADDITION (AR STATE) ---
 
@@ -889,13 +890,16 @@ function App() {
       {/* --- START: SURGICAL ADDITION (AR VIEW RENDER) --- */}
       {isArModeActive && (
         <ARMeasureView
+          startSession={startArSession}
           onDistanceMeasured={(measuredDistance) => {
             setDistance(measuredDistance.toFixed(2));
             setIsArModeActive(false);
+            setStartArSession(false);
             handleDistanceEntered(); // Reuse existing function to advance state
           }}
           onCancel={() => {
             setIsArModeActive(false);
+            setStartArSession(false);
           }}
         />
       )}
@@ -957,7 +961,7 @@ function App() {
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
                 <button 
-                  onClick={() => setIsArModeActive(true)} 
+                  onClick={() => { setIsArModeActive(true); setStartArSession(true); }} 
                   disabled={!isArSupported}
                   title={isArSupported ? "Use your camera to measure distance" : "AR not supported on this device/browser"}
                   className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"

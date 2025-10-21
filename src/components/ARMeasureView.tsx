@@ -1,195 +1,208 @@
 // src/components/ARMeasureView.tsx
-// --- START: SURGICAL ADDITION ---
-import React from 'react';
+// --- START: SURGICAL REPLACEMENT ---
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Check, X, Move3d } from 'lucide-react';
+import { Check, X, RotateCcw, Scan, Move } from 'lucide-react';
 
 // Props interface for communication with the parent component (App.tsx)
 interface ARMeasureViewProps {
+  startSession: boolean;
   onDistanceMeasured: (distance: number) => void;
   onCancel: () => void;
 }
 
-export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
-  const [sessionActive, setSessionActive] = React.useState(false);
-  const [distance, setDistance] = React.useState<number | null>(null);
-  const [startPoint, setStartPoint] = React.useState<THREE.Vector3 | null>(null);
-  const [instruction, setInstruction] = React.useState("Point your camera at the ground to begin.");
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const isMountedRef = React.useRef(false);
+// State machine to manage the measurement process
+type ARState = 'INITIALIZING' | 'READY_TO_PLACE_START' | 'READY_TO_PLACE_END' | 'COMPLETE';
 
-  React.useEffect(() => {
-    // Prevent running the effect twice in strict mode
+export function ARMeasureView({ startSession, onDistanceMeasured, onCancel }: ARMeasureViewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const arButtonRef = useRef<HTMLButtonElement | null>(null);
+  const isMountedRef = useRef(false);
+
+  const [arState, setArState] = useState<ARState>('INITIALIZING');
+  const [distance, setDistance] = useState<number | null>(null);
+
+  // Memoize handlers to prevent re-creation on re-render
+  const handleConfirm = useCallback(() => {
+    if (distance !== null) {
+      onDistanceMeasured(distance);
+    }
+  }, [distance, onDistanceMeasured]);
+
+  const handleReset = useCallback(() => {
+    setDistance(null);
+    setArState('READY_TO_PLACE_START');
+  }, []);
+
+  useEffect(() => {
     if (isMountedRef.current) return;
     isMountedRef.current = true;
 
-    // --- Core Three.js & WebXR Setup ---
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    if (!containerRef.current) return;
+    containerRef.current.appendChild(renderer.domElement);
     
-    if (containerRef.current) {
-        containerRef.current.appendChild(renderer.domElement);
-    }
-    
-    // Simple lighting
-    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
     light.position.set(0.5, 1, 0.25);
     scene.add(light);
     
-    // Reticle (the circle on the ground)
+    // --- Visual Elements ---
+    // Reticle (the target on the ground)
     const reticle = new THREE.Mesh(
-      new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff })
+      new THREE.RingGeometry(0.08, 0.1, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial()
     );
     reticle.matrixAutoUpdate = false;
     reticle.visible = false;
     scene.add(reticle);
 
-    // Measurement line
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    // Measurement Line
+    const lineGeometry = new THREE.BufferGeometry();
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
     const measurementLine = new THREE.Line(lineGeometry, lineMaterial);
-    measurementLine.visible = false;
     scene.add(measurementLine);
 
     // Markers for start/end points
-    const markerGeometry = new THREE.SphereGeometry(0.02, 16, 16);
-    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const markerGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.2, 16);
+    markerGeometry.translate(0, 0.1, 0); // Position pivot at the base
+    const markerMaterial = new THREE.MeshStandardMaterial({ color: 0x22c55e });
     const startMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+    const endMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+    scene.add(startMarker, endMarker);
+    
+    let startPoint: THREE.Vector3 | null = null;
+    let endPoint: THREE.Vector3 | null = null;
     startMarker.visible = false;
-    scene.add(startMarker);
+    endMarker.visible = false;
+    measurementLine.visible = false;
 
     let hitTestSource: XRHitTestSource | null = null;
-    let hitTestSourceRequested = false;
 
-    // Function to handle screen tap
+    // --- State-driven UI Logic ---
+    const updateUIState = (newState: ARState) => {
+      startMarker.visible = newState === 'READY_TO_PLACE_END' || newState === 'COMPLETE';
+      endMarker.visible = newState === 'COMPLETE';
+      measurementLine.visible = startMarker.visible;
+      if (newState === 'READY_TO_PLACE_START') {
+        startPoint = null;
+        endPoint = null;
+        startMarker.visible = false;
+        endMarker.visible = false;
+        measurementLine.visible = false;
+        setDistance(null);
+      }
+      setArState(newState);
+    };
+    
     const onSelect = () => {
-      if (reticle.visible) {
-        const point = new THREE.Vector3();
-        point.setFromMatrixPosition(reticle.matrix);
-        setStartPoint(point);
-        startMarker.position.copy(point);
-        startMarker.visible = true;
-        measurementLine.visible = true;
-        setInstruction("Point at your current position to see the distance.");
+      if (!reticle.visible) return;
+
+      if (arState === 'READY_TO_PLACE_START') {
+        startPoint = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+        startMarker.position.copy(startPoint);
+        updateUIState('READY_TO_PLACE_END');
+      } else if (arState === 'READY_TO_PLACE_END') {
+        endPoint = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+        endMarker.position.copy(endPoint);
+        
+        const finalDistance = startPoint!.distanceTo(endPoint!);
+        setDistance(finalDistance);
+        
+        measurementLine.geometry.setFromPoints([startPoint!, endPoint!]);
+        updateUIState('COMPLETE');
       }
     };
 
-    // --- AR Session Logic ---
     const controller = renderer.xr.getController(0);
     controller.addEventListener('select', onSelect);
     scene.add(controller);
 
-    const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay'],
-      domOverlay: { root: containerRef.current?.querySelector('#ar-overlay')! }
-    });
-
-    arButton.addEventListener('click', () => {
-        setInstruction("Point your camera at the ground to find a surface.");
-    });
+    // --- AR Session Management (No visible button) ---
+    const arButton = document.createElement('button');
+    arButton.id = "ar-button";
+    arButton.style.display = 'none'; // Keep the button hidden
+    arButtonRef.current = arButton;
+    document.body.appendChild(arButton);
     
-    renderer.xr.addEventListener('sessionstart', () => setSessionActive(true));
-    renderer.xr.addEventListener('sessionend', () => {
-        setSessionActive(false);
-        onCancel(); // Automatically cancel if user exits AR session
+    // This is the Three.js helper that wires up the WebXR API
+    const sessionInit = { requiredFeatures: ['hit-test', 'dom-overlay'], domOverlay: { root: containerRef.current?.querySelector('#ar-overlay')! } };
+    arButton.onclick = () => {
+        renderer.xr.getSession()?.end();
+        navigator.xr?.requestSession('immersive-ar', sessionInit).then((session) => {
+            renderer.xr.setSession(session);
+        });
+    };
+
+    renderer.xr.addEventListener('sessionstart', () => {
+      updateUIState('INITIALIZING');
     });
 
-    if (containerRef.current) {
-        containerRef.current.appendChild(arButton);
-        arButton.style.position = 'absolute';
-        arButton.style.bottom = '20px';
-        arButton.style.left = '50%';
-        arButton.style.transform = 'translateX(-50%)';
-        arButton.style.padding = '12px 24px';
-        arButton.style.backgroundColor = 'rgb(var(--brand-primary))';
-        arButton.style.color = 'white';
-        arButton.style.border = 'none';
-        arButton.style.borderRadius = '8px';
-        arButton.style.fontWeight = 'bold';
-        arButton.textContent = "Start AR Measurement";
-    }
+    renderer.xr.addEventListener('sessionend', () => {
+      onCancel();
+    });
 
     // --- Render Loop ---
-    function render(timestamp: any, frame: XRFrame) {
+    const render = (timestamp: any, frame: XRFrame) => {
       if (frame) {
         const referenceSpace = renderer.xr.getReferenceSpace();
+        if (!referenceSpace) return;
         const session = renderer.xr.getSession();
 
-        if (hitTestSourceRequested === false) {
-          session?.requestReferenceSpace('viewer').then((viewerSpace) => {
-            session.requestHitTestSource?.({ space: viewerSpace })?.then((source) => {
+        if (!hitTestSource) {
+          session?.requestReferenceSpace('viewer').then(viewerSpace => {
+            session.requestHitTestSource?.({ space: viewerSpace })?.then(source => {
               hitTestSource = source;
             });
           });
-          session?.addEventListener('end', () => {
-            hitTestSourceRequested = false;
-            hitTestSource = null;
-          });
-          hitTestSourceRequested = true;
         }
 
         if (hitTestSource) {
           const hitTestResults = frame.getHitTestResults(hitTestSource);
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace!);
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose!.transform.matrix);
+            const pose = hit.getPose(referenceSpace);
+            if (pose) {
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
+              if (arState === 'INITIALIZING') {
+                updateUIState('READY_TO_PLACE_START');
+              }
+            }
           } else {
             reticle.visible = false;
           }
         }
-
-        // Calculate and display distance if a start point is set
-        if (startPoint) {
-          const cameraPosition = new THREE.Vector3();
-          camera.getWorldPosition(cameraPosition);
-          
-          // Project points onto the horizontal plane (y=0) for ground distance
-          const startPointGround = startPoint.clone();
-          startPointGround.y = 0;
-          const cameraPositionGround = cameraPosition.clone();
-          cameraPositionGround.y = 0;
-
-          const currentDistance = startPointGround.distanceTo(cameraPositionGround);
-          setDistance(currentDistance);
-
-          // Update line visual
-          const linePositions = measurementLine.geometry.attributes.position;
-          linePositions.setXYZ(0, startPoint.x, startPoint.y, startPoint.z);
-          linePositions.setXYZ(1, cameraPosition.x, cameraPosition.y, cameraPosition.z);
-          linePositions.needsUpdate = true;
+        
+        if (arState === 'READY_TO_PLACE_END' && startPoint && reticle.visible) {
+            const currentEndPoint = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+            measurementLine.geometry.setFromPoints([startPoint, currentEndPoint]);
+            setDistance(startPoint.distanceTo(currentEndPoint));
         }
       }
       renderer.render(scene, camera);
-    }
-    
+    };
+
     renderer.setAnimationLoop(render);
 
-    // Handle window resize
     const onWindowResize = () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
     window.addEventListener('resize', onWindowResize);
 
-    // --- Cleanup function ---
     return () => {
       renderer.setAnimationLoop(null);
       renderer.xr.getSession()?.end();
-      if (containerRef.current && arButton.parentElement) {
-        containerRef.current.removeChild(arButton);
-      }
-       if (containerRef.current && renderer.domElement.parentElement) {
+      if (arButtonRef.current) document.body.removeChild(arButtonRef.current);
+      if (containerRef.current && renderer.domElement.parentElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
       window.removeEventListener('resize', onWindowResize);
@@ -197,62 +210,56 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       renderer.dispose();
       isMountedRef.current = false;
     };
-  }, [onCancel]);
+  }, [onCancel]); // Dependencies intentionally minimal to prevent re-setup
 
+  // Effect to programmatically start the AR session
+  useEffect(() => {
+    if (startSession && arButtonRef.current) {
+      arButtonRef.current.click();
+    }
+  }, [startSession]);
 
-  const handleConfirm = () => {
-    if (distance !== null) {
-      onDistanceMeasured(distance);
+  const getInstructionText = () => {
+    switch (arState) {
+      case 'INITIALIZING': return "Searching for a surface... Slowly move your camera around.";
+      case 'READY_TO_PLACE_START': return "Tap to place the first point at the tree's base.";
+      case 'READY_TO_PLACE_END': return "Tap to place the second point at your location.";
+      case 'COMPLETE': return "Measurement Complete";
     }
   };
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 bg-black">
-      {/* This overlay is used by WebXR DOM Overlay feature */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
-        {sessionActive && (
           <div className="w-full h-full flex flex-col justify-between p-4 pointer-events-auto">
-            {/* Top instruction text */}
-            <div className="text-center bg-black/50 text-white p-3 rounded-lg backdrop-blur-sm">
-                <p className="font-semibold">{instruction}</p>
-                {startPoint && (
-                    <div className="text-4xl font-bold mt-2">
-                        {distance !== null ? `${distance.toFixed(2)}m` : '...'}
-                    </div>
-                )}
+            <div className="text-center bg-black/60 text-white p-4 rounded-xl backdrop-blur-sm flex flex-col items-center">
+              {arState === 'INITIALIZING' && <Scan className="w-6 h-6 mb-2 animate-pulse text-cyan-300" />}
+              <p className="font-semibold text-lg">{getInstructionText()}</p>
+              {(arState === 'READY_TO_PLACE_END' || arState === 'COMPLETE') && (
+                <div className="text-5xl font-bold mt-2 tracking-tight">
+                    {distance !== null ? `${distance.toFixed(2)}m` : '...'}
+                </div>
+              )}
             </div>
 
-            {/* Bottom action buttons */}
             <div className="flex justify-center items-center gap-4">
-               {!startPoint ? (
-                  <div className="flex items-center gap-2 text-white bg-black/50 p-3 rounded-lg backdrop-blur-sm">
-                    <Move3d className="w-6 h-6"/>
-                    <span className="font-medium">Tap to place start point at tree base</span>
-                  </div>
-               ) : (
-                <>
-                  <button
-                    onClick={onCancel}
-                    className="flex items-center gap-2 px-6 py-4 bg-red-600 text-white rounded-full font-bold shadow-lg"
-                  >
-                    <X className="w-6 h-6"/>
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleConfirm}
-                    disabled={distance === null}
-                    className="flex items-center gap-2 px-6 py-4 bg-green-600 text-white rounded-full font-bold shadow-lg disabled:bg-gray-500"
-                  >
-                    <Check className="w-6 h-6"/>
-                    Confirm
-                  </button>
-                </>
-               )}
+              <button onClick={onCancel} className="flex items-center gap-2 px-6 py-3 bg-red-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm">
+                <X className="w-6 h-6"/> Cancel
+              </button>
+              {(arState === 'READY_TO_PLACE_END' || arState === 'COMPLETE') && (
+                <button onClick={handleReset} className="flex items-center gap-2 px-6 py-3 bg-gray-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm">
+                  <RotateCcw className="w-6 h-6"/> Reset
+                </button>
+              )}
+              {arState === 'COMPLETE' && (
+                <button onClick={handleConfirm} className="flex items-center gap-2 px-6 py-3 bg-green-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm">
+                  <Check className="w-6 h-6"/> Confirm
+                </button>
+              )}
             </div>
           </div>
-        )}
       </div>
     </div>
   );
 }
-// --- END: SURGICAL ADDITION ---
+// --- END: SURGICAL REPLACEMENT ---
