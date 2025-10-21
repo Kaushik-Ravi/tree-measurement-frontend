@@ -2,9 +2,7 @@
 // --- START: SURGICAL REPLACEMENT ---
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-// --- START: SURGICAL ADDITION (FIX) ---
 import { Check, X, RotateCcw, ScanLine, AlertTriangle, Move, Loader2 } from 'lucide-react';
-// --- END: SURGICAL ADDITION (FIX) ---
 
 // Props interface for communication with the parent component (App.tsx)
 interface ARMeasureViewProps {
@@ -15,22 +13,27 @@ interface ARMeasureViewProps {
 // State machine to manage the measurement process and UI feedback
 type ARStatus = 'INITIALIZING' | 'REQUESTING_SESSION' | 'SESSION_FAILED' | 'SEARCHING_SURFACE' | 'READY_TO_PLACE_START' | 'READY_TO_PLACE_END' | 'COMPLETE';
 
+// --- START: SURGICAL ADDITION ---
+// Add a new state to hold a more specific error message for the user.
+type SessionErrorType = 'GENERIC_FAILURE' | 'OVERLAY_UNSUPPORTED';
+// --- END: SURGICAL ADDITION ---
+
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const [status, setStatus] = useState<ARStatus>('INITIALIZING');
+  // --- START: SURGICAL MODIFICATION ---
+  // Replace the simple status with a state that can hold a specific error type.
+  const [sessionError, setSessionError] = useState<SessionErrorType | null>(null);
+  // --- END: SURGICAL MODIFICATION ---
   const [distance, setDistance] = useState<number | null>(null);
 
-  // --- START: SURGICAL ADDITION (FIX) ---
-  // Use refs for THREE objects that change but shouldn't trigger re-renders.
-  // This solves the scoping and stale state issues.
   const startPointRef = useRef<THREE.Vector3 | null>(null);
   const endPointRef = useRef<THREE.Vector3 | null>(null);
   const measurementLineRef = useRef<THREE.Line | null>(null);
   const startMarkerRef = useRef<THREE.Mesh | null>(null);
   const endMarkerRef = useRef<THREE.Mesh | null>(null);
-  // --- END: SURGICAL ADDITION (FIX) ---
 
 
   // Memoize handlers to prevent re-creation on re-render
@@ -40,7 +43,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     }
   }, [distance, onDistanceMeasured]);
 
-  // --- START: SURGICAL REPLACEMENT (FIX) ---
   const handleReset = useCallback(() => {
     // This function now directly controls both React state and THREE.js object state via refs.
     startPointRef.current = null;
@@ -51,7 +53,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     setDistance(null);
     setStatus('READY_TO_PLACE_START');
   }, []);
-  // --- END: SURGICAL REPLACEMENT (FIX) ---
 
   useEffect(() => {
     // --- Guard against multiple initializations ---
@@ -111,19 +112,42 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
     const requestARSession = async () => {
       if (!navigator.xr) {
+        // --- START: SURGICAL MODIFICATION ---
+        // Set the specific error type before setting the failed status.
+        setSessionError('GENERIC_FAILURE');
+        // --- END: SURGICAL MODIFICATION ---
         setStatus('SESSION_FAILED');
         return;
       }
       try {
         setStatus('REQUESTING_SESSION');
+        // --- START: SURGICAL MODIFICATION ---
+        // As per the plan, move 'dom-overlay' to optionalFeatures to make the session request more resilient.
         const session = await navigator.xr.requestSession('immersive-ar', { 
-            requiredFeatures: ['hit-test', 'dom-overlay'], 
+            requiredFeatures: ['hit-test'], 
+            optionalFeatures: ['dom-overlay'],
             domOverlay: { root: containerRef.current?.querySelector('#ar-overlay')! }
         });
+        
+        // After the session is granted, verify that our critical optional feature was actually enabled.
+        if (!session.domOverlayState) {
+          // If the DOM overlay isn't supported, we cannot proceed. Throw a specific error.
+          throw new Error('OVERLAY_UNSUPPORTED');
+        }
+        // --- END: SURGICAL MODIFICATION ---
+
         await renderer.xr.setSession(session);
         setStatus('SEARCHING_SURFACE');
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to start AR session:", error);
+        // --- START: SURGICAL MODIFICATION ---
+        // Catch the specific error we threw and set the state accordingly for a better user message.
+        if (error.message === 'OVERLAY_UNSUPPORTED') {
+          setSessionError('OVERLAY_UNSUPPORTED');
+        } else {
+          setSessionError('GENERIC_FAILURE');
+        }
+        // --- END: SURGICAL MODIFICATION ---
         setStatus('SESSION_FAILED');
       }
     };
@@ -226,8 +250,14 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       case 'INITIALIZING':
       case 'REQUESTING_SESSION':
         return <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <p className="font-semibold text-lg">Starting AR Camera...</p></>;
+      // --- START: SURGICAL MODIFICATION ---
+      // Provide intelligent, specific error messages based on the new sessionError state.
       case 'SESSION_FAILED':
+        if (sessionError === 'OVERLAY_UNSUPPORTED') {
+          return <><AlertTriangle className="w-8 h-8 mb-2 text-red-400" /> <p className="font-semibold text-lg">AR Error</p><p className="text-sm">Your device or browser does not support the required AR interface overlay.</p></>;
+        }
         return <><AlertTriangle className="w-8 h-8 mb-2 text-red-400" /> <p className="font-semibold text-lg">Could not start AR session.</p><p className="text-sm">Please ensure your browser has camera permissions and try again.</p></>;
+      // --- END: SURGICAL MODIFICATION ---
       case 'SEARCHING_SURFACE':
         return <><ScanLine className="w-8 h-8 mb-2 animate-pulse text-cyan-300" /> <p className="font-semibold text-lg">Searching for a surface...</p><p className="text-sm">Slowly move your camera around.</p></>;
       case 'READY_TO_PLACE_START':
