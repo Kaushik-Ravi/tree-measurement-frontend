@@ -1,8 +1,9 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
-// --- START: SURGICAL ADDITION (THEME ICONS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon } from 'lucide-react';
-// --- END: SURGICAL ADDITION (THEME ICONS) ---
+// --- START: SURGICAL ADDITION (THEME ICONS & AR) ---
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon, Camera } from 'lucide-react';
+import { ARMeasureView } from './components/ARMeasureView';
+// --- END: SURGICAL ADDITION (THEME ICONS & AR) ---
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -58,7 +59,6 @@ type PrerequisiteStatus = {
 };
 type UserProfile = { id: string; full_name: string; avatar_url: string; sapling_points: number; rank: string; } | null;
 
-// --- START: SURGICAL ADDITION (THEME MANAGEMENT) ---
 type Theme = 'light' | 'dark';
 
 interface ThemeToggleProps {
@@ -71,7 +71,6 @@ const ThemeToggle = ({ theme, onToggle }: ThemeToggleProps) => (
     {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
   </button>
 );
-// --- END: SURGICAL ADDITION (THEME MANAGEMENT) ---
 
 interface FloatingInteractionControlsProps {
   onUndo: () => void;
@@ -106,7 +105,6 @@ const ARLinks = () => ( <p className="text-xs text-content-subtle mt-1 pl-1">Nee
 
 const initialAdditionalData: AdditionalData = { condition: '', ownership: '', remarks: '' };
 
-// --- START: SURGICAL REPLACEMENT (AUTH COMPONENT WITH THEME TOGGLE) ---
 const AuthComponent = ({ profile, theme, onThemeToggle }: { profile: UserProfile, theme: Theme, onThemeToggle: () => void }) => {
   const { user, signInWithGoogle, signOut } = useAuth();
 
@@ -144,7 +142,6 @@ const AuthComponent = ({ profile, theme, onThemeToggle }: { profile: UserProfile
     </div>
   );
 };
-// --- END: SURGICAL REPLACEMENT (AUTH COMPONENT WITH THEME TOGGLE) ---
 
 function App() {
   const { user, session } = useAuth();
@@ -159,13 +156,17 @@ function App() {
   
   const [fovRatio, setFovRatio] = useState<number | null>(null);
 
-  // --- START: SURGICAL ADDITION (THEME MANAGEMENT STATE & LOGIC) ---
   const [theme, setTheme] = useState<Theme>(() => {
     if (localStorage.getItem('theme') === 'light') {
       return 'light';
     }
     return 'dark';
   });
+  
+  // --- START: SURGICAL ADDITION (AR STATE) ---
+  const [isArModeActive, setIsArModeActive] = useState(false);
+  const [isArSupported, setIsArSupported] = useState(false);
+  // --- END: SURGICAL ADDITION (AR STATE) ---
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -179,7 +180,6 @@ function App() {
   const handleThemeToggle = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
-  // --- END: SURGICAL ADDITION (THEME MANAGEMENT STATE & LOGIC) ---
 
   const [currentMeasurementFile, setCurrentMeasurementFile] = useState<File | null>(null);
   const [pendingTreeFile, setPendingTreeFile] = useState<File | null>(null);
@@ -221,12 +221,29 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- START: SURGICAL ADDITION (AR SUPPORT CHECK) ---
+  useEffect(() => {
+    // Check for WebXR support on component mount
+    const checkArSupport = async () => {
+      if (navigator.xr) {
+        try {
+          const supported = await navigator.xr.isSessionSupported('immersive-ar');
+          setIsArSupported(supported);
+        } catch (e) {
+          console.error("Error checking AR support:", e);
+          setIsArSupported(false);
+        }
+      }
+    };
+    checkArSupport();
+  }, []);
+  // --- END: SURGICAL ADDITION (AR SUPPORT CHECK) ---
+
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
 
   useEffect(() => {
-    // Wrapped in a check to avoid unnecessary listeners.
     if (currentView !== 'SESSION') return;
     
     const handleLiveOrientation = (event: DeviceOrientationEvent) => {
@@ -365,9 +382,7 @@ function App() {
       const scaleCoords = (p: Point): Point => !imageDimensions ? p : { x: (p.x / imageDimensions.w) * canvas.width, y: (p.y / imageDimensions.h) * canvas.height };
       const drawPoint = (p: Point, color: string) => { const sp = scaleCoords(p); ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke(); };
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
-      // --- START: SURGICAL REPLACEMENT (DBH GUIDE COLOR & THICKNESS) ---
       if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
-      // --- END: SURGICAL REPLACEMENT (DBH GUIDE COLOR & THICKNESS) ---
       refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
     };
   }, [resultImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
@@ -381,7 +396,6 @@ function App() {
   };
 
   const handleRequestPermissions = async () => {
-    // Location
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -396,7 +410,6 @@ function App() {
       setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
     }
   
-    // This logic ensures the permission request is tied to a user gesture as required by iOS.
     // @ts-ignore
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       try {
@@ -412,9 +425,6 @@ function App() {
         setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
       }
     } else {
-      // For non-iOS devices, we assume permission or availability. The useEffect listener
-      // will update the status to GRANTED if it successfully receives an event.
-      // This is a reasonable fallback for Android/Desktop.
       console.log("DeviceOrientationEvent.requestPermission not found. Assuming permission or non-iOS device.");
     }
   };
@@ -544,23 +554,19 @@ function App() {
     }
   };
   
-  // --- START: SURGICAL MODIFICATION ---
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     setCurrentView('SESSION');
 
-    // **CRITICAL FIX**: Restore the pending file to trigger the analysis flow.
     if (pendingTreeFile) {
       setCurrentMeasurementFile(pendingTreeFile);
-      setAppStatus('SESSION_PROCESSING_PHOTO'); // Re-trigger the processing pipeline
+      setAppStatus('SESSION_PROCESSING_PHOTO');
     } else {
-      // Fallback if somehow pending file is lost (should not happen)
       setAppStatus('SESSION_AWAITING_PHOTO');
       setInstructionText("Calibration complete! Please re-select your photo to begin.");
     }
   };
-  // --- END: SURGICAL MODIFICATION ---
 
   const prepareMeasurementSession = (): number | null => {
     const distForCalc = currentView === 'COMMUNITY_GROVE' ? claimedTree?.distance_m : parseFloat(distance);
@@ -689,7 +695,7 @@ function App() {
     try {
       const trees = await getPendingTrees(session.access_token);
       setPendingTrees(trees);
-      setAppStatus('IDLE'); // Transition to IDLE after success
+      setAppStatus('IDLE');
     } catch(e: any) {
       setErrorMessage(`Failed to load grove: ${e.message}`);
       setAppStatus('ERROR');
@@ -795,9 +801,7 @@ function App() {
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
       setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click widest points."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
-      // --- START: SURGICAL REPLACEMENT (INSTRUCTION TEXT) ---
       setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width."); } return {...p, canopy: c}; }); 
-      // --- END: SURGICAL REPLACEMENT (INSTRUCTION TEXT) ---
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
       setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
@@ -882,6 +886,21 @@ function App() {
 
   const renderSessionView = () => (
     <>
+      {/* --- START: SURGICAL ADDITION (AR VIEW RENDER) --- */}
+      {isArModeActive && (
+        <ARMeasureView
+          onDistanceMeasured={(measuredDistance) => {
+            setDistance(measuredDistance.toFixed(2));
+            setIsArModeActive(false);
+            handleDistanceEntered(); // Reuse existing function to advance state
+          }}
+          onCancel={() => {
+            setIsArModeActive(false);
+          }}
+        />
+      )}
+      {/* --- END: SURGICAL ADDITION (AR VIEW RENDER) --- */}
+
       {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
         <PermissionsCheckModal 
           locationStatus={prereqStatus.location}
@@ -934,7 +953,37 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> </div> )}
 
-            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( <div> <label htmlFor="distance-input" className="block text-sm font-medium text-content-default mb-2">2. Distance to Tree Base (meters)</label> <div className="relative"> <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" /> <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" /> </div> <ARLinks /> <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle"> Continue </button> </div> )}
+            {/* --- START: SURGICAL REPLACEMENT (AR BUTTON INTEGRATION) --- */}
+            {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
+              <div>
+                <button 
+                  onClick={() => setIsArModeActive(true)} 
+                  disabled={!isArSupported}
+                  title={isArSupported ? "Use your camera to measure distance" : "AR not supported on this device/browser"}
+                  className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
+                >
+                  <Camera className="w-5 h-5" />
+                  Measure with Camera (AR)
+                </button>
+
+                <div className="relative my-4 flex items-center">
+                    <div className="flex-grow border-t border-stroke-default"></div>
+                    <span className="flex-shrink mx-4 text-content-subtle text-sm">OR</span>
+                    <div className="flex-grow border-t border-stroke-default"></div>
+                </div>
+                
+                <label htmlFor="distance-input" className="block text-sm font-medium text-content-default mb-2">Manually Enter Distance (meters)</label>
+                <div className="relative">
+                  <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" />
+                  <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" />
+                </div>
+                <ARLinks />
+                <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
+                  Continue
+                </button>
+              </div>
+            )}
+            {/* --- END: SURGICAL REPLACEMENT (AR BUTTON INTEGRATION) --- */}
             
             {appStatus === 'SESSION_AWAITING_CALIBRATION_CHOICE' && (
               <div className="space-y-4 pt-4 border-t border-stroke-subtle">
@@ -962,23 +1011,18 @@ function App() {
               </div>
             )}
             
-            {/* --- START: SURGICAL REPLACEMENT (BUTTON TEXT COLOR) --- */}
             {appStatus === 'SESSION_AWAITING_ANALYSIS_CHOICE' && ( <div className="space-y-4 pt-4 border-t border-stroke-subtle"> <h3 className="text-base font-semibold text-center text-content-default">How would you like to proceed?</h3> <button onClick={handleSubmitForCommunity} className="w-full text-left p-4 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover transition-all flex items-center gap-4"> <Navigation className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Submit for Community <span className="text-xs font-bold bg-white text-brand-secondary px-1.5 py-0.5 rounded-full ml-1">+2 SP</span></p><p className="text-xs opacity-80">Quickly tag this tree for others to analyze.</p></div> </button> <button onClick={() => {setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION'); setInstructionText("Select your preferred analysis method.");}} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"> <ShieldCheck className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Analyze Myself <span className="text-xs font-bold bg-white text-brand-primary px-1.5 py-0.5 rounded-full ml-1">+15 SP</span></p><p className="text-xs opacity-80">Perform a detailed analysis for immediate results.</p></div> </button> </div> )}
-            {/* --- END: SURGICAL REPLACEMENT (BUTTON TEXT COLOR) --- */}
 
             {appStatus === 'ANALYSIS_AWAITING_MODE_SELECTION' && (
                <div className="space-y-3 pt-6 border-t border-stroke-subtle mt-6"> 
                   <h3 className="text-base font-semibold text-center text-content-default mb-2">Choose Measurement Method</h3>
                   <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover disabled:bg-background-inset disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs opacity-80">Tap the trunk once for a quick analysis.</p></div> </button> 
-                  {/* --- START: SURGICAL MODIFICATION --- */}
                   <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover disabled:bg-background-inset transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs opacity-80">Mark all points yourself for maximum control.</p></div> </button> 
-                  {/* --- END: SURGICAL MODIFICATION --- */}
               </div>
             )}
             
             {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t border-stroke-subtle"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-brand-accent text-white rounded-lg font-semibold hover:bg-brand-accent-hover disabled:bg-background-inset"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
-            {/* --- START: SURGICAL REPLACEMENT (BUTTON STYLING & TEXT) --- */}
             {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-content-default">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Height:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Canopy:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> 
             <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle">
               <div className="flex items-center gap-2 relative group min-w-0">
@@ -996,9 +1040,7 @@ function App() {
             </div> 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stroke-subtle"> 
               {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
-            {/* --- START: SURGICAL MODIFICATION --- */}
             <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
-            {/* --- END: SURGICAL MODIFICATION --- */}
             <div className="space-y-4 border-t border-stroke-subtle pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
@@ -1010,7 +1052,6 @@ function App() {
               {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"><GitMerge className="w-5 h-5" />Submit Analysis</button>}
             </div>
             </div> )}
-            {/* --- END: SURGICAL REPLACEMENT (BUTTON STYLING & TEXT) --- */}
           </div>
         </div>
       )}
@@ -1039,7 +1080,6 @@ function App() {
                 </button>
               </div>
 
-              {/* --- START: SURGICAL REPLACEMENT (HUB CARD TERMINOLOGY) --- */}
               <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
                   <button onClick={handleNavigateToGrove} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-secondary/50 hover:shadow-xl transition-all hover:-translate-y-1">
                       <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">The Community Grove</h3></div>
@@ -1050,7 +1090,6 @@ function App() {
                       <p className="text-sm text-content-subtle mt-2">See how your contributions rank. Earn Sapling Points for each tree you map and analyze.</p>
                   </button>
               </div>
-              {/* --- END: SURGICAL REPLACEMENT (HUB CARD TERMINOLOGY) --- */}
               <div className="max-w-7xl mx-auto">
                 <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} isLoading={isHistoryLoading} />
               </div>
@@ -1061,4 +1100,4 @@ function App() {
   );
 }
 
-export default App; //
+export default App;
