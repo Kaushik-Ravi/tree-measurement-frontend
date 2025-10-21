@@ -163,11 +163,10 @@ function App() {
     return 'dark';
   });
   
-  // --- START: SURGICAL ADDITION (AR STATE) ---
+  // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
-  const [startArSession, setStartArSession] = useState(false);
   const [isArSupported, setIsArSupported] = useState(false);
-  // --- END: SURGICAL ADDITION (AR STATE) ---
+  // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -222,7 +221,6 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- START: SURGICAL ADDITION (AR SUPPORT CHECK) ---
   useEffect(() => {
     // Check for WebXR support on component mount
     const checkArSupport = async () => {
@@ -238,7 +236,6 @@ function App() {
     };
     checkArSupport();
   }, []);
-  // --- END: SURGICAL ADDITION (AR SUPPORT CHECK) ---
 
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
@@ -887,23 +884,20 @@ function App() {
 
   const renderSessionView = () => (
     <>
-      {/* --- START: SURGICAL ADDITION (AR VIEW RENDER) --- */}
+      {/* --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR VIEW INTEGRATION) --- */}
       {isArModeActive && (
         <ARMeasureView
-          startSession={startArSession}
           onDistanceMeasured={(measuredDistance) => {
             setDistance(measuredDistance.toFixed(2));
             setIsArModeActive(false);
-            setStartArSession(false);
             handleDistanceEntered(); // Reuse existing function to advance state
           }}
           onCancel={() => {
             setIsArModeActive(false);
-            setStartArSession(false);
           }}
         />
       )}
-      {/* --- END: SURGICAL ADDITION (AR VIEW RENDER) --- */}
+      {/* --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR VIEW INTEGRATION) --- */}
 
       {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
         <PermissionsCheckModal 
@@ -957,11 +951,10 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> </div> )}
 
-            {/* --- START: SURGICAL REPLACEMENT (AR BUTTON INTEGRATION) --- */}
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
                 <button 
-                  onClick={() => { setIsArModeActive(true); setStartArSession(true); }} 
+                  onClick={() => setIsArModeActive(true)} 
                   disabled={!isArSupported}
                   title={isArSupported ? "Use your camera to measure distance" : "AR not supported on this device/browser"}
                   className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
@@ -987,7 +980,6 @@ function App() {
                 </button>
               </div>
             )}
-            {/* --- END: SURGICAL REPLACEMENT (AR BUTTON INTEGRATION) --- */}
             
             {appStatus === 'SESSION_AWAITING_CALIBRATION_CHOICE' && (
               <div className="space-y-4 pt-4 border-t border-stroke-subtle">
