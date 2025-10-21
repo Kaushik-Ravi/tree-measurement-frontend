@@ -2,7 +2,7 @@
 // --- START: SURGICAL REPLACEMENT ---
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
-import { Check, X, RotateCcw, ScanLine, AlertTriangle, Move, Loader2 } from 'lucide-react';
+import { Check, X, RotateCcw, ScanLine, AlertTriangle, Move, Loader2, Camera } from 'lucide-react';
 
 // Props interface for communication with the parent component (App.tsx)
 interface ARMeasureViewProps {
@@ -11,22 +11,23 @@ interface ARMeasureViewProps {
 }
 
 // State machine to manage the measurement process and UI feedback
-type ARStatus = 'INITIALIZING' | 'REQUESTING_SESSION' | 'SESSION_FAILED' | 'SEARCHING_SURFACE' | 'READY_TO_PLACE_START' | 'READY_TO_PLACE_END' | 'COMPLETE';
+// --- START: SURGICAL MODIFICATION ---
+// Added 'AWAITING_USER_START' as the initial state to ensure user-initiated session.
+type ARStatus = 'AWAITING_USER_START' | 'REQUESTING_SESSION' | 'SESSION_FAILED' | 'SEARCHING_SURFACE' | 'READY_TO_PLACE_START' | 'READY_TO_PLACE_END' | 'COMPLETE';
+// --- END: SURGICAL MODIFICATION ---
 
-// --- START: SURGICAL ADDITION ---
-// Add a new state to hold a more specific error message for the user.
 type SessionErrorType = 'GENERIC_FAILURE' | 'OVERLAY_UNSUPPORTED';
-// --- END: SURGICAL ADDITION ---
 
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // --- START: SURGICAL ADDITION ---
+  // A ref to hold the session start function, making it accessible to our React button's onClick handler.
+  const startSessionFunc = useRef<(() => Promise<void>) | null>(null);
+  // --- END: SURGICAL ADDITION ---
 
-  const [status, setStatus] = useState<ARStatus>('INITIALIZING');
-  // --- START: SURGICAL MODIFICATION ---
-  // Replace the simple status with a state that can hold a specific error type.
+  const [status, setStatus] = useState<ARStatus>('AWAITING_USER_START');
   const [sessionError, setSessionError] = useState<SessionErrorType | null>(null);
-  // --- END: SURGICAL MODIFICATION ---
   const [distance, setDistance] = useState<number | null>(null);
 
   const startPointRef = useRef<THREE.Vector3 | null>(null);
@@ -44,7 +45,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   }, [distance, onDistanceMeasured]);
 
   const handleReset = useCallback(() => {
-    // This function now directly controls both React state and THREE.js object state via refs.
     startPointRef.current = null;
     endPointRef.current = null;
     if (startMarkerRef.current) startMarkerRef.current.visible = false;
@@ -54,8 +54,16 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     setStatus('READY_TO_PLACE_START');
   }, []);
 
+  // --- START: SURGICAL ADDITION ---
+  // This handler is called by the user clicking our React "Start AR" button.
+  const handleStartAR = useCallback(() => {
+    if (startSessionFunc.current) {
+      startSessionFunc.current();
+    }
+  }, []);
+  // --- END: SURGICAL ADDITION ---
+
   useEffect(() => {
-    // --- Guard against multiple initializations ---
     if (cleanupRef.current) {
       return;
     }
@@ -98,7 +106,9 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         endMarkerRef.current = new THREE.Mesh(markerGeometry, markerMaterial);
         scene.add(startMarkerRef.current, endMarkerRef.current);
         
-        handleReset(); // Initialize state correctly
+        startMarkerRef.current.visible = false;
+        endMarkerRef.current.visible = false;
+        measurementLineRef.current.visible = false;
         
         controller = renderer.xr.getController(0);
         controller.addEventListener('select', onSelect);
@@ -107,55 +117,48 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         renderer.xr.addEventListener('sessionend', () => isComponentMounted && onCancel());
         window.addEventListener('resize', onWindowResize);
         renderer.setAnimationLoop(render);
-        requestARSession();
     };
 
     const requestARSession = async () => {
       if (!navigator.xr) {
-        // --- START: SURGICAL MODIFICATION ---
-        // Set the specific error type before setting the failed status.
         setSessionError('GENERIC_FAILURE');
-        // --- END: SURGICAL MODIFICATION ---
         setStatus('SESSION_FAILED');
         return;
       }
       try {
         setStatus('REQUESTING_SESSION');
-        // --- START: SURGICAL MODIFICATION ---
-        // As per the plan, move 'dom-overlay' to optionalFeatures to make the session request more resilient.
         const session = await navigator.xr.requestSession('immersive-ar', { 
             requiredFeatures: ['hit-test'], 
             optionalFeatures: ['dom-overlay'],
             domOverlay: { root: containerRef.current?.querySelector('#ar-overlay')! }
         });
         
-        // After the session is granted, verify that our critical optional feature was actually enabled.
         if (!session.domOverlayState) {
-          // If the DOM overlay isn't supported, we cannot proceed. Throw a specific error.
           throw new Error('OVERLAY_UNSUPPORTED');
         }
-        // --- END: SURGICAL MODIFICATION ---
 
         await renderer.xr.setSession(session);
         setStatus('SEARCHING_SURFACE');
       } catch (error: any) {
         console.error("Failed to start AR session:", error);
-        // --- START: SURGICAL MODIFICATION ---
-        // Catch the specific error we threw and set the state accordingly for a better user message.
         if (error.message === 'OVERLAY_UNSUPPORTED') {
           setSessionError('OVERLAY_UNSUPPORTED');
         } else {
           setSessionError('GENERIC_FAILURE');
         }
-        // --- END: SURGICAL MODIFICATION ---
         setStatus('SESSION_FAILED');
       }
     };
 
+    // --- START: SURGICAL MODIFICATION ---
+    // Assign the session request function to our ref so the button can call it.
+    startSessionFunc.current = requestARSession;
+    // --- END: SURGICAL MODIFICATION ---
+
     const onSelect = () => {
       if (!reticle.visible) return;
 
-      const currentStatus = status; // Capture status at time of event
+      const currentStatus = status; 
       if (currentStatus === 'READY_TO_PLACE_START') {
         startPointRef.current = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
         if(startMarkerRef.current) startMarkerRef.current.position.copy(startPointRef.current);
@@ -193,7 +196,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           if (pose) {
             reticle.visible = true;
             reticle.matrix.fromArray(pose.transform.matrix);
-            // Use a function to safely update state only if it's SEARCHING_SURFACE
             setStatus(currentStatus => currentStatus === 'SEARCHING_SURFACE' ? 'READY_TO_PLACE_START' : currentStatus);
           }
         } else {
@@ -201,7 +203,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         }
       }
       
-      const currentStatus = status; // Capture status for this frame
+      const currentStatus = status; 
       if (startMarkerRef.current) startMarkerRef.current.visible = currentStatus === 'READY_TO_PLACE_END' || currentStatus === 'COMPLETE';
       if (endMarkerRef.current) endMarkerRef.current.visible = currentStatus === 'COMPLETE';
       if (measurementLineRef.current) measurementLineRef.current.visible = !!startMarkerRef.current?.visible;
@@ -242,22 +244,18 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [onCancel, handleReset]); // handleReset is stable due to useCallback
+  }, [onCancel]);
 
 
   const getInstructionContent = () => {
     switch (status) {
-      case 'INITIALIZING':
       case 'REQUESTING_SESSION':
         return <><Loader2 className="w-6 h-6 mb-2 animate-spin" /> <p className="font-semibold text-lg">Starting AR Camera...</p></>;
-      // --- START: SURGICAL MODIFICATION ---
-      // Provide intelligent, specific error messages based on the new sessionError state.
       case 'SESSION_FAILED':
         if (sessionError === 'OVERLAY_UNSUPPORTED') {
           return <><AlertTriangle className="w-8 h-8 mb-2 text-red-400" /> <p className="font-semibold text-lg">AR Error</p><p className="text-sm">Your device or browser does not support the required AR interface overlay.</p></>;
         }
         return <><AlertTriangle className="w-8 h-8 mb-2 text-red-400" /> <p className="font-semibold text-lg">Could not start AR session.</p><p className="text-sm">Please ensure your browser has camera permissions and try again.</p></>;
-      // --- END: SURGICAL MODIFICATION ---
       case 'SEARCHING_SURFACE':
         return <><ScanLine className="w-8 h-8 mb-2 animate-pulse text-cyan-300" /> <p className="font-semibold text-lg">Searching for a surface...</p><p className="text-sm">Slowly move your camera around.</p></>;
       case 'READY_TO_PLACE_START':
@@ -266,12 +264,20 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       case 'COMPLETE':
         const text = status === 'COMPLETE' ? 'Measurement Complete' : 'Tap to place second point at your location.';
         return <><p className="font-semibold text-lg">{text}</p><div className="text-5xl font-bold mt-2 tracking-tight">{distance !== null ? `${distance.toFixed(2)}m` : '...'}</div></>;
+      // --- START: SURGICAL MODIFICATION ---
+      // AWAITING_USER_START state does not show the top instruction bubble.
+      case 'AWAITING_USER_START':
+        return null;
+      // --- END: SURGICAL MODIFICATION ---
     }
   };
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 bg-black">
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
+        {/* --- START: SURGICAL REPLACEMENT --- */}
+        {/* This entire block is now conditional. It only shows UI *after* the user starts the session. */}
+        {status !== 'AWAITING_USER_START' ? (
           <div className="w-full h-full flex flex-col justify-between p-4 pointer-events-auto">
             <div className="text-center bg-black/60 text-white p-4 rounded-xl backdrop-blur-sm flex flex-col items-center">
               {getInstructionContent()}
@@ -299,6 +305,31 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               )}
             </div>
           </div>
+        ) : (
+          // This is the new "Start" screen, shown before the session begins.
+          <div className="w-full h-full flex flex-col items-center justify-center p-4 pointer-events-auto text-white text-center">
+              <div className="bg-black/60 p-6 rounded-xl backdrop-blur-sm max-w-sm">
+                <Camera className="w-12 h-12 mx-auto text-cyan-300" />
+                <h2 className="text-xl font-bold mt-4">AR Measurement</h2>
+                <p className="text-sm text-white/80 mt-2">
+                  You are about to enter an immersive experience. Please be aware of your surroundings.
+                </p>
+                <button
+                  onClick={handleStartAR}
+                  className="mt-6 w-full px-6 py-3 bg-cyan-600 text-white rounded-lg font-bold shadow-lg hover:bg-cyan-700 transition-colors"
+                >
+                  Start AR Session
+                </button>
+                 <button
+                    onClick={onCancel}
+                    className="mt-3 w-full px-4 py-2 text-sm text-white/70 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+              </div>
+          </div>
+        )}
+        {/* --- END: SURGICAL REPLACEMENT --- */}
       </div>
     </div>
   );
