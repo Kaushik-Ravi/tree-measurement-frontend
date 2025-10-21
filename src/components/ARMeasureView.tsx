@@ -1,10 +1,11 @@
 // src/components/ARMeasureView.tsx
-// --- START: SURGICAL REPLACEMENT ---
+// --- START: SURGICAL ADDITION ---
 import React from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Check, X, RotateCcw, Loader2, XCircle } from 'lucide-react';
+import { Check, X, Move3d } from 'lucide-react';
 
+// Props interface for communication with the parent component (App.tsx)
 interface ARMeasureViewProps {
   onDistanceMeasured: (distance: number) => void;
   onCancel: () => void;
@@ -14,182 +15,188 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [sessionActive, setSessionActive] = React.useState(false);
   const [distance, setDistance] = React.useState<number | null>(null);
   const [startPoint, setStartPoint] = React.useState<THREE.Vector3 | null>(null);
-  const [instruction, setInstruction] = React.useState("Initializing AR Session...");
-  const [error, setError] = React.useState<string | null>(null);
-
+  const [instruction, setInstruction] = React.useState("Point your camera at the ground to begin.");
   const containerRef = React.useRef<HTMLDivElement>(null);
-  
+  const isMountedRef = React.useRef(false);
+
   React.useEffect(() => {
-    let isComponentMounted = true;
-    let renderer: THREE.WebGLRenderer;
-    let arButton: HTMLElement;
+    // Prevent running the effect twice in strict mode
+    if (isMountedRef.current) return;
+    isMountedRef.current = true;
 
-    const init = () => {
-        if (!containerRef.current) return;
-
-        // --- Upfront Support Check ---
-        if (!navigator.xr) {
-            setError("AR is not supported on this browser. Please use a compatible browser like Chrome on Android.");
-            return;
-        }
-
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        
+    // --- Core Three.js & WebXR Setup ---
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    
+    if (containerRef.current) {
         containerRef.current.appendChild(renderer.domElement);
-        
-        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-        light.position.set(0.5, 1, 0.25);
-        scene.add(light);
-        
-        const reticle = new THREE.Mesh(
-          new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
-          new THREE.MeshBasicMaterial({ color: 0xffffff })
-        );
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
+    }
+    
+    // Simple lighting
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    light.position.set(0.5, 1, 0.25);
+    scene.add(light);
+    
+    // Reticle (the circle on the ground)
+    const reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
 
-        const measurementLine = new THREE.Line(
-            new THREE.BufferGeometry(),
-            new THREE.LineBasicMaterial({ color: 0x22c55e, linewidth: 3 })
-        );
-        measurementLine.visible = false;
-        scene.add(measurementLine);
+    // Measurement line
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+    const measurementLine = new THREE.Line(lineGeometry, lineMaterial);
+    measurementLine.visible = false;
+    scene.add(measurementLine);
 
-        const startMarker = new THREE.Mesh(
-            new THREE.SphereGeometry(0.02, 16, 16),
-            new THREE.MeshBasicMaterial({ color: 0x22c55e })
-        );
-        startMarker.visible = false;
-        scene.add(startMarker);
+    // Markers for start/end points
+    const markerGeometry = new THREE.SphereGeometry(0.02, 16, 16);
+    const markerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const startMarker = new THREE.Mesh(markerGeometry, markerMaterial);
+    startMarker.visible = false;
+    scene.add(startMarker);
 
-        let localStartPoint: THREE.Vector3 | null = null;
-        
-        const onSelect = () => {
-          if (reticle.visible) {
-            const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-            localStartPoint = point; // Use local variable for render loop
-            startMarker.position.copy(point);
-            startMarker.visible = true;
-            measurementLine.visible = true;
-            if (isComponentMounted) setStartPoint(point); // Update React state
-          }
-        };
+    let hitTestSource: XRHitTestSource | null = null;
+    let hitTestSourceRequested = false;
 
-        const controller = renderer.xr.getController(0);
-        controller.addEventListener('select', onSelect);
-        scene.add(controller);
+    // Function to handle screen tap
+    const onSelect = () => {
+      if (reticle.visible) {
+        const point = new THREE.Vector3();
+        point.setFromMatrixPosition(reticle.matrix);
+        setStartPoint(point);
+        startMarker.position.copy(point);
+        startMarker.visible = true;
+        measurementLine.visible = true;
+        setInstruction("Point at your current position to see the distance.");
+      }
+    };
 
-        arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
-        arButton.textContent = 'Start AR';
-        
+    // --- AR Session Logic ---
+    const controller = renderer.xr.getController(0);
+    controller.addEventListener('select', onSelect);
+    scene.add(controller);
+
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: containerRef.current?.querySelector('#ar-overlay')! }
+    });
+
+    arButton.addEventListener('click', () => {
+        setInstruction("Point your camera at the ground to find a surface.");
+    });
+    
+    renderer.xr.addEventListener('sessionstart', () => setSessionActive(true));
+    renderer.xr.addEventListener('sessionend', () => {
+        setSessionActive(false);
+        onCancel(); // Automatically cancel if user exits AR session
+    });
+
+    if (containerRef.current) {
+        containerRef.current.appendChild(arButton);
         arButton.style.position = 'absolute';
-        arButton.style.bottom = '50%';
+        arButton.style.bottom = '20px';
         arButton.style.left = '50%';
-        arButton.style.transform = 'translate(-50%, 50%)';
+        arButton.style.transform = 'translateX(-50%)';
         arButton.style.padding = '12px 24px';
-        arButton.style.backgroundColor = 'rgb(var(--brand-secondary))';
+        arButton.style.backgroundColor = 'rgb(var(--brand-primary))';
         arButton.style.color = 'white';
         arButton.style.border = 'none';
         arButton.style.borderRadius = '8px';
         arButton.style.fontWeight = 'bold';
-        
-        containerRef.current.appendChild(arButton);
-        
-        renderer.xr.addEventListener('sessionstart', () => {
-            if(isComponentMounted) {
-                setSessionActive(true);
-                arButton.style.display = 'none';
-            }
-        });
-        
-        renderer.xr.addEventListener('sessionend', () => {
-            if(isComponentMounted) {
-                setSessionActive(false);
-                arButton.style.display = 'block';
-                onCancel();
-            }
-        });
+        arButton.textContent = "Start AR Measurement";
+    }
 
-        let hitTestSource: XRHitTestSource | null = null;
+    // --- Render Loop ---
+    function render(timestamp: any, frame: XRFrame) {
+      if (frame) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        const session = renderer.xr.getSession();
 
-        function render(_: any, frame: XRFrame) {
-          if (frame) {
-            const referenceSpace = renderer.xr.getReferenceSpace();
-            const session = renderer.xr.getSession();
-
-            if (hitTestSource === null) {
-              session?.requestReferenceSpace('viewer').then((viewerSpace) => {
-                session.requestHitTestSource?.({ space: viewerSpace })?.then((source) => {
-                  hitTestSource = source;
-                });
-              });
-            }
-
-            if (hitTestSource) {
-              const hitTestResults = frame.getHitTestResults(hitTestSource);
-              if (hitTestResults.length > 0) {
-                const hit = hitTestResults[0];
-                const pose = hit.getPose(referenceSpace!);
-                reticle.visible = true;
-                reticle.matrix.fromArray(pose!.transform.matrix);
-              } else {
-                reticle.visible = false;
-              }
-            }
-            
-            // --- Consolidated Logic within Render Loop ---
-            if(localStartPoint) {
-                const xrCamera = renderer.xr.getCamera();
-                const cameraPosition = new THREE.Vector3();
-                xrCamera.getWorldPosition(cameraPosition);
-
-                const currentDistance = localStartPoint.distanceTo(cameraPosition);
-                if(isComponentMounted) setDistance(currentDistance);
-
-                const linePositions = (measurementLine.geometry.attributes.position as THREE.BufferAttribute);
-                linePositions.setXYZ(0, localStartPoint.x, localStartPoint.y, localStartPoint.z);
-                linePositions.setXYZ(1, cameraPosition.x, cameraPosition.y, cameraPosition.z);
-                linePositions.needsUpdate = true;
-            }
-
-            if(isComponentMounted) {
-                if(!sessionActive) {
-                    setInstruction("Click 'Start AR' to begin.");
-                } else if (!localStartPoint) {
-                    setInstruction(reticle.visible ? "Tap to place a marker at the tree's base." : "Point camera at the ground to find a surface.");
-                } else {
-                    setInstruction("Distance from marker is shown below.");
-                }
-            }
-          }
-          renderer.render(scene, camera);
+        if (hitTestSourceRequested === false) {
+          session?.requestReferenceSpace('viewer').then((viewerSpace) => {
+            session.requestHitTestSource?.({ space: viewerSpace })?.then((source) => {
+              hitTestSource = source;
+            });
+          });
+          session?.addEventListener('end', () => {
+            hitTestSourceRequested = false;
+            hitTestSource = null;
+          });
+          hitTestSourceRequested = true;
         }
-        
-        renderer.setAnimationLoop(render);
 
-        return () => {
-            isComponentMounted = false;
-            renderer.setAnimationLoop(null);
-            renderer.xr.getSession()?.end();
-            if (containerRef.current) {
-                // Clean up all children to prevent memory leaks
-                while (containerRef.current.firstChild) {
-                    containerRef.current.removeChild(containerRef.current.firstChild);
-                }
-            }
-            renderer.dispose();
-        };
+        if (hitTestSource) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace!);
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose!.transform.matrix);
+          } else {
+            reticle.visible = false;
+          }
+        }
+
+        // Calculate and display distance if a start point is set
+        if (startPoint) {
+          const cameraPosition = new THREE.Vector3();
+          camera.getWorldPosition(cameraPosition);
+          
+          // Project points onto the horizontal plane (y=0) for ground distance
+          const startPointGround = startPoint.clone();
+          startPointGround.y = 0;
+          const cameraPositionGround = cameraPosition.clone();
+          cameraPositionGround.y = 0;
+
+          const currentDistance = startPointGround.distanceTo(cameraPositionGround);
+          setDistance(currentDistance);
+
+          // Update line visual
+          const linePositions = measurementLine.geometry.attributes.position;
+          linePositions.setXYZ(0, startPoint.x, startPoint.y, startPoint.z);
+          linePositions.setXYZ(1, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+          linePositions.needsUpdate = true;
+        }
+      }
+      renderer.render(scene, camera);
+    }
+    
+    renderer.setAnimationLoop(render);
+
+    // Handle window resize
+    const onWindowResize = () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener('resize', onWindowResize);
+
+    // --- Cleanup function ---
+    return () => {
+      renderer.setAnimationLoop(null);
+      renderer.xr.getSession()?.end();
+      if (containerRef.current && arButton.parentElement) {
+        containerRef.current.removeChild(arButton);
+      }
+       if (containerRef.current && renderer.domElement.parentElement) {
+        containerRef.current.removeChild(renderer.domElement);
+      }
+      window.removeEventListener('resize', onWindowResize);
+      controller.removeEventListener('select', onSelect);
+      renderer.dispose();
+      isMountedRef.current = false;
     };
-
-    const cleanup = init();
-    return cleanup;
   }, [onCancel]);
 
 
@@ -198,62 +205,54 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       onDistanceMeasured(distance);
     }
   };
-  
-  const handleReset = () => {
-      // Logic inside the render loop will handle visuals based on startPoint state
-      setStartPoint(null);
-      setDistance(null);
-  }
-  
-  if (error) {
-    return (
-        <div className="fixed inset-0 z-50 bg-background-default flex flex-col items-center justify-center text-center p-4">
-            <XCircle className="w-12 h-12 text-status-error mb-4" />
-            <h2 className="text-xl font-bold text-content-default">AR Not Supported</h2>
-            <p className="max-w-md mt-2 text-content-subtle">{error}</p>
-            <button onClick={onCancel} className="mt-8 px-6 py-3 bg-brand-primary text-content-on-brand font-semibold rounded-lg hover:bg-brand-primary-hover">
-              Return to Manual Entry
-            </button>
-        </div>
-    );
-  }
-
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50 bg-black">
+      {/* This overlay is used by WebXR DOM Overlay feature */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
-        {sessionActive ? (
+        {sessionActive && (
           <div className="w-full h-full flex flex-col justify-between p-4 pointer-events-auto">
-            <div className="text-center bg-black/60 text-white p-4 rounded-xl backdrop-blur-sm flex flex-col items-center">
-                <p className="font-semibold text-lg">{instruction}</p>
+            {/* Top instruction text */}
+            <div className="text-center bg-black/50 text-white p-3 rounded-lg backdrop-blur-sm">
+                <p className="font-semibold">{instruction}</p>
                 {startPoint && (
-                    <div className="text-5xl font-bold mt-2 tracking-tight">
+                    <div className="text-4xl font-bold mt-2">
                         {distance !== null ? `${distance.toFixed(2)}m` : '...'}
                     </div>
                 )}
             </div>
-            
+
+            {/* Bottom action buttons */}
             <div className="flex justify-center items-center gap-4">
-                <button onClick={onCancel} className="flex items-center gap-2 px-6 py-3 bg-red-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm">
-                  <X className="w-6 h-6"/> Cancel
-                </button>
-                {startPoint && (
-                  <button onClick={handleReset} className="flex items-center gap-2 px-6 py-3 bg-gray-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm">
-                    <RotateCcw className="w-6 h-6"/> Reset
+               {!startPoint ? (
+                  <div className="flex items-center gap-2 text-white bg-black/50 p-3 rounded-lg backdrop-blur-sm">
+                    <Move3d className="w-6 h-6"/>
+                    <span className="font-medium">Tap to place start point at tree base</span>
+                  </div>
+               ) : (
+                <>
+                  <button
+                    onClick={onCancel}
+                    className="flex items-center gap-2 px-6 py-4 bg-red-600 text-white rounded-full font-bold shadow-lg"
+                  >
+                    <X className="w-6 h-6"/>
+                    Cancel
                   </button>
-                )}
-                <button onClick={handleConfirm} disabled={!startPoint || distance === null} className="flex items-center gap-2 px-6 py-3 bg-green-600/90 text-white rounded-full font-bold shadow-lg backdrop-blur-sm disabled:bg-gray-500/80">
-                  <Check className="w-6 h-6"/> Confirm
-                </button>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={distance === null}
+                    className="flex items-center gap-2 px-6 py-4 bg-green-600 text-white rounded-full font-bold shadow-lg disabled:bg-gray-500"
+                  >
+                    <Check className="w-6 h-6"/>
+                    Confirm
+                  </button>
+                </>
+               )}
             </div>
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {!error && <Loader2 className="w-10 h-10 text-white animate-spin" />}
           </div>
         )}
       </div>
     </div>
   );
 }
-// --- END: SURGICAL REPLACEMENT ---
+// --- END: SURGICAL ADDITION ---
