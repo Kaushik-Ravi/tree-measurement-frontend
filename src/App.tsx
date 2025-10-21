@@ -165,7 +165,6 @@ function App() {
   
   // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
-  const [isArSupported, setIsArSupported] = useState(false);
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
 
   useEffect(() => {
@@ -220,22 +219,6 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    // Check for WebXR support on component mount
-    const checkArSupport = async () => {
-      if (navigator.xr) {
-        try {
-          const supported = await navigator.xr.isSessionSupported('immersive-ar');
-          setIsArSupported(supported);
-        } catch (e) {
-          console.error("Error checking AR support:", e);
-          setIsArSupported(false);
-        }
-      }
-    };
-    checkArSupport();
-  }, []);
 
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
@@ -884,20 +867,18 @@ function App() {
 
   const renderSessionView = () => (
     <>
-      {/* --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR VIEW INTEGRATION) --- */}
       {isArModeActive && (
         <ARMeasureView
           onDistanceMeasured={(measuredDistance) => {
             setDistance(measuredDistance.toFixed(2));
             setIsArModeActive(false);
-            handleDistanceEntered(); // Reuse existing function to advance state
+            handleDistanceEntered();
           }}
           onCancel={() => {
             setIsArModeActive(false);
           }}
         />
       )}
-      {/* --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR VIEW INTEGRATION) --- */}
 
       {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
         <PermissionsCheckModal 
@@ -953,15 +934,16 @@ function App() {
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
+                {/* --- START: SURGICAL MODIFICATION --- */}
+                {/* The AR support check is removed from here. The ARButton inside ARMeasureView will handle it. */}
                 <button 
                   onClick={() => setIsArModeActive(true)} 
-                  disabled={!isArSupported}
-                  title={isArSupported ? "Use your camera to measure distance" : "AR not supported on this device/browser"}
-                  className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
+                  className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
                 >
                   <Camera className="w-5 h-5" />
                   Measure with Camera (AR)
                 </button>
+                {/* --- END: SURGICAL MODIFICATION --- */}
 
                 <div className="relative my-4 flex items-center">
                     <div className="flex-grow border-t border-stroke-default"></div>
