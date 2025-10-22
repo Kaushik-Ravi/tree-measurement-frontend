@@ -395,6 +395,14 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.setAnimationLoop(render);
 
     const onWindowResize = () => {
+        // --- START: SURGICAL FIX (WebXR Best Practice) ---
+        // CRITICAL: Never resize renderer during active XR session
+        // The XR system controls viewport during presentation
+        if (renderer.xr.isPresenting) {
+          return; // Skip resize, prevent Chrome errors and flickering
+        }
+        // --- END: SURGICAL FIX ---
+        
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
