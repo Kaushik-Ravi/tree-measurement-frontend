@@ -33,6 +33,10 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
   
+  // Diagnostic state
+  const [diagnosticLog, setDiagnosticLog] = useState<string[]>([]);
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
+  
   // Refs for Three.js objects to persist them across renders
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef(new THREE.Scene());
@@ -121,6 +125,207 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const handleCancelSafe = useCallback(() => {
     handleUIButtonClick(onCancel);
   }, [onCancel, handleUIButtonClick]);
+
+  // --- DIAGNOSTIC: Comprehensive AR Session Initialization ---
+  const diagnosticARStart = useCallback(async () => {
+    const logs: string[] = [];
+    const timestamp = new Date().toISOString();
+    
+    logs.push(`=== AR DIAGNOSTIC START: ${timestamp} ===`);
+    logs.push('');
+    
+    // 1. Browser & Device Information
+    logs.push('--- DEVICE INFO ---');
+    logs.push(`User Agent: ${navigator.userAgent}`);
+    logs.push(`Platform: ${navigator.platform}`);
+    logs.push(`Language: ${navigator.language}`);
+    logs.push(`Online: ${navigator.onLine}`);
+    logs.push(`Screen: ${window.screen.width}x${window.screen.height}`);
+    logs.push(`Viewport: ${window.innerWidth}x${window.innerHeight}`);
+    logs.push(`Protocol: ${location.protocol}`);
+    logs.push(`Host: ${location.host}`);
+    logs.push('');
+    
+    // 2. WebXR Availability Check
+    logs.push('--- WEBXR CAPABILITY ---');
+    if (!('xr' in navigator)) {
+      logs.push('❌ FATAL: navigator.xr not found');
+      logs.push('Browser does not support WebXR');
+      logs.push('Supported browsers: Chrome 79+, Edge 79+, Brave');
+      console.error(logs.join('\n'));
+      setDiagnosticLog(logs);
+      setShowDiagnostic(true);
+      
+      alert('❌ WebXR Not Supported\n\nYour browser doesn\'t support AR.\n\nPlease use:\n• Chrome (latest)\n• Brave\n• Samsung Internet (latest)');
+      return false;
+    }
+    logs.push('✅ navigator.xr exists');
+    logs.push('');
+    
+    // 3. Immersive AR Support Check
+    logs.push('--- AR SESSION SUPPORT ---');
+    let isARSupported = false;
+    try {
+      isARSupported = await navigator.xr!.isSessionSupported('immersive-ar');
+      logs.push(`✅ isSessionSupported check completed`);
+      logs.push(`Result: ${isARSupported}`);
+    } catch (error: any) {
+      logs.push(`❌ isSessionSupported check failed`);
+      logs.push(`Error: ${error.name} - ${error.message}`);
+    }
+    logs.push('');
+    
+    if (!isARSupported) {
+      logs.push('❌ FATAL: immersive-ar not supported on this device');
+      logs.push('');
+      logs.push('Requirements:');
+      logs.push('• Android 7.0 or higher');
+      logs.push('• ARCore installed (google.com/ar/discover)');
+      logs.push('• Compatible device (check: developers.google.com/ar/devices)');
+      console.error(logs.join('\n'));
+      setDiagnosticLog(logs);
+      setShowDiagnostic(true);
+      
+      alert('❌ AR Not Available\n\nYour device doesn\'t support AR.\n\nCheck:\n1. ARCore app installed?\n2. Device compatible?\n3. Permissions granted?\n\nVisit: google.com/ar/discover');
+      return false;
+    }
+    logs.push('✅ Device supports immersive-ar');
+    logs.push('');
+    
+    // 4. Security & Permissions Check
+    logs.push('--- SECURITY CHECK ---');
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      logs.push('⚠️ WARNING: Not using HTTPS');
+      logs.push('WebXR requires secure context (HTTPS or localhost)');
+      logs.push(`Current protocol: ${location.protocol}`);
+    } else {
+      logs.push(`✅ Secure context: ${location.protocol}`);
+    }
+    logs.push('');
+    
+    // 5. Renderer Check
+    logs.push('--- RENDERER STATUS ---');
+    if (!rendererRef.current) {
+      logs.push('❌ FATAL: Three.js renderer not initialized');
+      console.error(logs.join('\n'));
+      setDiagnosticLog(logs);
+      setShowDiagnostic(true);
+      
+      alert('❌ Renderer Error\n\nAR system not initialized.\n\nPlease refresh the page.');
+      return false;
+    }
+    logs.push('✅ Renderer exists');
+    logs.push(`XR Enabled: ${rendererRef.current.xr.enabled}`);
+    logs.push('');
+    
+    // 6. DOM Overlay Check
+    logs.push('--- DOM OVERLAY ---');
+    const overlayElement = document.getElementById('ar-overlay');
+    if (overlayElement) {
+      logs.push('✅ #ar-overlay element exists');
+      logs.push(`Dimensions: ${overlayElement.offsetWidth}x${overlayElement.offsetHeight}`);
+    } else {
+      logs.push('⚠️ WARNING: #ar-overlay not found (will proceed without dom-overlay)');
+    }
+    logs.push('');
+    
+    // 7. Session Request
+    logs.push('--- SESSION REQUEST ---');
+    logs.push('🚀 Requesting XR session...');
+    
+    const sessionConfig: any = {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay']
+    };
+    
+    if (overlayElement) {
+      sessionConfig.domOverlay = { root: overlayElement };
+      logs.push('With dom-overlay support');
+    }
+    
+    console.log(logs.join('\n'));
+    
+    try {
+      const session = await navigator.xr!.requestSession('immersive-ar', sessionConfig);
+      
+      logs.push('');
+      logs.push('✅ ✅ ✅ SESSION CREATED SUCCESSFULLY! ✅ ✅ ✅');
+      logs.push(`Session visibilityState: ${session.visibilityState}`);
+      logs.push(`Input Sources: ${session.inputSources.length}`);
+      logs.push('');
+      console.log(logs.join('\n'));
+      
+      // Attach session to renderer
+      await rendererRef.current.xr.setSession(session);
+      logs.push('✅ Session attached to renderer');
+      
+      setDiagnosticLog(logs);
+      setUiState('AR_ACTIVE');
+      
+      return true;
+      
+    } catch (error: any) {
+      logs.push('');
+      logs.push('❌❌❌ SESSION REQUEST FAILED ❌❌❌');
+      logs.push(`Error Name: ${error.name}`);
+      logs.push(`Error Message: ${error.message}`);
+      if (error.stack) {
+        logs.push(`Stack Trace: ${error.stack.substring(0, 500)}`);
+      }
+      logs.push('');
+      
+      console.error(logs.join('\n'));
+      setDiagnosticLog(logs);
+      setShowDiagnostic(true);
+      
+      // User-friendly error messages
+      if (error.name === 'NotAllowedError') {
+        logs.push('CAUSE: Camera permission denied or user cancelled');
+        alert('❌ Permission Denied\n\nCamera access is required for AR.\n\nPlease:\n1. Allow camera access\n2. Try again\n\nIf issue persists:\n• Check browser settings\n• Grant camera permission');
+        
+      } else if (error.name === 'NotSupportedError') {
+        logs.push('CAUSE: Feature not supported by browser/device');
+        alert('❌ Not Supported\n\nAR features not available.\n\nCheck:\n1. ARCore installed?\n2. Chrome updated?\n3. Device compatible?\n\nVisit: google.com/ar/discover');
+        
+      } else if (error.name === 'SecurityError') {
+        logs.push('CAUSE: Security restrictions (HTTPS, permissions, etc.)');
+        alert('❌ Security Error\n\nCannot start AR session.\n\nEnsure:\n1. Using HTTPS connection\n2. Valid SSL certificate\n3. Camera permissions granted');
+        
+      } else if (error.name === 'InvalidStateError') {
+        logs.push('CAUSE: Another AR session active or renderer conflict');
+        alert('❌ Session Conflict\n\nAnother AR session may be active.\n\nTry:\n1. Close other AR tabs\n2. Restart browser\n3. Refresh this page');
+        
+      } else if (error.name === 'OperationError') {
+        logs.push('CAUSE: Operation failed (device busy, hardware issue)');
+        alert('❌ Operation Failed\n\nCouldn\'t initialize AR.\n\nTry:\n1. Close camera app if open\n2. Restart browser\n3. Restart device');
+        
+      } else {
+        logs.push(`CAUSE: Unknown error - ${error.name}`);
+        alert(`❌ AR Error\n\n${error.name}\n\n${error.message}\n\nCheck browser console for details.`);
+      }
+      
+      console.error('Full diagnostic log:', logs.join('\n'));
+      setUiState('ENTRY'); // Return to entry screen
+      
+      return false;
+    }
+  }, []);
+
+  // Handler to trigger AR with diagnostic logging
+  const handleStartAR = useCallback(() => {
+    // Set transitioning state first to unmount entry screen cleanly
+    setUiState('TRANSITIONING');
+    
+    // Clear any existing transition timer
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+    }
+    
+    // 50ms buffer: Allows React to fully unmount entry screen before AR session starts
+    transitionTimerRef.current = setTimeout(() => {
+      diagnosticARStart(); // Use diagnostic function instead of button click
+    }, 50);
+  }, [diagnosticARStart]);
 
   // --- Main useEffect for AR Setup and Lifecycle ---
   useEffect(() => {
@@ -531,25 +736,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       }
       // --- END: SURGICAL ENHANCEMENT ---
     };
-  }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
-
-  // Handler to trigger the hidden AR button with transition buffer
-  const handleStartAR = useCallback(() => {
-    // --- CRITICAL FIX: Transition buffer to prevent Chrome compositor conflicts ---
-    // Set transitioning state first to unmount entry screen cleanly
-    setUiState('TRANSITIONING');
-    
-    // Clear any existing transition timer
-    if (transitionTimerRef.current) {
-      clearTimeout(transitionTimerRef.current);
-    }
-    
-    // 50ms buffer: Allows React to fully unmount entry screen before AR session starts
-    // This eliminates z-index warfare and prevents the white flicker in Chrome
-    transitionTimerRef.current = setTimeout(() => {
-      arButtonRef.current?.click();
-    }, 50);
-  }, []);
+  }, [diagnosticARStart]); // CRITICAL FIX: Added diagnosticARStart dependency
 
   return (
     <div 
@@ -562,6 +749,45 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     >
       {/* AR Overlay - MUST exist before ARButton creation to prevent race condition */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none" />
+      
+      {/* Diagnostic Log Viewer - Shown when errors occur */}
+      {showDiagnostic && diagnosticLog.length > 0 && (
+        <div className="absolute inset-0 z-[60] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
+          <div className="max-w-2xl w-full bg-background-default rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-status-error px-6 py-4 flex items-center justify-between">
+              <h3 className="text-white font-bold text-lg">AR Diagnostic Report</h3>
+              <button
+                onClick={() => setShowDiagnostic(false)}
+                className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+            <div className="p-6 max-h-[70vh] overflow-y-auto">
+              <pre className="text-xs font-mono text-content-default whitespace-pre-wrap break-words bg-background-subtle p-4 rounded-lg border border-stroke-default">
+                {diagnosticLog.join('\n')}
+              </pre>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(diagnosticLog.join('\n'));
+                    alert('Diagnostic log copied to clipboard!');
+                  }}
+                  className="flex-1 px-4 py-3 bg-brand-accent hover:bg-brand-accent-hover text-content-on-brand font-semibold rounded-xl transition-colors"
+                >
+                  Copy to Clipboard
+                </button>
+                <button
+                  onClick={() => setShowDiagnostic(false)}
+                  className="flex-1 px-4 py-3 bg-background-subtle hover:bg-background-inset text-content-default font-semibold rounded-xl border border-stroke-default transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* AR Entry Screen - Only shown in ENTRY state */}
       {uiState === 'ENTRY' && (
