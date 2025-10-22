@@ -935,7 +935,7 @@ function App() {
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
                 {/* --- START: SURGICAL MODIFICATION --- */}
-                {/* The AR support check is removed from here. The ARButton inside ARMeasureView will handle it. */}
+                {/* The AR support check is removed. The button now cleanly activates the AR mode. */}
                 <button 
                   onClick={() => setIsArModeActive(true)} 
                   className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
