@@ -24,11 +24,9 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
   const [arSessionActive, setArSessionActive] = useState(false);
+  const arButtonRef = useRef<HTMLElement | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const arButtonContainerRef = useRef<HTMLDivElement | null>(null);
-  const arButtonElementRef = useRef<HTMLElement | null>(null);
-  const sessionStartedRef = useRef(false);
   const isMountedRef = useRef(false);
   
   // Refs for Three.js objects to persist them across renders
@@ -117,10 +115,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
   // Wrapped version of onCancel for UI button (prevents marker placement)
   const handleCancelSafe = useCallback(() => {
-    handleUIButtonClick(() => {
-      sessionStartedRef.current = false;
-      onCancel();
-    });
+    handleUIButtonClick(onCancel);
   }, [onCancel, handleUIButtonClick]);
 
   // --- Main useEffect for AR Setup and Lifecycle ---
@@ -300,58 +295,39 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     scene.add(controller);
     // --- END: SURGICAL CORRECTION ---
 
-  // --- 4. The Chimera AR Button Strategy ---
-  // We hide the Three.js ARButton behind our custom UI but keep it functional
-  const arButton = ARButton.createButton(renderer, {
-    requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay'],
-    domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
-  });
-
-  // Style the button to be invisible but still capture the direct tap
-  Object.assign(arButton.style, {
-    position: 'absolute',
-    top: '0',
-    left: '0',
-    width: '100%',
-    height: '100%',
-    opacity: '0',
-    border: 'none',
-    background: 'transparent',
-    padding: '0',
-    margin: '0',
-    pointerEvents: 'auto',
-    touchAction: 'manipulation',
-    cursor: 'pointer',
-    zIndex: '30'
-  });
-
-  arButtonElementRef.current = arButton;
-  arButton.innerHTML = '';
-  arButton.setAttribute('aria-label', 'Start AR Measurement');
-
-  const arButtonMountTarget = arButtonContainerRef.current ?? currentContainer;
-  arButtonMountTarget.appendChild(arButton);
-
-  // Track AR session state
-  const handleSessionStart = () => {
-    sessionStartedRef.current = true;
-    setArSessionActive(true);
-    console.debug('[AR] WebXR session started');
-  };
-
-  const handleSessionEnd = () => {
-    const hadActiveSession = sessionStartedRef.current;
-    sessionStartedRef.current = false;
-    setArSessionActive(false);
-    console.debug('[AR] WebXR session ended');
-    if (hadActiveSession) {
-      onCancel();
-    }
-  };
-
-  renderer.xr.addEventListener('sessionstart', handleSessionStart);
-  renderer.xr.addEventListener('sessionend', handleSessionEnd);
+    // --- 4. The Chimera AR Button Strategy ---
+    // We hide the Three.js ARButton behind our custom UI but keep it functional
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
+    });
+    
+    // Style the button to be invisible but still functional
+    Object.assign(arButton.style, {
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        opacity: '0',
+        pointerEvents: 'auto',
+        width: '200px',
+        height: '60px',
+        zIndex: '100'
+    });
+    
+    arButtonRef.current = arButton;
+    currentContainer.appendChild(arButton);
+    
+    // Track AR session state
+    renderer.xr.addEventListener('sessionstart', () => {
+        setArSessionActive(true);
+    });
+    
+    renderer.xr.addEventListener('sessionend', () => {
+        setArSessionActive(false);
+        onCancel();
+    });
 
     // --- 5. Render Loop ---
     let surfaceFound = false;
@@ -439,8 +415,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       
       // Remove event listeners
       controller.removeEventListener('select', onSelect);
-  renderer.xr.removeEventListener('sessionstart', handleSessionStart);
-  renderer.xr.removeEventListener('sessionend', handleSessionEnd);
       window.removeEventListener('resize', onWindowResize);
 
       // Clear cooldown timer
@@ -520,8 +494,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       lineRef.current = null;
       pointsRef.current = [];
       onSelectRef.current = null;
-  arButtonElementRef.current = null;
-      sessionStartedRef.current = false;
       
       // Remove DOM elements
       if (currentContainer) {
@@ -533,11 +505,10 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     };
   }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
 
-  useEffect(() => {
-    if (!arSessionActive && arButtonElementRef.current && arButtonContainerRef.current) {
-      arButtonContainerRef.current.appendChild(arButtonElementRef.current);
-    }
-  }, [arSessionActive]);
+  // Handler to trigger the hidden AR button
+  const handleStartAR = useCallback(() => {
+    arButtonRef.current?.click();
+  }, []);
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50">
@@ -597,13 +568,15 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               </ol>
             </div>
 
-            {/* Start Button - Native WebXR button receives the tap */}
-            <div className="relative group">
-              <div className="pointer-events-none w-full bg-gradient-to-r from-brand-primary to-brand-secondary text-content-on-brand font-bold py-5 px-8 rounded-2xl shadow-lg transform transition-all duration-200 flex items-center justify-center gap-3 group-hover:from-brand-primary-hover group-hover:to-brand-secondary-hover group-hover:shadow-xl group-hover:scale-[1.02] group-active:scale-[0.98]" aria-hidden="true">
+            {/* Start Button - Positioned over the hidden AR button */}
+            <div className="relative">
+              <button
+                onClick={handleStartAR}
+                className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary hover:from-brand-primary-hover hover:to-brand-secondary-hover text-content-on-brand font-bold py-5 px-8 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
+              >
                 <Move className="w-6 h-6 group-hover:animate-pulse" />
                 <span className="text-lg">Start AR Measurement</span>
-              </div>
-              <div ref={arButtonContainerRef} className="absolute inset-0 rounded-2xl overflow-hidden" />
+              </button>
             </div>
 
             {/* Help Text */}
