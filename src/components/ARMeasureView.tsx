@@ -39,6 +39,27 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const pointsRef = useRef<THREE.Vector3[]>([]);
   const clockRef = useRef(new THREE.Clock());
   const onSelectRef = useRef<(() => void) | null>(null);
+  const allowMarkerPlacement = useRef(true); // Control flag for marker placement
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Wrapper function to prevent marker placement during UI button interactions
+  const handleUIButtonClick = useCallback((callback: () => void) => {
+    // Disable marker placement
+    allowMarkerPlacement.current = false;
+    
+    // Clear any existing cooldown timer
+    if (cooldownTimerRef.current) {
+      clearTimeout(cooldownTimerRef.current);
+    }
+    
+    // Execute the button's actual function
+    callback();
+    
+    // Re-enable marker placement after cooldown
+    cooldownTimerRef.current = setTimeout(() => {
+      allowMarkerPlacement.current = true;
+    }, 300); // 300ms cooldown to prevent accidental placement
+  }, []);
 
   // --- Core Action Handlers ---
   const handleConfirm = useCallback(() => {
@@ -46,6 +67,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       onDistanceMeasured(distanceRef.current);
     }
   }, [onDistanceMeasured]);
+
+  // Wrapped version for UI button (prevents marker placement)
+  const handleConfirmSafe = useCallback(() => {
+    handleUIButtonClick(handleConfirm);
+  }, [handleConfirm, handleUIButtonClick]);
 
   const handleRedo = useCallback(() => {
     pointsRef.current = [];
@@ -65,6 +91,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     if (lineRef.current) lineRef.current.visible = false;
   }, []);
   
+  // Wrapped version for UI button (prevents marker placement)
+  const handleRedoSafe = useCallback(() => {
+    handleUIButtonClick(handleRedo);
+  }, [handleRedo, handleUIButtonClick]);
+  
   const handleUndo = useCallback(() => {
     if (arStateRef.current === 'READY_TO_PLACE_SECOND' && pointsRef.current.length === 1) {
         pointsRef.current.pop();
@@ -76,6 +107,16 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         setInstruction("Point camera at tree's base, then tap +");
     }
   }, []);
+  
+  // Wrapped version for UI button (prevents marker placement)
+  const handleUndoSafe = useCallback(() => {
+    handleUIButtonClick(handleUndo);
+  }, [handleUndo, handleUIButtonClick]);
+
+  // Wrapped version of onCancel for UI button (prevents marker placement)
+  const handleCancelSafe = useCallback(() => {
+    handleUIButtonClick(onCancel);
+  }, [onCancel, handleUIButtonClick]);
 
   // --- Main useEffect for AR Setup and Lifecycle ---
   useEffect(() => {
@@ -198,6 +239,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
     // This is the core logic function for placing a point
     const onSelect = () => {
+        // CRITICAL: Check if marker placement is allowed (prevents UI button interference)
+        if (!allowMarkerPlacement.current) {
+            console.log('[AR] Marker placement blocked - UI button interaction in progress');
+            return;
+        }
+        
         if (!reticle.visible) return;
 
         const currentState = arStateRef.current;
@@ -361,6 +408,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       renderer.xr.getSession()?.end();
       controller.removeEventListener('select', onSelect);
 
+      // Clear cooldown timer
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current);
+      }
+
       // Dispose of Three.js objects to prevent memory leaks
       scene.traverse(object => {
           if (object instanceof THREE.Mesh) {
@@ -398,7 +450,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
           {/* Exit Button */}
           <button
-            onClick={onCancel}
+            onClick={handleCancelSafe}
             className="absolute top-4 right-4 p-3 rounded-full bg-background-subtle hover:bg-background-inset border border-stroke-default transition-all duration-200 group"
             aria-label="Cancel AR Measurement"
           >
@@ -495,7 +547,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
             {/* Exit Button - INTERACTIVE */}
             <button
-              onClick={onCancel}
+              onClick={handleCancelSafe}
               className="flex-shrink-0 p-3 bg-status-error/90 hover:bg-status-error text-white rounded-full backdrop-blur-md shadow-lg transition-all duration-200 pointer-events-auto"
               aria-label="Exit AR"
             >
@@ -524,7 +576,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               <div className="flex items-center gap-4">
                 {/* Undo Button - INTERACTIVE */}
                 <button
-                  onClick={handleUndo}
+                  onClick={handleUndoSafe}
                   disabled={!showUndoButton}
                   className="p-4 bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-full border border-stroke-default shadow-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-background-inset transition-all duration-200 group pointer-events-auto"
                   aria-label="Undo last point"
@@ -554,7 +606,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               <div className="flex gap-3">
                 {/* Redo Button - INTERACTIVE */}
                 <button
-                  onClick={handleRedo}
+                  onClick={handleRedoSafe}
                   className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-brand-accent to-brand-accent-hover hover:from-brand-accent-hover hover:to-brand-accent text-content-on-brand font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 pointer-events-auto"
                 >
                   <RotateCcw className="w-5 h-5" />
@@ -563,7 +615,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
                 {/* Confirm Button - INTERACTIVE */}
                 <button
-                  onClick={handleConfirm}
+                  onClick={handleConfirmSafe}
                   className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-status-success to-brand-primary hover:from-status-success/90 hover:to-brand-primary/90 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 pointer-events-auto"
                 >
                   <Check className="w-5 h-5" />
