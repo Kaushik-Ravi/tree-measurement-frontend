@@ -1,8 +1,8 @@
 // src/components/ARMeasureView.tsx
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Check, RotateCcw, X, Move, Plus } from 'lucide-react';
+import { Check, RotateCcw, Move, Plus, X, Scan } from 'lucide-react';
 
 interface ARMeasureViewProps {
   onDistanceMeasured: (distance: number) => void;
@@ -12,8 +12,19 @@ interface ARMeasureViewProps {
 type ARState = 'SCANNING' | 'READY_TO_PLACE_FIRST' | 'READY_TO_PLACE_SECOND' | 'COMPLETE';
 
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
-  const [arState, setArState] = useState<ARState>('SCANNING');
-  const [distance, setDistance] = useState<number | null>(null);
+  // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
+  const arStateRef = useRef<ARState>('SCANNING');
+  const distanceRef = useRef<number | null>(null);
+  
+  // UI state (safe to cause re-renders)
+  const [instruction, setInstruction] = useState("Move your phone to scan the ground.");
+  const [uiDistance, setUiDistance] = useState<number | null>(null);
+  const [showConfirmButtons, setShowConfirmButtons] = useState(false);
+  const [showPlaceButton, setShowPlaceButton] = useState(false);
+  const [showUndoButton, setShowUndoButton] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
+  const [arSessionActive, setArSessionActive] = useState(false);
+  const arButtonRef = useRef<HTMLElement | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
@@ -27,39 +38,44 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const lineRef = useRef<THREE.Line | null>(null);
   const pointsRef = useRef<THREE.Vector3[]>([]);
   const clockRef = useRef(new THREE.Clock());
-  
-  // --- START: SURGICAL CORRECTION ---
-  // Ref to hold the onSelect function, making it accessible to the JSX.
   const onSelectRef = useRef<(() => void) | null>(null);
-  // --- END: SURGICAL CORRECTION ---
-  
-  // --- UI Text State ---
-  const [instruction, setInstruction] = useState("Move your phone to scan the ground.");
 
   // --- Core Action Handlers ---
   const handleConfirm = useCallback(() => {
-    if (distance !== null) {
-      onDistanceMeasured(distance);
+    if (distanceRef.current !== null) {
+      onDistanceMeasured(distanceRef.current);
     }
-  }, [distance, onDistanceMeasured]);
+  }, [onDistanceMeasured]);
 
   const handleRedo = useCallback(() => {
     pointsRef.current = [];
-    setDistance(null);
+    distanceRef.current = null;
+    arStateRef.current = 'SCANNING';
+    
+    // Update UI state
+    setUiDistance(null);
+    setShowConfirmButtons(false);
+    setShowPlaceButton(false);
+    setShowUndoButton(false);
+    setIsScanning(true);
+    setInstruction("Move your phone to scan the ground.");
+    
+    // Reset visual elements
     markersRef.current.forEach(marker => marker.visible = false);
     if (lineRef.current) lineRef.current.visible = false;
-    setArState('SCANNING');
-    setInstruction("Move your phone to scan the ground.");
   }, []);
   
   const handleUndo = useCallback(() => {
-    if (arState === 'READY_TO_PLACE_SECOND' && pointsRef.current.length === 1) {
+    if (arStateRef.current === 'READY_TO_PLACE_SECOND' && pointsRef.current.length === 1) {
         pointsRef.current.pop();
         markersRef.current[0].visible = false;
-        setArState('READY_TO_PLACE_FIRST');
+        arStateRef.current = 'READY_TO_PLACE_FIRST';
+        
+        // Update UI state
+        setShowUndoButton(false);
         setInstruction("Tap '+' to place a marker at the tree's base.");
     }
-  }, [arState]);
+  }, []);
 
   // --- Main useEffect for AR Setup and Lifecycle ---
   useEffect(() => {
@@ -82,17 +98,67 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     // --- 2. Scene Lighting & Objects ---
     scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1.5));
     
-    // A. Advanced Reticle (for surface detection feedback)
+    // A. World-Class Reticle (ARuler-inspired surface detection feedback)
     const reticle = new THREE.Group();
+    
+    // Outer ring (primary indicator)
     const reticleRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.06, 0.07, 32).rotateX(-Math.PI / 2),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.5, transparent: true })
+        new THREE.RingGeometry(0.08, 0.09, 64).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ 
+            color: 0x34d399, // Emerald green
+            opacity: 0.9, 
+            transparent: true,
+            side: THREE.DoubleSide
+        })
     );
+    
+    // Inner ring (secondary feedback)
+    const reticleInnerRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.04, 0.045, 64).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ 
+            color: 0x10b981, 
+            opacity: 0.6, 
+            transparent: true,
+            side: THREE.DoubleSide
+        })
+    );
+    
+    // Center dot
     const reticleDot = new THREE.Mesh(
-        new THREE.CircleGeometry(0.01, 32).rotateX(-Math.PI / 2),
+        new THREE.CircleGeometry(0.015, 32).rotateX(-Math.PI / 2),
         new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
-    reticle.add(reticleRing, reticleDot);
+    
+    // Crosshair lines for precision
+    const crosshairMaterial = new THREE.LineBasicMaterial({ 
+        color: 0x34d399, 
+        transparent: true, 
+        opacity: 0.7 
+    });
+    
+    const crosshairGeometry1 = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-0.12, 0.001, 0),
+        new THREE.Vector3(-0.09, 0.001, 0)
+    ]);
+    const crosshairGeometry2 = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0.09, 0.001, 0),
+        new THREE.Vector3(0.12, 0.001, 0)
+    ]);
+    const crosshairGeometry3 = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0.001, -0.12),
+        new THREE.Vector3(0, 0.001, -0.09)
+    ]);
+    const crosshairGeometry4 = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0.001, 0.09),
+        new THREE.Vector3(0, 0.001, 0.12)
+    ]);
+    
+    const crosshair1 = new THREE.Line(crosshairGeometry1, crosshairMaterial);
+    const crosshair2 = new THREE.Line(crosshairGeometry2, crosshairMaterial);
+    const crosshair3 = new THREE.Line(crosshairGeometry3, crosshairMaterial);
+    const crosshair4 = new THREE.Line(crosshairGeometry4, crosshairMaterial);
+    
+    reticle.add(reticleRing, reticleInnerRing, reticleDot, crosshair1, crosshair2, crosshair3, crosshair4);
     reticle.matrixAutoUpdate = false;
     reticle.visible = false;
     scene.add(reticle);
@@ -132,7 +198,8 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     const onSelect = () => {
         if (!reticle.visible) return;
 
-        if (arState === 'READY_TO_PLACE_FIRST' || arState === 'READY_TO_PLACE_SECOND') {
+        const currentState = arStateRef.current;
+        if (currentState === 'READY_TO_PLACE_FIRST' || currentState === 'READY_TO_PLACE_SECOND') {
             const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
             const markerIndex = pointsRef.current.length;
 
@@ -142,12 +209,19 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 markersRef.current[markerIndex].visible = true;
 
                 if (markerIndex === 0) { // First point placed
-                    setArState('READY_TO_PLACE_SECOND');
+                    arStateRef.current = 'READY_TO_PLACE_SECOND';
+                    setShowUndoButton(true);
                     setInstruction("Now, tap '+' to place a marker at your feet.");
                 } else { // Second point placed
                     const [p1, p2] = pointsRef.current;
                     const calculatedDistance = p1.distanceTo(p2);
-                    setDistance(calculatedDistance);
+                    distanceRef.current = calculatedDistance;
+                    
+                    // Update UI state
+                    setUiDistance(calculatedDistance);
+                    setShowPlaceButton(false);
+                    setShowUndoButton(false);
+                    setShowConfirmButtons(true);
 
                     const linePositions = line.geometry.attributes.position as THREE.BufferAttribute;
                     linePositions.setXYZ(0, p1.x, p1.y, p1.z);
@@ -155,7 +229,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                     linePositions.needsUpdate = true;
                     line.visible = true;
 
-                    setArState('COMPLETE');
+                    arStateRef.current = 'COMPLETE';
                     setInstruction("Measurement Complete");
                 }
             }
@@ -172,32 +246,43 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     scene.add(controller);
     // --- END: SURGICAL CORRECTION ---
 
-    // --- 4. The Chimera AR Button Solution ---
+    // --- 4. The Chimera AR Button Strategy ---
+    // We hide the Three.js ARButton behind our custom UI but keep it functional
     const arButton = ARButton.createButton(renderer, {
       requiredFeatures: ['hit-test'],
       optionalFeatures: ['dom-overlay'],
       domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
     });
     
-    arButton.textContent = "Start AR Measurement";
+    // Style the button to be invisible but still functional
     Object.assign(arButton.style, {
-        position: 'absolute', bottom: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)', padding: '16px 32px',
-        backgroundColor: 'rgb(var(--brand-primary))', color: 'white',
-        border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer',
-        fontSize: '18px', boxShadow: '0 8px 30px rgba(0,0,0,0.2)', transition: 'transform 0.2s'
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        opacity: '0',
+        pointerEvents: 'auto',
+        width: '200px',
+        height: '60px',
+        zIndex: '100'
     });
-    arButton.onmouseenter = () => arButton.style.transform = 'translate(-50%, -50%) scale(1.05)';
-    arButton.onmouseleave = () => arButton.style.transform = 'translate(-50%, -50%) scale(1)';
     
+    arButtonRef.current = arButton;
     currentContainer.appendChild(arButton);
-    renderer.xr.addEventListener('sessionend', onCancel);
+    
+    // Track AR session state
+    renderer.xr.addEventListener('sessionstart', () => {
+        setArSessionActive(true);
+    });
+    
+    renderer.xr.addEventListener('sessionend', () => {
+        setArSessionActive(false);
+        onCancel();
+    });
 
     // --- 5. Render Loop ---
     let surfaceFound = false;
     const render = (_: any, frame: XRFrame) => {
-      const delta = clockRef.current.getDelta();
-
       if (frame) {
         const referenceSpace = renderer.xr.getReferenceSpace();
         const session = renderer.xr.getSession();
@@ -222,12 +307,23 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 
                 if (!surfaceFound) {
                     surfaceFound = true;
-                    if (arState === 'SCANNING') {
-                        setArState('READY_TO_PLACE_FIRST');
+                    if (arStateRef.current === 'SCANNING') {
+                        arStateRef.current = 'READY_TO_PLACE_FIRST';
+                        setIsScanning(false);
+                        setShowPlaceButton(true);
                         setInstruction("Tap '+' to place a marker at the tree's base.");
                     }
                 }
-                (reticleRing.material as THREE.MeshBasicMaterial).opacity = 1;
+                // Enhanced reticle feedback: full opacity when surface locked
+                (reticleRing.material as THREE.MeshBasicMaterial).opacity = 0.95;
+                
+                // Subtle pulse animation for the reticle
+                const pulseScale = 1 + Math.sin(clockRef.current.getElapsedTime() * 3) * 0.05;
+                reticle.children.forEach((child, index) => {
+                    if (index < 2) { // Only pulse the rings
+                        child.scale.set(pulseScale, pulseScale, pulseScale);
+                    }
+                });
             }
           } else {
             reticle.visible = false;
@@ -286,70 +382,192 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       }
       window.removeEventListener('resize', onWindowResize);
     };
-  }, [onCancel, arState]);
+  }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
+
+  // Handler to trigger the hidden AR button
+  const handleStartAR = useCallback(() => {
+    arButtonRef.current?.click();
+  }, []);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 bg-black">
-      <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
-        <div className="w-full h-full flex flex-col justify-between p-4 pointer-events-auto">
-          {/* Top instruction/result panel */}
-          <div className="w-full max-w-md mx-auto text-center bg-black/60 p-3 rounded-lg backdrop-blur-md">
-            <p className="font-semibold text-white">{instruction}</p>
-            {arState === 'COMPLETE' && (
-              <div className="text-4xl font-bold mt-1 text-white">
-                {distance?.toFixed(2)}m
+    <div ref={containerRef} className="fixed inset-0 z-50">
+      {/* AR Entry Screen - Only shown before AR session starts */}
+      {!arSessionActive && (
+        <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
+          {/* Exit Button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 p-3 rounded-full bg-background-subtle hover:bg-background-inset border border-stroke-default transition-all duration-200 group"
+            aria-label="Cancel AR Measurement"
+          >
+            <X className="w-5 h-5 text-content-subtle group-hover:text-content-default" />
+          </button>
+
+          {/* Main Content */}
+          <div className="max-w-md w-full space-y-8 text-center">
+            {/* Icon */}
+            <div className="flex justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-2xl animate-pulse" />
+                <div className="relative bg-gradient-to-br from-brand-primary to-brand-secondary p-6 rounded-full">
+                  <Move className="w-16 h-16 text-content-on-brand" />
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Title & Description */}
+            <div className="space-y-3">
+              <h1 className="text-3xl font-bold text-content-default">
+                AR Distance Measurement
+              </h1>
+              <p className="text-content-subtle text-lg leading-relaxed">
+                Measure the distance from the tree's base to your position using augmented reality
+              </p>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-background-subtle border border-stroke-default rounded-2xl p-6 space-y-4 text-left">
+              <h2 className="font-semibold text-content-default flex items-center gap-2">
+                <Scan className="w-5 h-5 text-brand-accent" />
+                How it works:
+              </h2>
+              <ol className="space-y-3 text-sm text-content-subtle">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">1</span>
+                  <span>Point your camera at the ground and move your phone to scan the surface</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">2</span>
+                  <span>Tap the + button to place a marker at the tree's base</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">3</span>
+                  <span>Walk to your position and tap + again to measure the distance</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Start Button - Positioned over the hidden AR button */}
+            <div className="relative">
+              <button
+                onClick={handleStartAR}
+                className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary hover:from-brand-primary-hover hover:to-brand-secondary-hover text-content-on-brand font-bold py-5 px-8 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
+              >
+                <Move className="w-6 h-6 group-hover:animate-pulse" />
+                <span className="text-lg">Start AR Measurement</span>
+              </button>
+            </div>
+
+            {/* Help Text */}
+            <p className="text-xs text-content-subtle">
+              Make sure you're in a well-lit area with enough space to move around
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AR Session Overlay - Only shown during active AR session */}
+      <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
+        <div className="w-full h-full flex flex-col justify-between p-4 md:p-6 pointer-events-auto">
+          
+          {/* Top Bar: Instructions & Distance Display */}
+          <div className="flex items-start justify-between gap-4">
+            {/* Instruction Panel */}
+            <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  {isScanning && <Move className="w-6 h-6 text-brand-accent animate-pulse" />}
+                  {showPlaceButton && <Plus className="w-6 h-6 text-brand-primary" />}
+                  {showConfirmButtons && <Check className="w-6 h-6 text-status-success" />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-content-default">{instruction}</p>
+                  {showConfirmButtons && uiDistance !== null && (
+                    <div className="mt-2 text-3xl font-bold text-brand-primary">
+                      {uiDistance.toFixed(2)} m
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Exit Button */}
+            <button
+              onClick={onCancel}
+              className="flex-shrink-0 p-3 bg-status-error/90 hover:bg-status-error text-white rounded-full backdrop-blur-md shadow-lg transition-all duration-200"
+              aria-label="Exit AR"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Bottom action buttons */}
-          <div className="flex justify-center items-center gap-4">
-            {arState === 'SCANNING' && (
-              <div className="flex items-center gap-2 text-white bg-black/60 p-3 rounded-lg backdrop-blur-md">
-                <Move className="w-6 h-6 animate-pulse" />
-                <span className="font-medium">Scanning for a surface...</span>
+          {/* Bottom Controls: Context-Aware Action Buttons */}
+          <div className="flex justify-center items-end pb-safe">
+            
+            {/* Scanning State */}
+            {isScanning && (
+              <div className="bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-stroke-default">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-brand-accent/30 rounded-full blur-md animate-pulse" />
+                    <Move className="relative w-6 h-6 text-brand-accent animate-pulse" />
+                  </div>
+                  <span className="font-medium text-content-default">Scanning surface...</span>
+                </div>
               </div>
             )}
 
-            {(arState === 'READY_TO_PLACE_FIRST' || arState === 'READY_TO_PLACE_SECOND') && (
-              <div className="flex items-center gap-6">
+            {/* Placement State */}
+            {showPlaceButton && (
+              <div className="flex items-center gap-4">
+                {/* Undo Button */}
                 <button
-                    onClick={handleUndo}
-                    disabled={arState !== 'READY_TO_PLACE_SECOND'}
-                    className="p-4 bg-white/20 text-white rounded-full backdrop-blur-md disabled:opacity-30 disabled:cursor-not-allowed transition"
+                  onClick={handleUndo}
+                  disabled={!showUndoButton}
+                  className="p-4 bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-full border border-stroke-default shadow-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-background-inset transition-all duration-200 group"
+                  aria-label="Undo last point"
                 >
-                    <RotateCcw className="w-6 h-6" />
+                  <RotateCcw className="w-6 h-6 text-content-subtle group-hover:text-content-default transition-colors" />
                 </button>
+
+                {/* Main Place Button */}
                 <button
-                    // --- START: SURGICAL CORRECTION ---
-                    // Directly invoke the function from the ref.
-                    onClick={() => onSelectRef.current?.()}
-                    // --- END: SURGICAL CORRECTION ---
-                    className="p-6 bg-white text-black rounded-full shadow-lg"
+                  onClick={() => onSelectRef.current?.()}
+                  className="relative group"
+                  aria-label="Place marker"
                 >
-                    <Plus className="w-8 h-8" />
+                  <div className="absolute inset-0 bg-brand-primary/30 rounded-full blur-xl group-hover:blur-2xl transition-all" />
+                  <div className="relative p-6 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-full shadow-2xl transform group-hover:scale-110 group-active:scale-95 transition-all duration-200">
+                    <Plus className="w-10 h-10 text-content-on-brand" strokeWidth={3} />
+                  </div>
                 </button>
-                <div className="w-[64px]" />
+
+                {/* Spacer for visual balance */}
+                <div className="w-[56px]" />
               </div>
             )}
 
-            {arState === 'COMPLETE' && (
-              <>
+            {/* Complete State */}
+            {showConfirmButtons && (
+              <div className="flex gap-3">
+                {/* Redo Button */}
                 <button
                   onClick={handleRedo}
-                  className="flex items-center gap-2 px-8 py-4 bg-amber-500 text-white rounded-full font-bold shadow-lg"
+                  className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-brand-accent to-brand-accent-hover hover:from-brand-accent-hover hover:to-brand-accent text-content-on-brand font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
                 >
-                  <RotateCcw className="w-6 h-6" />
-                  Redo
+                  <RotateCcw className="w-5 h-5" />
+                  <span>Redo</span>
                 </button>
+
+                {/* Confirm Button */}
                 <button
                   onClick={handleConfirm}
-                  className="flex items-center gap-2 px-8 py-4 bg-green-600 text-white rounded-full font-bold shadow-lg"
+                  className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-status-success to-brand-primary hover:from-status-success/90 hover:to-brand-primary/90 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
                 >
-                  <Check className="w-6 h-6" />
-                  Confirm
+                  <Check className="w-5 h-5" />
+                  <span>Confirm</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
