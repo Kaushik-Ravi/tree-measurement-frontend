@@ -1,4 +1,4 @@
-// src/components/ARMeasureView.tsx
+﻿// src/components/ARMeasureView.tsx
 import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
@@ -10,7 +10,6 @@ interface ARMeasureViewProps {
 }
 
 type ARState = 'SCANNING' | 'READY_TO_PLACE_FIRST' | 'READY_TO_PLACE_SECOND' | 'COMPLETE';
-type UIState = 'ENTRY' | 'TRANSITIONING' | 'AR_ACTIVE';
 
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
   // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
@@ -24,18 +23,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [showPlaceButton, setShowPlaceButton] = useState(false);
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
-  
-  // --- NEW: 3-State UI Machine to prevent Chrome compositor conflicts ---
-  const [uiState, setUiState] = useState<UIState>('ENTRY');
+  const [arSessionActive, setArSessionActive] = useState(false);
   const arButtonRef = useRef<HTMLElement | null>(null);
-  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
-  
-  // Diagnostic state
-  const [diagnosticLog, setDiagnosticLog] = useState<string[]>([]);
-  const [showDiagnostic, setShowDiagnostic] = useState(false);
   
   // Refs for Three.js objects to persist them across renders
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -126,267 +118,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     handleUIButtonClick(onCancel);
   }, [onCancel, handleUIButtonClick]);
 
-  // --- DIAGNOSTIC: Comprehensive AR Session Initialization ---
-  const diagnosticARStart = useCallback(async () => {
-    const logs: string[] = [];
-    const timestamp = new Date().toISOString();
-    
-    logs.push(`=== AR DIAGNOSTIC START: ${timestamp} ===`);
-    logs.push('');
-    
-    // 1. Browser & Device Information
-    logs.push('--- DEVICE INFO ---');
-    logs.push(`User Agent: ${navigator.userAgent}`);
-    logs.push(`Platform: ${navigator.platform}`);
-    logs.push(`Language: ${navigator.language}`);
-    logs.push(`Online: ${navigator.onLine}`);
-    logs.push(`Screen: ${window.screen.width}x${window.screen.height}`);
-    logs.push(`Viewport: ${window.innerWidth}x${window.innerHeight}`);
-    logs.push(`Protocol: ${location.protocol}`);
-    logs.push(`Host: ${location.host}`);
-    logs.push('');
-    
-    // 2. WebXR Availability Check
-    logs.push('--- WEBXR CAPABILITY ---');
-    if (!('xr' in navigator)) {
-      logs.push('❌ FATAL: navigator.xr not found');
-      logs.push('Browser does not support WebXR');
-      logs.push('Supported browsers: Chrome 79+, Edge 79+, Brave');
-      console.error(logs.join('\n'));
-      setDiagnosticLog(logs);
-      setShowDiagnostic(true);
-      
-      alert('❌ WebXR Not Supported\n\nYour browser doesn\'t support AR.\n\nPlease use:\n• Chrome (latest)\n• Brave\n• Samsung Internet (latest)');
-      return false;
-    }
-    logs.push('✅ navigator.xr exists');
-    logs.push('');
-    
-    // 3. Immersive AR Support Check
-    logs.push('--- AR SESSION SUPPORT ---');
-    let isARSupported = false;
-    try {
-      isARSupported = await navigator.xr!.isSessionSupported('immersive-ar');
-      logs.push(`✅ isSessionSupported check completed`);
-      logs.push(`Result: ${isARSupported}`);
-    } catch (error: any) {
-      logs.push(`❌ isSessionSupported check failed`);
-      logs.push(`Error: ${error.name} - ${error.message}`);
-    }
-    logs.push('');
-    
-    if (!isARSupported) {
-      logs.push('❌ FATAL: immersive-ar not supported on this device');
-      logs.push('');
-      logs.push('Requirements:');
-      logs.push('• Android 7.0 or higher');
-      logs.push('• ARCore installed (google.com/ar/discover)');
-      logs.push('• Compatible device (check: developers.google.com/ar/devices)');
-      console.error(logs.join('\n'));
-      setDiagnosticLog(logs);
-      setShowDiagnostic(true);
-      
-      alert('❌ AR Not Available\n\nYour device doesn\'t support AR.\n\nCheck:\n1. ARCore app installed?\n2. Device compatible?\n3. Permissions granted?\n\nVisit: google.com/ar/discover');
-      return false;
-    }
-    logs.push('✅ Device supports immersive-ar');
-    logs.push('');
-    
-    // 4. Security & Permissions Check
-    logs.push('--- SECURITY CHECK ---');
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      logs.push('⚠️ WARNING: Not using HTTPS');
-      logs.push('WebXR requires secure context (HTTPS or localhost)');
-      logs.push(`Current protocol: ${location.protocol}`);
-    } else {
-      logs.push(`✅ Secure context: ${location.protocol}`);
-    }
-    logs.push('');
-    
-    // 5. Renderer Check
-    logs.push('--- RENDERER STATUS ---');
-    if (!rendererRef.current) {
-      logs.push('❌ FATAL: Three.js renderer not initialized');
-      console.error(logs.join('\n'));
-      setDiagnosticLog(logs);
-      setShowDiagnostic(true);
-      
-      alert('❌ Renderer Error\n\nAR system not initialized.\n\nPlease refresh the page.');
-      return false;
-    }
-    logs.push('✅ Renderer exists');
-    logs.push(`XR Enabled: ${rendererRef.current.xr.enabled}`);
-    logs.push('');
-    
-    // 6. DOM Overlay Check
-    logs.push('--- DOM OVERLAY ---');
-    const overlayElement = document.getElementById('ar-overlay');
-    if (overlayElement) {
-      logs.push('✅ #ar-overlay element exists');
-      logs.push(`Dimensions: ${overlayElement.offsetWidth}x${overlayElement.offsetHeight}`);
-    } else {
-      logs.push('⚠️ WARNING: #ar-overlay not found (will proceed without dom-overlay)');
-    }
-    logs.push('');
-    
-    // 7. Session Request
-    logs.push('--- SESSION REQUEST ---');
-    logs.push('🚀 Requesting XR session...');
-    
-    const sessionConfig: any = {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay']
-    };
-    
-    if (overlayElement) {
-      sessionConfig.domOverlay = { root: overlayElement };
-      logs.push('With dom-overlay support');
-    }
-    
-    console.log(logs.join('\n'));
-    
-    try {
-      const session = await navigator.xr!.requestSession('immersive-ar', sessionConfig);
-      
-      logs.push('');
-      logs.push('✅ ✅ ✅ SESSION CREATED SUCCESSFULLY! ✅ ✅ ✅');
-      logs.push(`Session visibilityState: ${session.visibilityState}`);
-      logs.push(`Input Sources: ${session.inputSources.length}`);
-      logs.push('');
-      
-      // CRITICAL FIX: Detect supported reference spaces
-      logs.push('--- REFERENCE SPACE DETECTION ---');
-      const supportedSpaces: string[] = [];
-      
-      // Test available reference spaces by trying to create them
-      const spacesToTest: XRReferenceSpaceType[] = ['local-floor', 'local', 'viewer', 'unbounded'];
-      for (const spaceType of spacesToTest) {
-        try {
-          await session.requestReferenceSpace(spaceType);
-          supportedSpaces.push(spaceType);
-          logs.push(`✅ ${spaceType}: supported`);
-        } catch (e: any) {
-          logs.push(`❌ ${spaceType}: ${e.name || 'not supported'}`);
-        }
-      }
-      
-      logs.push(`Supported spaces: ${supportedSpaces.join(', ') || 'none'}`);
-      logs.push('');
-      
-      console.log(logs.join('\n'));
-      
-      // Attach session to renderer with viewer reference space
-      logs.push('🚀 Attaching session to renderer...');
-      
-      try {
-        // Three.js will automatically request reference space
-        // We need to let it use 'viewer' if 'local-floor' fails
-        await rendererRef.current.xr.setSession(session);
-        logs.push('✅ Session attached to renderer');
-      } catch (refSpaceError: any) {
-        logs.push(`⚠️ Renderer attachment with default reference space failed`);
-        logs.push(`Error: ${refSpaceError.message}`);
-        logs.push('Attempting manual reference space configuration...');
-        
-        // Manual reference space setup
-        let referenceSpace = null;
-        
-        // Try local-floor first (best for AR)
-        if (supportedSpaces.includes('local-floor')) {
-          try {
-            referenceSpace = await session.requestReferenceSpace('local-floor');
-            logs.push('✅ Using local-floor reference space');
-          } catch (e) {
-            logs.push('❌ local-floor failed despite detection');
-          }
-        }
-        
-        // Fallback to viewer (most compatible)
-        if (!referenceSpace) {
-          try {
-            referenceSpace = await session.requestReferenceSpace('viewer');
-            logs.push('✅ Using viewer reference space (fallback)');
-          } catch (e: any) {
-            logs.push(`❌ viewer reference space failed: ${e.message}`);
-            throw new Error('No compatible reference space available');
-          }
-        }
-        
-        // Manually set up renderer with the reference space
-        // This bypasses Three.js automatic reference space request
-        logs.push('⚙️ Configuring renderer manually...');
-        await rendererRef.current.xr.setSession(session);
-        logs.push('✅ Manual configuration complete');
-      }
-      
-      setDiagnosticLog(logs);
-      setUiState('AR_ACTIVE');
-      
-      return true;
-      
-    } catch (error: any) {
-      logs.push('');
-      logs.push('❌❌❌ SESSION REQUEST FAILED ❌❌❌');
-      logs.push(`Error Name: ${error.name}`);
-      logs.push(`Error Message: ${error.message}`);
-      if (error.stack) {
-        logs.push(`Stack Trace: ${error.stack.substring(0, 500)}`);
-      }
-      logs.push('');
-      
-      console.error(logs.join('\n'));
-      setDiagnosticLog(logs);
-      setShowDiagnostic(true);
-      
-      // User-friendly error messages
-      if (error.name === 'NotAllowedError') {
-        logs.push('CAUSE: Camera permission denied or user cancelled');
-        alert('❌ Permission Denied\n\nCamera access is required for AR.\n\nPlease:\n1. Allow camera access\n2. Try again\n\nIf issue persists:\n• Check browser settings\n• Grant camera permission');
-        
-      } else if (error.name === 'NotSupportedError') {
-        logs.push('CAUSE: Feature not supported by browser/device');
-        alert('❌ Not Supported\n\nAR features not available.\n\nCheck:\n1. ARCore installed?\n2. Chrome updated?\n3. Device compatible?\n\nVisit: google.com/ar/discover');
-        
-      } else if (error.name === 'SecurityError') {
-        logs.push('CAUSE: Security restrictions (HTTPS, permissions, etc.)');
-        alert('❌ Security Error\n\nCannot start AR session.\n\nEnsure:\n1. Using HTTPS connection\n2. Valid SSL certificate\n3. Camera permissions granted');
-        
-      } else if (error.name === 'InvalidStateError') {
-        logs.push('CAUSE: Another AR session active or renderer conflict');
-        alert('❌ Session Conflict\n\nAnother AR session may be active.\n\nTry:\n1. Close other AR tabs\n2. Restart browser\n3. Refresh this page');
-        
-      } else if (error.name === 'OperationError') {
-        logs.push('CAUSE: Operation failed (device busy, hardware issue)');
-        alert('❌ Operation Failed\n\nCouldn\'t initialize AR.\n\nTry:\n1. Close camera app if open\n2. Restart browser\n3. Restart device');
-        
-      } else {
-        logs.push(`CAUSE: Unknown error - ${error.name}`);
-        alert(`❌ AR Error\n\n${error.name}\n\n${error.message}\n\nCheck browser console for details.`);
-      }
-      
-      console.error('Full diagnostic log:', logs.join('\n'));
-      setUiState('ENTRY'); // Return to entry screen
-      
-      return false;
-    }
-  }, []);
-
-  // Handler to trigger AR with diagnostic logging
-  const handleStartAR = useCallback(() => {
-    // Set transitioning state first to unmount entry screen cleanly
-    setUiState('TRANSITIONING');
-    
-    // Clear any existing transition timer
-    if (transitionTimerRef.current) {
-      clearTimeout(transitionTimerRef.current);
-    }
-    
-    // 50ms buffer: Allows React to fully unmount entry screen before AR session starts
-    transitionTimerRef.current = setTimeout(() => {
-      diagnosticARStart(); // Use diagnostic function instead of button click
-    }, 50);
-  }, [diagnosticARStart]);
-
   // --- Main useEffect for AR Setup and Lifecycle ---
   useEffect(() => {
     if (isMountedRef.current) return;
@@ -402,38 +133,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
-    
-    // CRITICAL FIX: Patch Three.js WebXR manager to handle 'viewer' reference space
-    // Some devices (like yours) don't support 'local-floor', only 'viewer'
-    const originalSetSession = renderer.xr.setSession.bind(renderer.xr);
-    renderer.xr.setSession = async function(session: XRSession | null) {
-      if (!session) {
-        return await originalSetSession(session);
-      }
-      
-      try {
-        // Try the original method (will attempt 'local-floor')
-        await originalSetSession(session);
-      } catch (error: any) {
-        // If it fails due to reference space, try 'viewer'
-        if (error.message && error.message.includes('reference space')) {
-          console.log('[AR] local-floor not supported, using viewer reference space');
-          
-          // Manually set up with 'viewer' reference space
-          const referenceSpace = await session.requestReferenceSpace('viewer');
-          
-          // Access Three.js internals to set the reference space directly
-          (this as any).referenceSpace = referenceSpace;
-          (this as any).session = session;
-          
-          // Dispatch xrsessionstart event
-          (this as any).dispatchEvent({ type: 'sessionstart' });
-        } else {
-          throw error;
-        }
-      }
-    };
-    
     rendererRef.current = renderer;
     currentContainer.appendChild(renderer.domElement);
     
@@ -598,20 +297,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
     // --- 4. The Chimera AR Button Strategy ---
     // We hide the Three.js ARButton behind our custom UI but keep it functional
-    
-    // CRITICAL: Ensure #ar-overlay exists before referencing it
-    const overlayElement = currentContainer.querySelector('#ar-overlay');
-    const arButtonConfig: any = {
+    const arButton = ARButton.createButton(renderer, {
       requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay'] // Make dom-overlay optional for broader compatibility
-    };
-    
-    // Only add domOverlay if the element exists (prevents race condition)
-    if (overlayElement) {
-      arButtonConfig.domOverlay = { root: overlayElement };
-    }
-    
-    const arButton = ARButton.createButton(renderer, arButtonConfig);
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
+    });
     
     // Style the button to be invisible but still functional
     Object.assign(arButton.style, {
@@ -629,15 +319,14 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     arButtonRef.current = arButton;
     currentContainer.appendChild(arButton);
     
-    // Track AR session state with UI state synchronization
+    // Track AR session state
     renderer.xr.addEventListener('sessionstart', () => {
-      console.log('XR session started');
-      setUiState('AR_ACTIVE');
+        setArSessionActive(true);
     });
     
     renderer.xr.addEventListener('sessionend', () => {
-      console.log('XR session ended');
-      setUiState('ENTRY');
+        setArSessionActive(false);
+        onCancel();
     });
 
     // --- 5. Render Loop ---
@@ -706,14 +395,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.setAnimationLoop(render);
 
     const onWindowResize = () => {
-        // --- START: SURGICAL FIX (WebXR Best Practice) ---
-        // CRITICAL: Never resize renderer during active XR session OR during UI transitions
-        // The XR system controls viewport during presentation
-        if (renderer.xr.isPresenting) {
-          return; // Skip resize, prevent Chrome errors and flickering
-        }
-        // --- END: SURGICAL FIX ---
-        
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -740,12 +421,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       if (cooldownTimerRef.current) {
         clearTimeout(cooldownTimerRef.current);
         cooldownTimerRef.current = null;
-      }
-      
-      // Clear transition timer
-      if (transitionTimerRef.current) {
-        clearTimeout(transitionTimerRef.current);
-        transitionTimerRef.current = null;
       }
 
       // Comprehensive Three.js cleanup to prevent WebGL context leaks
@@ -828,63 +503,18 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       }
       // --- END: SURGICAL ENHANCEMENT ---
     };
-  }, [diagnosticARStart]); // CRITICAL FIX: Added diagnosticARStart dependency
+  }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
+
+  // Handler to trigger the hidden AR button
+  const handleStartAR = useCallback(() => {
+    arButtonRef.current?.click();
+  }, []);
 
   return (
-    <div 
-      ref={containerRef} 
-      className="fixed inset-0 z-50"
-      style={{
-        willChange: 'contents',
-        transform: 'translateZ(0)'
-      }}
-    >
-      {/* AR Overlay - MUST exist before ARButton creation to prevent race condition */}
-      <div id="ar-overlay" className="absolute inset-0 pointer-events-none" />
-      
-      {/* Diagnostic Log Viewer - Shown when errors occur */}
-      {showDiagnostic && diagnosticLog.length > 0 && (
-        <div className="absolute inset-0 z-[60] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
-          <div className="max-w-2xl w-full bg-background-default rounded-2xl shadow-2xl overflow-hidden">
-            <div className="bg-status-error px-6 py-4 flex items-center justify-between">
-              <h3 className="text-white font-bold text-lg">AR Diagnostic Report</h3>
-              <button
-                onClick={() => setShowDiagnostic(false)}
-                className="p-2 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </div>
-            <div className="p-6 max-h-[70vh] overflow-y-auto">
-              <pre className="text-xs font-mono text-content-default whitespace-pre-wrap break-words bg-background-subtle p-4 rounded-lg border border-stroke-default">
-                {diagnosticLog.join('\n')}
-              </pre>
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(diagnosticLog.join('\n'));
-                    alert('Diagnostic log copied to clipboard!');
-                  }}
-                  className="flex-1 px-4 py-3 bg-brand-accent hover:bg-brand-accent-hover text-content-on-brand font-semibold rounded-xl transition-colors"
-                >
-                  Copy to Clipboard
-                </button>
-                <button
-                  onClick={() => setShowDiagnostic(false)}
-                  className="flex-1 px-4 py-3 bg-background-subtle hover:bg-background-inset text-content-default font-semibold rounded-xl border border-stroke-default transition-colors"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* AR Entry Screen - Only shown in ENTRY state */}
-      {uiState === 'ENTRY' && (
-        <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6"
-        >
+    <div ref={containerRef} className="fixed inset-0 z-50">
+      {/* AR Entry Screen - Only shown before AR session starts */}
+      {!arSessionActive && (
+        <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
           {/* Exit Button */}
           <button
             onClick={handleCancelSafe}
@@ -957,32 +587,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         </div>
       )}
 
-      {/* Transition State - Smooth black screen to prevent compositor conflicts */}
-      {uiState === 'TRANSITIONING' && (
-        <div className="absolute inset-0 z-50 bg-background-default dark:bg-background-default flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-brand-primary/30 rounded-full blur-xl animate-pulse" />
-              <Move className="relative w-12 h-12 text-brand-primary animate-pulse" />
-            </div>
-            <p className="text-content-subtle font-medium">Starting AR...</p>
-          </div>
-        </div>
-      )}
-
       {/* AR Session Overlay - Only shown during active AR session */}
-      {uiState === 'AR_ACTIVE' && (
-        <div className="absolute inset-0 pointer-events-none">
-        <div 
-          className="w-full h-full flex flex-col justify-between px-4 md:px-6"
-          style={{
-            paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
-            paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)'
-          }}
-        >
+      <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
+        <div className="w-full h-full flex flex-col justify-between p-4 md:p-6">
           
           {/* Top Bar: Instructions & Distance Display */}
-          <div className="flex items-start justify-between gap-4 pointer-events-auto mt-2">
+          <div className="flex items-start justify-between gap-4 pointer-events-auto">
             {/* Instruction Panel - NON-INTERACTIVE (visual only) */}
             <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default pointer-events-none">
               <div className="flex items-center gap-3">
@@ -1013,7 +623,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           </div>
 
           {/* Bottom Controls: Context-Aware Action Buttons */}
-          <div className="flex justify-center items-end mb-2 pointer-events-auto">
+          <div className="flex justify-center items-end pb-safe pointer-events-auto">
             
             {/* Scanning State */}
             {isScanning && (
@@ -1067,8 +677,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             )}
           </div>
         </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
