@@ -2,7 +2,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
-import { Check, RotateCcw, Move, Plus, X, Scan } from 'lucide-react';
+import { Check, RotateCcw, Move, X, Scan } from 'lucide-react';
 
 interface ARMeasureViewProps {
   onDistanceMeasured: (distance: number) => void;
@@ -84,7 +84,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     setShowPlaceButton(true); // Immediately show place button
     setShowUndoButton(false);
     setIsScanning(false); // Don't show scanning state
-    setInstruction("Point camera at tree's base, then tap +");
+    setInstruction("Point at tree's base, then tap screen");
     
     // Reset visual elements
     markersRef.current.forEach(marker => marker.visible = false);
@@ -104,7 +104,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         
         // Update UI state
         setShowUndoButton(false);
-        setInstruction("Point camera at tree's base, then tap +");
+        setInstruction("Point at tree's base, then tap screen");
     }
   }, []);
   
@@ -260,7 +260,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 if (markerIndex === 0) { // First point placed
                     arStateRef.current = 'READY_TO_PLACE_SECOND';
                     setShowUndoButton(true);
-                    setInstruction("Point camera at your feet, then tap +");
+                    setInstruction("Point at your feet, then tap screen");
                 } else { // Second point placed
                     const [p1, p2] = pointsRef.current;
                     const calculatedDistance = p1.distanceTo(p2);
@@ -360,7 +360,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                         arStateRef.current = 'READY_TO_PLACE_FIRST';
                         setIsScanning(false);
                         setShowPlaceButton(true);
-                        setInstruction("Point camera at tree's base, then tap +");
+                        setInstruction("Point at tree's base, then tap screen");
                     }
                 }
                 // Enhanced reticle feedback: full opacity when surface locked
@@ -492,11 +492,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">2</span>
-                  <span>Point your camera at the tree's base and tap the + button</span>
+                  <span>Point your camera at the tree's base and tap the screen</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">3</span>
-                  <span>Point your camera down at your feet and tap + again (stay in place)</span>
+                  <span>Point your camera at your feet and tap the screen again</span>
                 </li>
               </ol>
             </div>
@@ -531,7 +531,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
                   {isScanning && <Move className="w-6 h-6 text-brand-accent animate-pulse" />}
-                  {showPlaceButton && <Plus className="w-6 h-6 text-brand-primary" />}
+                  {showPlaceButton && <Move className="w-6 h-6 text-brand-primary animate-pulse" />}
                   {showConfirmButtons && <Check className="w-6 h-6 text-status-success" />}
                 </div>
                 <div className="flex-1">
@@ -571,7 +571,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               </div>
             )}
 
-            {/* Placement State - ONLY BOTTOM BUTTON IS INTERACTIVE */}
+            {/* Placement State - TAP ANYWHERE TO PLACE */}
             {showPlaceButton && (
               <div className="flex items-center gap-4">
                 {/* Undo Button - INTERACTIVE */}
@@ -584,17 +584,16 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                   <RotateCcw className="w-6 h-6 text-content-subtle group-hover:text-content-default transition-colors" />
                 </button>
 
-                {/* Main Place Button - PRIMARY INTERACTIVE ELEMENT */}
-                <button
-                  onClick={() => onSelectRef.current?.()}
-                  className="relative group pointer-events-auto"
-                  aria-label="Place marker"
-                >
-                  <div className="absolute inset-0 bg-brand-primary/30 rounded-full blur-xl group-hover:blur-2xl transition-all" />
-                  <div className="relative p-6 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-full shadow-2xl transform group-hover:scale-110 group-active:scale-95 transition-all duration-200">
-                    <Plus className="w-10 h-10 text-content-on-brand" strokeWidth={3} />
+                {/* Status Indicator - VISUAL ONLY (Not clickable) */}
+                <div className="relative pointer-events-none">
+                  <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-xl animate-pulse" />
+                  <div className="relative px-6 py-4 bg-gradient-to-br from-brand-primary/90 to-brand-secondary/90 backdrop-blur-md rounded-full shadow-2xl border-2 border-white/30">
+                    <div className="flex flex-col items-center gap-1">
+                      <Move className="w-8 h-8 text-white animate-pulse" strokeWidth={2.5} />
+                      <span className="text-xs font-bold text-white">Tap screen</span>
+                    </div>
                   </div>
-                </button>
+                </div>
 
                 {/* Spacer for visual balance */}
                 <div className="w-[56px]" />
