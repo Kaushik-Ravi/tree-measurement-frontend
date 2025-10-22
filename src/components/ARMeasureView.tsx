@@ -10,6 +10,7 @@ interface ARMeasureViewProps {
 }
 
 type ARState = 'SCANNING' | 'READY_TO_PLACE_FIRST' | 'READY_TO_PLACE_SECOND' | 'COMPLETE';
+type UIState = 'ENTRY' | 'TRANSITIONING' | 'AR_ACTIVE';
 
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
   // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
@@ -23,9 +24,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [showPlaceButton, setShowPlaceButton] = useState(false);
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
-  // Track AR session state
-  const [arSessionActive, setArSessionActive] = useState(false);
+  
+  // --- NEW: 3-State UI Machine to prevent Chrome compositor conflicts ---
+  const [uiState, setUiState] = useState<UIState>('ENTRY');
   const arButtonRef = useRef<HTMLElement | null>(null);
+  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
@@ -298,11 +301,20 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
     // --- 4. The Chimera AR Button Strategy ---
     // We hide the Three.js ARButton behind our custom UI but keep it functional
-    const arButton = ARButton.createButton(renderer, {
+    
+    // CRITICAL: Ensure #ar-overlay exists before referencing it
+    const overlayElement = currentContainer.querySelector('#ar-overlay');
+    const arButtonConfig: any = {
       requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay'],
-      domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
-    });
+      optionalFeatures: ['dom-overlay'] // Make dom-overlay optional for broader compatibility
+    };
+    
+    // Only add domOverlay if the element exists (prevents race condition)
+    if (overlayElement) {
+      arButtonConfig.domOverlay = { root: overlayElement };
+    }
+    
+    const arButton = ARButton.createButton(renderer, arButtonConfig);
     
     // Style the button to be invisible but still functional
     Object.assign(arButton.style, {
@@ -320,15 +332,15 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     arButtonRef.current = arButton;
     currentContainer.appendChild(arButton);
     
-    // Track AR session state
+    // Track AR session state with UI state synchronization
     renderer.xr.addEventListener('sessionstart', () => {
       console.log('XR session started');
-      setArSessionActive(true);
+      setUiState('AR_ACTIVE');
     });
     
     renderer.xr.addEventListener('sessionend', () => {
       console.log('XR session ended');
-      setArSessionActive(false);
+      setUiState('ENTRY');
     });
 
     // --- 5. Render Loop ---
@@ -398,7 +410,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
     const onWindowResize = () => {
         // --- START: SURGICAL FIX (WebXR Best Practice) ---
-        // CRITICAL: Never resize renderer during active XR session
+        // CRITICAL: Never resize renderer during active XR session OR during UI transitions
         // The XR system controls viewport during presentation
         if (renderer.xr.isPresenting) {
           return; // Skip resize, prevent Chrome errors and flickering
@@ -431,6 +443,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       if (cooldownTimerRef.current) {
         clearTimeout(cooldownTimerRef.current);
         cooldownTimerRef.current = null;
+      }
+      
+      // Clear transition timer
+      if (transitionTimerRef.current) {
+        clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
       }
 
       // Comprehensive Three.js cleanup to prevent WebGL context leaks
@@ -515,15 +533,38 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     };
   }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
 
-  // Handler to trigger the hidden AR button
+  // Handler to trigger the hidden AR button with transition buffer
   const handleStartAR = useCallback(() => {
-    arButtonRef.current?.click();
+    // --- CRITICAL FIX: Transition buffer to prevent Chrome compositor conflicts ---
+    // Set transitioning state first to unmount entry screen cleanly
+    setUiState('TRANSITIONING');
+    
+    // Clear any existing transition timer
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+    }
+    
+    // 50ms buffer: Allows React to fully unmount entry screen before AR session starts
+    // This eliminates z-index warfare and prevents the white flicker in Chrome
+    transitionTimerRef.current = setTimeout(() => {
+      arButtonRef.current?.click();
+    }, 50);
   }, []);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50">
-      {/* AR Entry Screen */}
-      {!arSessionActive && (
+    <div 
+      ref={containerRef} 
+      className="fixed inset-0 z-50"
+      style={{
+        willChange: 'contents',
+        transform: 'translateZ(0)'
+      }}
+    >
+      {/* AR Overlay - MUST exist before ARButton creation to prevent race condition */}
+      <div id="ar-overlay" className="absolute inset-0 pointer-events-none" />
+      
+      {/* AR Entry Screen - Only shown in ENTRY state */}
+      {uiState === 'ENTRY' && (
         <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6"
         >
           {/* Exit Button */}
@@ -598,8 +639,22 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         </div>
       )}
 
+      {/* Transition State - Smooth black screen to prevent compositor conflicts */}
+      {uiState === 'TRANSITIONING' && (
+        <div className="absolute inset-0 z-50 bg-background-default dark:bg-background-default flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 bg-brand-primary/30 rounded-full blur-xl animate-pulse" />
+              <Move className="relative w-12 h-12 text-brand-primary animate-pulse" />
+            </div>
+            <p className="text-content-subtle font-medium">Starting AR...</p>
+          </div>
+        </div>
+      )}
+
       {/* AR Session Overlay - Only shown during active AR session */}
-      <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
+      {uiState === 'AR_ACTIVE' && (
+        <div className="absolute inset-0 pointer-events-none">
         <div 
           className="w-full h-full flex flex-col justify-between px-4 md:px-6"
           style={{
@@ -694,7 +749,8 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             )}
           </div>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
