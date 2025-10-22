@@ -1,9 +1,10 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
+import { ARMeasureView } from './ARMeasureView';
 
 interface Point { x: number; y: number; }
 
@@ -36,6 +37,9 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   const [instruction, setInstruction] = useState("A one-time camera calibration is needed.");
   const [isPanelVisible, setIsPanelVisible] = useState(true);
   const [showInstructionToast, setShowInstructionToast] = useState(false);
+  // --- START: SURGICAL ADDITION ---
+  const [showARDistanceMeasure, setShowARDistanceMeasure] = useState(false);
+  // --- END: SURGICAL ADDITION ---
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +152,18 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
     setIsPanelVisible(false);
     setShowInstructionToast(true);
   };
+
+  // --- START: SURGICAL ADDITION ---
+  const handleARDistanceComplete = (measuredDistance: number) => {
+    setDistance(measuredDistance.toFixed(2));
+    setShowARDistanceMeasure(false);
+    setInstruction("AR distance measured! Now enter the object's real size.");
+  };
+
+  const handleARDistanceCancel = () => {
+    setShowARDistanceMeasure(false);
+  };
+  // --- END: SURGICAL ADDITION ---
   
   return (
     // --- START: SURGICAL REPLACEMENT ---
@@ -213,7 +229,17 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-default mb-2">2. Distance to Object (meters)</label>
-                  <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
+                  <div className="flex gap-2">
+                    <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="flex-1 text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
+                    <button 
+                      onClick={() => setShowARDistanceMeasure(true)}
+                      className="px-4 py-3 bg-brand-primary/10 text-brand-primary rounded-lg border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
+                      title="Measure distance using AR"
+                    >
+                      <Ruler className="w-5 h-5" />
+                      <span className="hidden sm:inline">AR</span>
+                    </button>
+                  </div>
                   <ARLinks />
                 </div>
                 <div>
@@ -231,6 +257,17 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
             </main>
         </div>
       </div>
+
+      {/* --- START: SURGICAL ADDITION --- */}
+      {showARDistanceMeasure && (
+        <div className="fixed inset-0 z-50 bg-background-default">
+          <ARMeasureView 
+            onDistanceMeasured={handleARDistanceComplete}
+            onCancel={handleARDistanceCancel}
+          />
+        </div>
+      )}
+      {/* --- END: SURGICAL ADDITION --- */}
     </div>
     // --- END: SURGICAL REPLACEMENT ---
   );

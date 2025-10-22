@@ -373,7 +373,30 @@ function App() {
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
     setInstructionText("Please grant the requested permissions to proceed.");
     setIsPanelOpen(true);
+    // --- START: SURGICAL ADDITION (Permission Re-validation) ---
+    // Always reset to PENDING to force permission re-check
     setPrereqStatus({ location: 'PENDING', compass: 'PENDING' });
+    
+    // Immediately check if permissions are already granted (from previous session)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // Location already granted
+          const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+          setUserGeoLocation(userLoc);
+          setCurrentLocation(userLoc);
+          setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+        },
+        (error) => {
+          // Location denied or blocked
+          if (error.code === 1) {
+            setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
+          }
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    }
+    // --- END: SURGICAL ADDITION ---
   };
 
   const handleRequestPermissions = async () => {
