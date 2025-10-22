@@ -589,10 +589,16 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
       {/* AR Session Overlay - Only shown during active AR session */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
-        <div className="w-full h-full flex flex-col justify-between p-4 md:p-6">
+        <div 
+          className="w-full h-full flex flex-col justify-between px-4 md:px-6"
+          style={{
+            paddingTop: 'max(env(safe-area-inset-top, 16px), 16px)',
+            paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 16px)'
+          }}
+        >
           
           {/* Top Bar: Instructions & Distance Display */}
-          <div className="flex items-start justify-between gap-4 pointer-events-auto">
+          <div className="flex items-start justify-between gap-4 pointer-events-auto mt-2">
             {/* Instruction Panel - NON-INTERACTIVE (visual only) */}
             <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default pointer-events-none">
               <div className="flex items-center gap-3">
@@ -623,7 +629,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           </div>
 
           {/* Bottom Controls: Context-Aware Action Buttons */}
-          <div className="flex justify-center items-end pb-safe pointer-events-auto">
+          <div className="flex justify-center items-end mb-2 pointer-events-auto">
             
             {/* Scanning State */}
             {isScanning && (
