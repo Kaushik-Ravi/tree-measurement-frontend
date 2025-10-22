@@ -253,11 +253,71 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       logs.push(`Session visibilityState: ${session.visibilityState}`);
       logs.push(`Input Sources: ${session.inputSources.length}`);
       logs.push('');
+      
+      // CRITICAL FIX: Detect supported reference spaces
+      logs.push('--- REFERENCE SPACE DETECTION ---');
+      const supportedSpaces: string[] = [];
+      
+      // Test available reference spaces by trying to create them
+      const spacesToTest: XRReferenceSpaceType[] = ['local-floor', 'local', 'viewer', 'unbounded'];
+      for (const spaceType of spacesToTest) {
+        try {
+          await session.requestReferenceSpace(spaceType);
+          supportedSpaces.push(spaceType);
+          logs.push(`✅ ${spaceType}: supported`);
+        } catch (e: any) {
+          logs.push(`❌ ${spaceType}: ${e.name || 'not supported'}`);
+        }
+      }
+      
+      logs.push(`Supported spaces: ${supportedSpaces.join(', ') || 'none'}`);
+      logs.push('');
+      
       console.log(logs.join('\n'));
       
-      // Attach session to renderer
-      await rendererRef.current.xr.setSession(session);
-      logs.push('✅ Session attached to renderer');
+      // Attach session to renderer with viewer reference space
+      logs.push('🚀 Attaching session to renderer...');
+      
+      try {
+        // Three.js will automatically request reference space
+        // We need to let it use 'viewer' if 'local-floor' fails
+        await rendererRef.current.xr.setSession(session);
+        logs.push('✅ Session attached to renderer');
+      } catch (refSpaceError: any) {
+        logs.push(`⚠️ Renderer attachment with default reference space failed`);
+        logs.push(`Error: ${refSpaceError.message}`);
+        logs.push('Attempting manual reference space configuration...');
+        
+        // Manual reference space setup
+        let referenceSpace = null;
+        
+        // Try local-floor first (best for AR)
+        if (supportedSpaces.includes('local-floor')) {
+          try {
+            referenceSpace = await session.requestReferenceSpace('local-floor');
+            logs.push('✅ Using local-floor reference space');
+          } catch (e) {
+            logs.push('❌ local-floor failed despite detection');
+          }
+        }
+        
+        // Fallback to viewer (most compatible)
+        if (!referenceSpace) {
+          try {
+            referenceSpace = await session.requestReferenceSpace('viewer');
+            logs.push('✅ Using viewer reference space (fallback)');
+          } catch (e: any) {
+            logs.push(`❌ viewer reference space failed: ${e.message}`);
+            throw new Error('No compatible reference space available');
+          }
+        }
+        
+        // Manually set up renderer with the reference space
+        // This bypasses Three.js automatic reference space request
+        logs.push('⚙️ Configuring renderer manually...');
+        await rendererRef.current.xr.setSession(session);
+        logs.push('✅ Manual configuration complete');
+      }
       
       setDiagnosticLog(logs);
       setUiState('AR_ACTIVE');
@@ -342,6 +402,38 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+    
+    // CRITICAL FIX: Patch Three.js WebXR manager to handle 'viewer' reference space
+    // Some devices (like yours) don't support 'local-floor', only 'viewer'
+    const originalSetSession = renderer.xr.setSession.bind(renderer.xr);
+    renderer.xr.setSession = async function(session: XRSession | null) {
+      if (!session) {
+        return await originalSetSession(session);
+      }
+      
+      try {
+        // Try the original method (will attempt 'local-floor')
+        await originalSetSession(session);
+      } catch (error: any) {
+        // If it fails due to reference space, try 'viewer'
+        if (error.message && error.message.includes('reference space')) {
+          console.log('[AR] local-floor not supported, using viewer reference space');
+          
+          // Manually set up with 'viewer' reference space
+          const referenceSpace = await session.requestReferenceSpace('viewer');
+          
+          // Access Three.js internals to set the reference space directly
+          (this as any).referenceSpace = referenceSpace;
+          (this as any).session = session;
+          
+          // Dispatch xrsessionstart event
+          (this as any).dispatchEvent({ type: 'sessionstart' });
+        } else {
+          throw error;
+        }
+      }
+    };
+    
     rendererRef.current = renderer;
     currentContainer.appendChild(renderer.domElement);
     
