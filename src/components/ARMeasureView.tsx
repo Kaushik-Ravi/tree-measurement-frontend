@@ -17,7 +17,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const distanceRef = useRef<number | null>(null);
   
   // UI state (safe to cause re-renders)
-  const [instruction, setInstruction] = useState("Move your phone to scan the ground.");
+  const [instruction, setInstruction] = useState("Scan the ground to detect surface.");
   const [uiDistance, setUiDistance] = useState<number | null>(null);
   const [showConfirmButtons, setShowConfirmButtons] = useState(false);
   const [showPlaceButton, setShowPlaceButton] = useState(false);
@@ -50,15 +50,15 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const handleRedo = useCallback(() => {
     pointsRef.current = [];
     distanceRef.current = null;
-    arStateRef.current = 'SCANNING';
+    arStateRef.current = 'READY_TO_PLACE_FIRST'; // Skip scanning, go straight to placement
     
     // Update UI state
     setUiDistance(null);
     setShowConfirmButtons(false);
-    setShowPlaceButton(false);
+    setShowPlaceButton(true); // Immediately show place button
     setShowUndoButton(false);
-    setIsScanning(true);
-    setInstruction("Move your phone to scan the ground.");
+    setIsScanning(false); // Don't show scanning state
+    setInstruction("Point camera at tree's base, then tap +");
     
     // Reset visual elements
     markersRef.current.forEach(marker => marker.visible = false);
@@ -73,7 +73,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         
         // Update UI state
         setShowUndoButton(false);
-        setInstruction("Tap '+' to place a marker at the tree's base.");
+        setInstruction("Point camera at tree's base, then tap +");
     }
   }, []);
 
@@ -98,59 +98,61 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     // --- 2. Scene Lighting & Objects ---
     scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1.5));
     
-    // A. World-Class Reticle (ARuler-inspired surface detection feedback)
+    // A. High-Visibility Reticle (Magenta, 2.5x larger for forest visibility)
     const reticle = new THREE.Group();
     
-    // Outer ring (primary indicator)
+    // Outer ring (primary indicator) - MAGENTA, 2.5x larger
     const reticleRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.08, 0.09, 64).rotateX(-Math.PI / 2),
+        new THREE.RingGeometry(0.15, 0.17, 64).rotateX(-Math.PI / 2), // 15-17cm diameter
         new THREE.MeshBasicMaterial({ 
-            color: 0x34d399, // Emerald green
-            opacity: 0.9, 
+            color: 0xFF00FF, // Bright Magenta - maximum visibility
+            opacity: 0.95, 
             transparent: true,
             side: THREE.DoubleSide
         })
     );
     
-    // Inner ring (secondary feedback)
+    // Inner ring (secondary feedback) - MAGENTA
     const reticleInnerRing = new THREE.Mesh(
-        new THREE.RingGeometry(0.04, 0.045, 64).rotateX(-Math.PI / 2),
+        new THREE.RingGeometry(0.07, 0.08, 64).rotateX(-Math.PI / 2), // 7-8cm diameter
         new THREE.MeshBasicMaterial({ 
-            color: 0x10b981, 
-            opacity: 0.6, 
+            color: 0xFF00FF, // Magenta
+            opacity: 0.7, 
             transparent: true,
             side: THREE.DoubleSide
         })
     );
     
-    // Center dot
+    // Center dot - White for maximum contrast
     const reticleDot = new THREE.Mesh(
-        new THREE.CircleGeometry(0.015, 32).rotateX(-Math.PI / 2),
+        new THREE.CircleGeometry(0.025, 32).rotateX(-Math.PI / 2), // Larger dot
         new THREE.MeshBasicMaterial({ color: 0xffffff })
     );
     
-    // Crosshair lines for precision
+    // Crosshair lines for precision - MAGENTA, thicker
     const crosshairMaterial = new THREE.LineBasicMaterial({ 
-        color: 0x34d399, 
+        color: 0xFF00FF, // Magenta
         transparent: true, 
-        opacity: 0.7 
+        opacity: 0.8,
+        linewidth: 3 // Thicker lines
     });
     
+    // Longer crosshairs for better visibility
     const crosshairGeometry1 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-0.12, 0.001, 0),
-        new THREE.Vector3(-0.09, 0.001, 0)
+        new THREE.Vector3(-0.22, 0.001, 0),
+        new THREE.Vector3(-0.18, 0.001, 0)
     ]);
     const crosshairGeometry2 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0.09, 0.001, 0),
-        new THREE.Vector3(0.12, 0.001, 0)
+        new THREE.Vector3(0.18, 0.001, 0),
+        new THREE.Vector3(0.22, 0.001, 0)
     ]);
     const crosshairGeometry3 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0.001, -0.12),
-        new THREE.Vector3(0, 0.001, -0.09)
+        new THREE.Vector3(0, 0.001, -0.22),
+        new THREE.Vector3(0, 0.001, -0.18)
     ]);
     const crosshairGeometry4 = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0.001, 0.09),
-        new THREE.Vector3(0, 0.001, 0.12)
+        new THREE.Vector3(0, 0.001, 0.18),
+        new THREE.Vector3(0, 0.001, 0.22)
     ]);
     
     const crosshair1 = new THREE.Line(crosshairGeometry1, crosshairMaterial);
@@ -211,7 +213,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 if (markerIndex === 0) { // First point placed
                     arStateRef.current = 'READY_TO_PLACE_SECOND';
                     setShowUndoButton(true);
-                    setInstruction("Now, tap '+' to place a marker at your feet.");
+                    setInstruction("Point camera at your feet, then tap +");
                 } else { // Second point placed
                     const [p1, p2] = pointsRef.current;
                     const calculatedDistance = p1.distanceTo(p2);
@@ -311,7 +313,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                         arStateRef.current = 'READY_TO_PLACE_FIRST';
                         setIsScanning(false);
                         setShowPlaceButton(true);
-                        setInstruction("Tap '+' to place a marker at the tree's base.");
+                        setInstruction("Point camera at tree's base, then tap +");
                     }
                 }
                 // Enhanced reticle feedback: full opacity when surface locked
@@ -434,15 +436,15 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               <ol className="space-y-3 text-sm text-content-subtle">
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">1</span>
-                  <span>Point your camera at the ground and move your phone to scan the surface</span>
+                  <span>Stand at your measurement position and scan the ground</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">2</span>
-                  <span>Tap the + button to place a marker at the tree's base</span>
+                  <span>Point your camera at the tree's base and tap the + button</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">3</span>
-                  <span>Walk to your position and tap + again to measure the distance</span>
+                  <span>Point your camera down at your feet and tap + again (stay in place)</span>
                 </li>
               </ol>
             </div>
@@ -468,12 +470,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
       {/* AR Session Overlay - Only shown during active AR session */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
-        <div className="w-full h-full flex flex-col justify-between p-4 md:p-6 pointer-events-auto">
+        <div className="w-full h-full flex flex-col justify-between p-4 md:p-6">
           
           {/* Top Bar: Instructions & Distance Display */}
-          <div className="flex items-start justify-between gap-4">
-            {/* Instruction Panel */}
-            <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default">
+          <div className="flex items-start justify-between gap-4 pointer-events-auto">
+            {/* Instruction Panel - NON-INTERACTIVE (visual only) */}
+            <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default pointer-events-none">
               <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
                   {isScanning && <Move className="w-6 h-6 text-brand-accent animate-pulse" />}
@@ -491,10 +493,10 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               </div>
             </div>
 
-            {/* Exit Button */}
+            {/* Exit Button - INTERACTIVE */}
             <button
               onClick={onCancel}
-              className="flex-shrink-0 p-3 bg-status-error/90 hover:bg-status-error text-white rounded-full backdrop-blur-md shadow-lg transition-all duration-200"
+              className="flex-shrink-0 p-3 bg-status-error/90 hover:bg-status-error text-white rounded-full backdrop-blur-md shadow-lg transition-all duration-200 pointer-events-auto"
               aria-label="Exit AR"
             >
               <X className="w-5 h-5" />
@@ -502,11 +504,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           </div>
 
           {/* Bottom Controls: Context-Aware Action Buttons */}
-          <div className="flex justify-center items-end pb-safe">
+          <div className="flex justify-center items-end pb-safe pointer-events-auto">
             
             {/* Scanning State */}
             {isScanning && (
-              <div className="bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-stroke-default">
+              <div className="bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-stroke-default pointer-events-none">
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <div className="absolute inset-0 bg-brand-accent/30 rounded-full blur-md animate-pulse" />
@@ -517,23 +519,23 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
               </div>
             )}
 
-            {/* Placement State */}
+            {/* Placement State - ONLY BOTTOM BUTTON IS INTERACTIVE */}
             {showPlaceButton && (
               <div className="flex items-center gap-4">
-                {/* Undo Button */}
+                {/* Undo Button - INTERACTIVE */}
                 <button
                   onClick={handleUndo}
                   disabled={!showUndoButton}
-                  className="p-4 bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-full border border-stroke-default shadow-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-background-inset transition-all duration-200 group"
+                  className="p-4 bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-full border border-stroke-default shadow-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-background-inset transition-all duration-200 group pointer-events-auto"
                   aria-label="Undo last point"
                 >
                   <RotateCcw className="w-6 h-6 text-content-subtle group-hover:text-content-default transition-colors" />
                 </button>
 
-                {/* Main Place Button */}
+                {/* Main Place Button - PRIMARY INTERACTIVE ELEMENT */}
                 <button
                   onClick={() => onSelectRef.current?.()}
-                  className="relative group"
+                  className="relative group pointer-events-auto"
                   aria-label="Place marker"
                 >
                   <div className="absolute inset-0 bg-brand-primary/30 rounded-full blur-xl group-hover:blur-2xl transition-all" />
@@ -550,19 +552,19 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             {/* Complete State */}
             {showConfirmButtons && (
               <div className="flex gap-3">
-                {/* Redo Button */}
+                {/* Redo Button - INTERACTIVE */}
                 <button
                   onClick={handleRedo}
-                  className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-brand-accent to-brand-accent-hover hover:from-brand-accent-hover hover:to-brand-accent text-content-on-brand font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
+                  className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-brand-accent to-brand-accent-hover hover:from-brand-accent-hover hover:to-brand-accent text-content-on-brand font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 pointer-events-auto"
                 >
                   <RotateCcw className="w-5 h-5" />
                   <span>Redo</span>
                 </button>
 
-                {/* Confirm Button */}
+                {/* Confirm Button - INTERACTIVE */}
                 <button
                   onClick={handleConfirm}
-                  className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-status-success to-brand-primary hover:from-status-success/90 hover:to-brand-primary/90 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200"
+                  className="flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-status-success to-brand-primary hover:from-status-success/90 hover:to-brand-primary/90 text-white font-bold rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 pointer-events-auto"
                 >
                   <Check className="w-5 h-5" />
                   <span>Confirm</span>
