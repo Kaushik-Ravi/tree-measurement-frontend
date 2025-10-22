@@ -1,5 +1,4 @@
 // src/components/ARMeasureView.tsx
-// --- START: SURGICAL REPLACEMENT ---
 import React from 'react';
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
@@ -239,4 +238,3 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     </div>
   );
 }
-// --- END: SURGICAL REPLACEMENT ---
