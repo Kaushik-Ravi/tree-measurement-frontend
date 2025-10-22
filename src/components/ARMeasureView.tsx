@@ -23,7 +23,11 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [showPlaceButton, setShowPlaceButton] = useState(false);
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
-  const [arSessionActive, setArSessionActive] = useState(false);
+  // --- START: SURGICAL FIX (Flicker Elimination) ---
+  // CRITICAL: Use ref instead of state to prevent React re-render during XR session
+  // Industry standard: Google, Meta, 8th Wall avoid setState during active XR
+  const arSessionActiveRef = useRef(false);
+  // --- END: SURGICAL FIX ---
   const arButtonRef = useRef<HTMLElement | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -319,15 +323,25 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     arButtonRef.current = arButton;
     currentContainer.appendChild(arButton);
     
-    // Track AR session state
+    // --- START: SURGICAL FIX (Flicker Elimination) ---
+    // Track AR session state WITHOUT triggering React re-renders
     renderer.xr.addEventListener('sessionstart', () => {
-        setArSessionActive(true);
+        // Use ref instead of setState to prevent re-render during XR session
+        arSessionActiveRef.current = true;
+        
+        // Hide entry screen using direct DOM manipulation (no React reconciliation)
+        const entryScreen = document.getElementById('ar-entry-screen');
+        if (entryScreen) {
+          entryScreen.style.display = 'none';
+        }
     });
     
     renderer.xr.addEventListener('sessionend', () => {
-        setArSessionActive(false);
+        arSessionActiveRef.current = false;
+        // Now safe to trigger React updates (session ended)
         onCancel();
     });
+    // --- END: SURGICAL FIX ---
 
     // --- 5. Render Loop ---
     let surfaceFound = false;
@@ -520,9 +534,14 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
   return (
     <div ref={containerRef} className="fixed inset-0 z-50">
-      {/* AR Entry Screen - Only shown before AR session starts */}
-      {!arSessionActive && (
-        <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
+      {/* AR Entry Screen - Always rendered, visibility controlled by direct DOM manipulation */}
+      {/* --- START: SURGICAL FIX (Flicker Elimination) --- */}
+      <div 
+        id="ar-entry-screen" 
+        style={{ display: 'block' }}
+        className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6"
+      >
+      {/* --- END: SURGICAL FIX --- */}
           {/* Exit Button */}
           <button
             onClick={handleCancelSafe}
@@ -593,7 +612,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             </p>
           </div>
         </div>
-      )}
 
       {/* AR Session Overlay - Only shown during active AR session */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
