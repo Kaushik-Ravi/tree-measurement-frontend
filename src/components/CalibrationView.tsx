@@ -229,17 +229,18 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-default mb-2">2. Distance to Object (meters)</label>
-                  <div className="flex gap-2">
-                    <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="flex-1 text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
-                    <button 
-                      onClick={() => setShowARDistanceMeasure(true)}
-                      className="px-4 py-3 bg-brand-primary/10 text-brand-primary rounded-lg border border-brand-primary/20 hover:bg-brand-primary/20 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
-                      title="Measure distance using AR"
-                    >
-                      <Ruler className="w-5 h-5" />
-                      <span className="hidden sm:inline">AR</span>
-                    </button>
-                  </div>
+                  <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
+                  
+                  {/* AR Measurement Option - Prominent Button */}
+                  <button 
+                    onClick={() => setShowARDistanceMeasure(true)}
+                    className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
+                    title="Measure distance using AR"
+                  >
+                    <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-brand-primary font-semibold">Measure with Camera (AR)</span>
+                  </button>
+                  
                   <ARLinks />
                 </div>
                 <div>

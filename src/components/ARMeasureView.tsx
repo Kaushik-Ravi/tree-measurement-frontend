@@ -405,36 +405,103 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     return () => {
       isMountedRef.current = false;
       renderer.setAnimationLoop(null);
-      renderer.xr.getSession()?.end();
+      
+      // --- START: SURGICAL ENHANCEMENT (WebGL Context Leak Fix) ---
+      // End XR session gracefully
+      const currentSession = renderer.xr.getSession();
+      if (currentSession) {
+        currentSession.end().catch((err) => console.warn('XR session end error:', err));
+      }
+      
+      // Remove event listeners
       controller.removeEventListener('select', onSelect);
+      window.removeEventListener('resize', onWindowResize);
 
       // Clear cooldown timer
       if (cooldownTimerRef.current) {
         clearTimeout(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
       }
 
-      // Dispose of Three.js objects to prevent memory leaks
+      // Comprehensive Three.js cleanup to prevent WebGL context leaks
       scene.traverse(object => {
           if (object instanceof THREE.Mesh) {
-              object.geometry.dispose();
-              if (Array.isArray(object.material)) {
-                  object.material.forEach(material => material.dispose());
-              } else {
+              // Dispose geometry
+              if (object.geometry) {
+                object.geometry.dispose();
+              }
+              
+              // Dispose material(s)
+              if (object.material) {
+                if (Array.isArray(object.material)) {
+                    object.material.forEach(material => {
+                      if (material.map) material.map.dispose();
+                      if (material.lightMap) material.lightMap.dispose();
+                      if (material.bumpMap) material.bumpMap.dispose();
+                      if (material.normalMap) material.normalMap.dispose();
+                      if (material.specularMap) material.specularMap.dispose();
+                      if (material.envMap) material.envMap.dispose();
+                      material.dispose();
+                    });
+                } else {
+                    if (object.material.map) object.material.map.dispose();
+                    if (object.material.lightMap) object.material.lightMap.dispose();
+                    if (object.material.bumpMap) object.material.bumpMap.dispose();
+                    if (object.material.normalMap) object.material.normalMap.dispose();
+                    if (object.material.specularMap) object.material.specularMap.dispose();
+                    if (object.material.envMap) object.material.envMap.dispose();
+                    object.material.dispose();
+                }
+              }
+          } else if (object instanceof THREE.Line) {
+              // Dispose line geometry and material
+              if (object.geometry) object.geometry.dispose();
+              if (object.material) {
+                if (Array.isArray(object.material)) {
+                  object.material.forEach(mat => mat.dispose());
+                } else {
                   object.material.dispose();
+                }
               }
           }
       });
 
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
+      // Clear scene
+      while(scene.children.length > 0) { 
+        scene.remove(scene.children[0]); 
       }
+
+      // Dispose renderer and force WebGL context loss (CRITICAL for Chrome)
+      if (rendererRef.current) {
+        const gl = rendererRef.current.getContext();
+        rendererRef.current.dispose();
+        rendererRef.current.forceContextLoss();
+        
+        // Extra cleanup for WebGL context
+        if (gl) {
+          const loseContextExt = gl.getExtension('WEBGL_lose_context');
+          if (loseContextExt) {
+            loseContextExt.loseContext();
+          }
+        }
+        
+        rendererRef.current = null;
+      }
+
+      // Clear all refs
+      reticleRef.current = null;
+      markersRef.current = [];
+      lineRef.current = null;
+      pointsRef.current = [];
+      onSelectRef.current = null;
       
+      // Remove DOM elements
       if (currentContainer) {
         while (currentContainer.firstChild) {
             currentContainer.removeChild(currentContainer.firstChild);
         }
       }
-      window.removeEventListener('resize', onWindowResize);
+      // --- END: SURGICAL ENHANCEMENT ---
     };
   }, [onCancel]); // CRITICAL FIX: Removed arState from dependencies
 
@@ -583,20 +650,6 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 >
                   <RotateCcw className="w-6 h-6 text-content-subtle group-hover:text-content-default transition-colors" />
                 </button>
-
-                {/* Status Indicator - VISUAL ONLY (Not clickable) */}
-                <div className="relative pointer-events-none">
-                  <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-xl animate-pulse" />
-                  <div className="relative px-6 py-4 bg-gradient-to-br from-brand-primary/90 to-brand-secondary/90 backdrop-blur-md rounded-full shadow-2xl border-2 border-white/30">
-                    <div className="flex flex-col items-center gap-1">
-                      <Move className="w-8 h-8 text-white animate-pulse" strokeWidth={2.5} />
-                      <span className="text-xs font-bold text-white">Tap screen</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Spacer for visual balance */}
-                <div className="w-[56px]" />
               </div>
             )}
 
