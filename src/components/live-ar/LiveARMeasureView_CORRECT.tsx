@@ -70,11 +70,23 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // CRITICAL FIX: Remove startCamera from useEffect to prevent infinite loop
   useEffect(() => {
     let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
     
     const initCamera = async () => {
       try {
         console.log('[LiveAR] Requesting camera access...');
-        const stream = await navigator.mediaDevices.getUserMedia({
+        console.log('[LiveAR] Protocol:', window.location.protocol);
+        console.log('[LiveAR] Host:', window.location.host);
+        console.log('[LiveAR] Checking navigator.mediaDevices:', !!navigator.mediaDevices);
+        console.log('[LiveAR] Checking getUserMedia:', !!navigator.mediaDevices?.getUserMedia);
+        
+        // CRITICAL CHECK: getUserMedia requires HTTPS (or localhost)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Camera API not available. Please ensure you are using HTTPS.');
+        }
+        
+        // CRITICAL FIX: Add 10-second timeout for getUserMedia
+        const streamPromise = navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
             width: { ideal: 1920 },
@@ -82,38 +94,75 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           },
           audio: false,
         });
+        
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('Camera access timeout after 10 seconds'));
+          }, 10000);
+        });
+        
+        console.log('[LiveAR] Waiting for getUserMedia response...');
+        const stream = await Promise.race([streamPromise, timeoutPromise]);
+        clearTimeout(timeoutId);
+        
+        console.log('[LiveAR] Camera access granted! Stream:', stream);
+        console.log('[LiveAR] Stream active:', stream.active);
+        console.log('[LiveAR] Video tracks:', stream.getVideoTracks().length);
 
         if (isMounted && videoRef.current) {
-          console.log('[LiveAR] Camera access granted, setting up video...');
+          console.log('[LiveAR] Setting video srcObject...');
           videoRef.current.srcObject = stream;
           streamRef.current = stream;
           
-          // Wait for video to actually start playing
-          videoRef.current.onloadedmetadata = async () => {
-            console.log('[LiveAR] Video metadata loaded');
-            if (isMounted && videoRef.current) {
-              try {
-                // CRITICAL FIX: Explicitly call play() in case autoplay is blocked
-                await videoRef.current.play();
-                console.log('[LiveAR] Video play() called successfully');
-                setState('DISTANCE_INPUT');
-              } catch (playErr) {
-                console.error('[LiveAR] Video play() error:', playErr);
-                // Still transition to distance input - user can manually tap to play
-                setState('DISTANCE_INPUT');
-              }
+          // CRITICAL FIX: Add timeout for metadata loading
+          let metadataTimeoutId: NodeJS.Timeout;
+          const metadataLoaded = new Promise<void>((resolve) => {
+            videoRef.current!.onloadedmetadata = () => {
+              clearTimeout(metadataTimeoutId);
+              console.log('[LiveAR] Video metadata loaded');
+              resolve();
+            };
+          });
+          
+          const metadataTimeout = new Promise<void>((_, reject) => {
+            metadataTimeoutId = setTimeout(() => {
+              reject(new Error('Video metadata timeout after 5 seconds'));
+            }, 5000);
+          });
+          
+          await Promise.race([metadataLoaded, metadataTimeout]);
+          
+          if (isMounted && videoRef.current) {
+            try {
+              console.log('[LiveAR] Calling video.play()...');
+              await videoRef.current.play();
+              console.log('[LiveAR] Video playing successfully!');
+              setState('DISTANCE_INPUT');
+            } catch (playErr) {
+              console.error('[LiveAR] Video play() error:', playErr);
+              // Still transition - user can tap to play
+              setState('DISTANCE_INPUT');
             }
-          };
+          }
         }
       } catch (err: any) {
-        console.error('[LiveAR] Camera access error:', err);
+        clearTimeout(timeoutId);
+        console.error('[LiveAR] Camera initialization error:', err);
+        console.error('[LiveAR] Error name:', err.name);
+        console.error('[LiveAR] Error message:', err.message);
+        console.error('[LiveAR] Error stack:', err.stack);
+        
         if (isMounted) {
           setError(
-            err.name === 'NotAllowedError'
+            err.message?.includes('timeout')
+              ? 'Camera access timeout. Please refresh and try again.'
+              : err.name === 'NotAllowedError'
               ? 'Camera permission denied. Please enable camera access in browser settings.'
               : err.name === 'NotFoundError'
               ? 'No camera found on device.'
-              : 'Could not access camera. Please check permissions and try again.'
+              : err.name === 'NotReadableError'
+              ? 'Camera is already in use by another application.'
+              : `Could not access camera: ${err.message || 'Unknown error'}`
           );
           setState('ERROR');
         }
@@ -124,6 +173,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       if (streamRef.current) {
         console.log('[LiveAR] Stopping camera stream...');
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -261,9 +311,25 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   if (state === 'CAMERA_INIT') {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-        <div className="text-center text-white">
+        <div className="text-center text-white max-w-md px-6">
+          <Camera className="w-20 h-20 mx-auto mb-6 text-green-500 animate-pulse" />
           <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
-          <p className="text-lg">Starting camera...</p>
+          <p className="text-2xl font-bold mb-3">Requesting Camera Access</p>
+          <p className="text-gray-400 text-sm mb-6">
+            Please allow camera access when prompted by your browser
+          </p>
+          <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-4 text-left text-sm">
+            <p className="font-semibold text-yellow-400 mb-2">📸 Camera Permission Required</p>
+            <p className="text-gray-300">
+              If you don't see a permission prompt, check your browser settings and ensure camera access is allowed for this site.
+            </p>
+          </div>
+          <button
+            onClick={onCancel}
+            className="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
         </div>
       </div>
     );
