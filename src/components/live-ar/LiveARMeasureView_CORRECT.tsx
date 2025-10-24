@@ -65,6 +65,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const pendingStreamRef = useRef<MediaStream | null>(null); // CRITICAL FIX: Hold stream until video element exists
 
   // --- CAMERA SETUP ---
   // CRITICAL FIX: Remove startCamera from useEffect to prevent infinite loop
@@ -109,41 +110,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         console.log('[LiveAR] Stream active:', stream.active);
         console.log('[LiveAR] Video tracks:', stream.getVideoTracks().length);
 
-        if (isMounted && videoRef.current) {
-          console.log('[LiveAR] Setting video srcObject...');
-          videoRef.current.srcObject = stream;
+        // CRITICAL FIX: Store stream and change state - video element will appear
+        // Then a separate useEffect will attach the stream to the video element
+        if (isMounted) {
+          console.log('[LiveAR] Storing stream in pendingStreamRef...');
+          pendingStreamRef.current = stream;
           streamRef.current = stream;
-          
-          // CRITICAL FIX: Add timeout for metadata loading
-          let metadataTimeoutId: NodeJS.Timeout;
-          const metadataLoaded = new Promise<void>((resolve) => {
-            videoRef.current!.onloadedmetadata = () => {
-              clearTimeout(metadataTimeoutId);
-              console.log('[LiveAR] Video metadata loaded');
-              resolve();
-            };
-          });
-          
-          const metadataTimeout = new Promise<void>((_, reject) => {
-            metadataTimeoutId = setTimeout(() => {
-              reject(new Error('Video metadata timeout after 5 seconds'));
-            }, 5000);
-          });
-          
-          await Promise.race([metadataLoaded, metadataTimeout]);
-          
-          if (isMounted && videoRef.current) {
-            try {
-              console.log('[LiveAR] Calling video.play()...');
-              await videoRef.current.play();
-              console.log('[LiveAR] Video playing successfully!');
-              setState('DISTANCE_INPUT');
-            } catch (playErr) {
-              console.error('[LiveAR] Video play() error:', playErr);
-              // Still transition - user can tap to play
-              setState('DISTANCE_INPUT');
-            }
-          }
+          console.log('[LiveAR] Changing state to DISTANCE_INPUT...');
+          setState('DISTANCE_INPUT');
+          console.log('[LiveAR] State changed - video element should now render');
         }
       } catch (err: any) {
         clearTimeout(timeoutId);
@@ -178,8 +153,48 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         console.log('[LiveAR] Stopping camera stream...');
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (pendingStreamRef.current) {
+        console.log('[LiveAR] Stopping pending stream...');
+        pendingStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, []); // Empty deps - run once on mount
+
+  // CRITICAL FIX: Attach stream to video element once it exists
+  useEffect(() => {
+    const attachStream = async () => {
+      if (pendingStreamRef.current && videoRef.current && state === 'DISTANCE_INPUT') {
+        console.log('[LiveAR] Video element now exists - attaching stream...');
+        const stream = pendingStreamRef.current;
+        videoRef.current.srcObject = stream;
+        
+        // Wait for metadata
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeoutId = setTimeout(() => reject(new Error('Metadata timeout')), 5000);
+            videoRef.current!.onloadedmetadata = () => {
+              clearTimeout(timeoutId);
+              console.log('[LiveAR] Video metadata loaded');
+              resolve();
+            };
+          });
+          
+          // Try to play
+          console.log('[LiveAR] Calling video.play()...');
+          await videoRef.current.play();
+          console.log('[LiveAR] Video playing successfully!');
+          
+          // Clear pending stream
+          pendingStreamRef.current = null;
+        } catch (err) {
+          console.error('[LiveAR] Video setup error:', err);
+          // Continue anyway - video might work without explicit play()
+        }
+      }
+    };
+    
+    attachStream();
+  }, [state]); // Re-run when state changes to DISTANCE_INPUT
 
   // --- CALCULATE SCALE FACTOR ---
   /**
