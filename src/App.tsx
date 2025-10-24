@@ -4,6 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon, Camera, Move } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
+// --- START: LIVE AR INTEGRATION ---
+import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView';
+import { FeatureFlags } from './config/featureFlags';
+// --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
 import { 
   samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -165,6 +169,7 @@ function App() {
   
   // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
+  const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // NEW: Live AR mode
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
 
   useEffect(() => {
@@ -890,6 +895,29 @@ function App() {
 
   const renderSessionView = () => (
     <>
+      {/* --- START: LIVE AR MODE --- */}
+      {isLiveARModeActive && (
+        <LiveARMeasureView
+          onMeasurementComplete={(height, measurement) => {
+            // Live AR measurement complete - set metrics directly
+            setCurrentMetrics({
+              height_m: height,
+              canopy_m: 0, // Will be measured separately or estimated
+              dbh_cm: 0,   // Will be measured separately or estimated
+            });
+            setDistance(measurement.distance.toFixed(2));
+            setIsLiveARModeActive(false);
+            setAppStatus('ANALYSIS_COMPLETE');
+            setIsPanelOpen(true);
+            setInstructionText("Live AR measurement complete! Identify the species to save.");
+          }}
+          onCancel={() => {
+            setIsLiveARModeActive(false);
+          }}
+        />
+      )}
+      {/* --- END: LIVE AR MODE --- */}
+
       {isArModeActive && (
         <ARMeasureView
           onDistanceMeasured={(measuredDistance) => {
@@ -957,14 +985,34 @@ function App() {
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
+                {/* --- START: LIVE AR MODE BUTTON --- */}
+                {FeatureFlags.LIVE_AR_MODE && (
+                  <>
+                    <button 
+                      onClick={() => setIsLiveARModeActive(true)} 
+                      className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      <Camera className="w-5 h-5" />
+                      Live AR Measurement (Beta)
+                    </button>
+
+                    <div className="relative my-4 flex items-center">
+                      <div className="flex-grow border-t border-stroke-default"></div>
+                      <span className="flex-shrink mx-4 text-content-subtle text-sm">OR</span>
+                      <div className="flex-grow border-t border-stroke-default"></div>
+                    </div>
+                  </>
+                )}
+                {/* --- END: LIVE AR MODE BUTTON --- */}
+
                 {/* --- START: SURGICAL MODIFICATION --- */}
                 {/* The AR support check is removed. The button now cleanly activates the AR mode. */}
                 <button 
                   onClick={() => setIsArModeActive(true)} 
                   className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
                 >
-                  <Camera className="w-5 h-5" />
-                  Measure with Camera (AR)
+                  <Move className="w-5 h-5" />
+                  Measure with AR Ruler
                 </button>
                 {/* --- END: SURGICAL MODIFICATION --- */}
 
