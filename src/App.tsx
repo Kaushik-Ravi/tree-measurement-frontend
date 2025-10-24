@@ -903,52 +903,58 @@ function App() {
         <LiveARMeasureView
           fovRatio={fovRatio}
           focalLength={focalLength}
-          onMeasurementComplete={(
-            metrics, 
-            capturedImageFile, 
-            maskImageBase64, 
-            speciesName,
-            speciesConfidence,
-            identificationResult,
-            co2Sequestered,
-            userLocation,
-            compassHeading
-          ) => {
-            // Live AR measurement complete - ALL metrics already calculated by SAM!
-            setCurrentMetrics(metrics);
-            setCurrentMeasurementFile(capturedImageFile);
-            setResultImageSrc(`data:image/png;base64,${maskImageBase64}`);
-            setOriginalImageSrc(URL.createObjectURL(capturedImageFile));
-            
-            // Set species identification if available
-            if (identificationResult) {
-              setCurrentIdentification(identificationResult);
+          onMeasurementComplete={(result) => {
+            // PHASE F.3: Database Integration Complete - Handle navigation to Hub
+            console.log('[App] Live AR measurement complete:', result);
+
+            // Update results if data was saved
+            if (result.updatedResults) {
+              setAllResults(result.updatedResults);
             }
-            
-            // Set CO2 if available
-            if (co2Sequestered) {
-              setCurrentCO2(co2Sequestered);
-            }
-            
-            // Set location if available
-            if (userLocation) {
-              setCurrentLocation(userLocation);
-              setCapturedHeading(compassHeading || null);
-            }
-            
-            // Update instruction based on what was identified
-            if (speciesName && speciesName !== 'Unknown species' && speciesName !== 'Species identification failed') {
-              setInstructionText(`Live AR measurement complete! Species identified as ${speciesName}. CO2 sequestration: ${co2Sequestered?.toFixed(2) || 'N/A'} kg.`);
+
+            // Navigate to HUB (matching Photo Method exactly)
+            if (result.shouldNavigateToHub) {
+              setCurrentView('HUB');
+              setIsLiveARModeActive(false);
+              setAppStatus('IDLE');
+
+              // Show success message based on workflow
+              if (result.success) {
+                if (result.quickSave) {
+                  setInstructionText("✅ Quick capture submitted successfully! Available in Community Grove.");
+                } else if (result.fullAnalysis) {
+                  setInstructionText("✅ Full analysis saved! Check your history below.");
+                }
+              } else {
+                // Error occurred
+                setInstructionText(`❌ Save failed: ${result.error || 'Unknown error'}`);
+                setErrorMessage(result.error || 'Failed to save measurement');
+              }
+
+              // Reset session state (same as Photo Method)
+              setCurrentMeasurementFile(null);
+              setDistance('');
+              setFocalLength(null);
+              setScaleFactor(null);
+              setCurrentMetrics(null);
+              setCurrentIdentification(null);
+              setCurrentCO2(null);
+              setAdditionalData(initialAdditionalData);
+              setIsPanelOpen(false);
             } else {
-              setInstructionText("Live AR measurement complete! Please identify the species to save.");
+              // Stay in Live AR mode (error handling)
+              setIsLiveARModeActive(false);
+              if (!result.success) {
+                setErrorMessage(result.error || 'An error occurred');
+                setAppStatus('ERROR');
+              }
             }
-            
-            setIsLiveARModeActive(false);
-            setAppStatus('ANALYSIS_COMPLETE');
-            setIsPanelOpen(true);
           }}
           onCancel={() => {
             setIsLiveARModeActive(false);
+            setCurrentView('HUB');
+            setAppStatus('IDLE');
+            setInstructionText("Live AR measurement cancelled.");
           }}
         />
       )}

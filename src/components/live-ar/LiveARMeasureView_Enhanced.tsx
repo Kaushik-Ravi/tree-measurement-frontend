@@ -24,27 +24,34 @@ import {
   AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw, Leaf,
   Zap, Users, Edit3
 } from 'lucide-react';
-import { samAutoSegment, identifySpecies, calculateCO2 } from '../../apiService';
+import { 
+  samAutoSegment, 
+  identifySpecies, 
+  calculateCO2, 
+  quickCapture, 
+  saveResult, 
+  uploadImage, 
+  getResults 
+} from '../../apiService';
 import type { Metrics, IdentificationResponse } from '../../apiService';
 import { 
   loadSavedCalibration, 
   autoCalibrate,
   type CameraCalibration 
 } from '../../utils/cameraCalibration';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface LiveARMeasureViewProps {
-  /** Callback when measurement is complete */
-  onMeasurementComplete: (
-    metrics: Metrics,
-    capturedImageFile: File,
-    maskImageBase64: string,
-    speciesName?: string,
-    speciesConfidence?: number,
-    identificationResult?: IdentificationResponse | null,
-    co2Sequestered?: number | null,
-    userLocation?: { lat: number; lng: number } | null,
-    compassHeading?: number | null
-  ) => void;
+  /** Callback when measurement is complete and saved to database */
+  onMeasurementComplete: (result: {
+    success: boolean;
+    quickSave?: boolean;
+    fullAnalysis?: boolean;
+    shouldNavigateToHub: boolean;
+    updatedResults?: any[];
+    metrics?: Metrics;
+    error?: string;
+  }) => void;
   /** Callback when user cancels */
   onCancel: () => void;
   /** Optional: Camera FOV ratio (from calibration) */
@@ -83,6 +90,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   fovRatio,
   focalLength,
 }) => {
+  // --- AUTH CONTEXT (Phase F: Database Integration) ---
+  const { session } = useAuth();
+  
   // --- STATE ---
   const [state, setState] = useState<MeasurementState>('CHECKING_AR_SUPPORT');
   const [distance, setDistance] = useState<number | null>(null);
@@ -467,24 +477,40 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
             // Request hit-test source with proper reference space
             if (!hitTestSourceRequested) {
-              // CRITICAL FIX: Use 'local-floor' instead of 'viewer' for better device compatibility
-              session.requestReferenceSpace('local-floor').then(localSpace => {
-                session.requestHitTestSource?.({ space: localSpace })?.then(source => {
-                  hitTestSource = source;
-                }).catch(err => {
-                  console.warn('[LiveAR] Hit-test source failed, trying viewer space:', err);
-                  // Fallback to viewer space if local-floor fails
-                  session.requestReferenceSpace('viewer').then(viewerSpace => {
-                    session.requestHitTestSource?.({ space: viewerSpace })?.then(source => {
+              // PHASE A.3: CRITICAL FIX - Try reference spaces in order of widest device support
+              // viewer → local → local-floor → unbounded
+              const tryReferenceSpaces = async () => {
+                const spaceTypes: XRReferenceSpaceType[] = [
+                  'viewer',         // Most widely supported (phone-relative)
+                  'local',          // Common fallback (session-relative)
+                  'local-floor',    // Floor alignment (ideal but not always available)
+                  'unbounded'       // Full tracking (rarely supported on mobile)
+                ];
+
+                for (const spaceType of spaceTypes) {
+                  try {
+                    console.log(`[Phase A.3] Trying reference space: ${spaceType}`);
+                    const refSpace = await session.requestReferenceSpace(spaceType);
+                    
+                    // Try to get hit-test source with this space
+                    const source = await session.requestHitTestSource?.({ space: refSpace });
+                    if (source) {
                       hitTestSource = source;
-                    });
-                  }).catch(err2 => {
-                    console.error('[LiveAR] All reference spaces failed:', err2);
-                  });
-                });
-              }).catch(err => {
-                console.error('[LiveAR] local-floor reference space failed:', err);
+                      console.log(`[Phase A.3] ✅ Success with reference space: ${spaceType}`);
+                      return;
+                    }
+                  } catch (err) {
+                    console.log(`[Phase A.3] ❌ Failed with ${spaceType}:`, err);
+                  }
+                }
+                
+                console.error('[Phase A.3] All reference spaces failed - hit-test unavailable');
+              };
+
+              tryReferenceSpaces().catch(err => {
+                console.error('[Phase A.3] Reference space initialization error:', err);
               });
+              
               session.addEventListener('end', () => {
                 hitTestSourceRequested = false;
                 hitTestSource = null;
@@ -552,8 +578,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
       if (focalLength) {
         cameraConstant = 36.0 / focalLength;
+        console.log('[Phase A.2] Using focal length:', focalLength, 'mm → camera constant:', cameraConstant);
       } else if (fovRatio) {
         cameraConstant = fovRatio;
+        console.log('[Phase A.2] Using FOV ratio:', fovRatio);
       } else {
         setError('Camera not calibrated. Please calibrate first.');
         return null;
@@ -562,6 +590,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       const distMM = dist * 1000;
       const horizontalPixels = Math.max(imageWidth, imageHeight);
       const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
+      
+      // PHASE A.2: Debug logging for dimension accuracy
+      console.log('[Phase A.2] Scale Factor Calculation:');
+      console.log('  - Distance (m):', dist);
+      console.log('  - Distance (mm):', distMM);
+      console.log('  - Camera constant:', cameraConstant);
+      console.log('  - Horizontal pixels:', horizontalPixels);
+      console.log('  - Image dimensions:', imageWidth, 'x', imageHeight);
+      console.log('  - Final scale factor:', finalScaleFactor);
+      console.log('  - Expected DBH range (10cm):', (10 / finalScaleFactor), 'pixels');
+      console.log('  - Expected DBH range (50cm):', (50 / finalScaleFactor), 'pixels');
       
       return finalScaleFactor;
     },
@@ -737,6 +776,146 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setMaskTransform({ x: 0, y: 0, scale: 1 });
   }, []);
 
+  // --- PHASE F.1: QUICK SAVE DATABASE INTEGRATION ---
+  const handleQuickSave = useCallback(async () => {
+    if (!capturedImageFile || !distance || !userLocation || !session?.access_token) {
+      setError("Missing required data: image, distance, location, or not logged in.");
+      setState('ERROR');
+      return;
+    }
+
+    setState('PROCESSING_SAM');
+    setInstruction("Submitting quick capture to database...");
+
+    try {
+      // Calculate scale factor if not already set
+      let finalScaleFactor = scaleFactor;
+      if (!finalScaleFactor && videoRef.current) {
+        finalScaleFactor = calculateScaleFactor(
+          distance,
+          videoRef.current.videoWidth,
+          videoRef.current.videoHeight
+        );
+        if (!finalScaleFactor) {
+          throw new Error('Failed to calculate scale factor');
+        }
+        setScaleFactor(finalScaleFactor);
+      }
+
+      console.log('[Phase F.1] Quick Save - calling API with:');
+      console.log('  - Distance:', distance, 'm');
+      console.log('  - Scale Factor:', finalScaleFactor);
+      console.log('  - Location:', userLocation);
+      console.log('  - Compass:', compassHeading);
+
+      // Call Quick Capture API (same as Photo Method)
+      await quickCapture(
+        capturedImageFile,
+        distance,
+        finalScaleFactor!,
+        compassHeading,
+        userLocation.lat,
+        userLocation.lng,
+        session.access_token
+      );
+
+      console.log('[Phase F.1] Quick capture saved successfully');
+
+      // Refresh history
+      const updatedResults = await getResults(session.access_token);
+
+      // Navigate back to Hub with success
+      onMeasurementComplete({
+        success: true,
+        quickSave: true,
+        shouldNavigateToHub: true,
+        updatedResults
+      });
+
+    } catch (error: any) {
+      console.error('[Phase F.1] Quick save failed:', error);
+      setError(`Quick save failed: ${error.message}`);
+      setState('ERROR');
+      
+      // Return error to parent
+      onMeasurementComplete({
+        success: false,
+        quickSave: true,
+        shouldNavigateToHub: false,
+        error: error.message
+      });
+    }
+  }, [capturedImageFile, distance, scaleFactor, userLocation, compassHeading, session, calculateScaleFactor, onMeasurementComplete]);
+
+  // --- PHASE F.2: FULL ANALYSIS DATABASE INTEGRATION ---
+  const handleFullAnalysisSave = useCallback(async () => {
+    if (!capturedImageFile || !metrics || !session?.access_token || !scaleFactor) {
+      setError("Cannot save: missing data or not logged in.");
+      setState('ERROR');
+      return;
+    }
+
+    setState('PROCESSING_SAM');
+    setInstruction("Uploading image and saving full analysis to database...");
+
+    try {
+      console.log('[Phase F.2] Full Analysis Save - uploading image...');
+      
+      // 1. Upload image to Supabase Storage
+      const uploadResponse = await uploadImage(capturedImageFile, session.access_token);
+      const imageUrl = uploadResponse.image_url;
+      console.log('[Phase F.2] Image uploaded:', imageUrl);
+
+      // 2. Prepare result payload (same as Photo Method)
+      const newResultPayload = {
+        fileName: capturedImageFile.name,
+        metrics: metrics,
+        species: identificationResult?.bestMatch ?? undefined,
+        woodDensity: identificationResult?.woodDensity ?? undefined,
+        co2_sequestered_kg: co2Sequestered ?? undefined,
+        latitude: userLocation?.lat,
+        longitude: userLocation?.lng,
+        heading: compassHeading,
+        image_url: imageUrl,
+        distance_m: distance,
+        scale_factor: scaleFactor,
+        measurement_method: 'live-ar', // Track measurement type
+        ...additionalDetails, // condition, ownership, remarks
+      };
+
+      console.log('[Phase F.2] Saving to database:', newResultPayload);
+
+      // 3. Save to database (same API as Photo Method)
+      await saveResult(newResultPayload, session.access_token);
+      console.log('[Phase F.2] Full analysis saved successfully');
+
+      // 4. Refresh history
+      const updatedResults = await getResults(session.access_token);
+
+      // 5. Navigate back to Hub with success
+      onMeasurementComplete({
+        success: true,
+        fullAnalysis: true,
+        shouldNavigateToHub: true,
+        updatedResults,
+        metrics
+      });
+
+    } catch (error: any) {
+      console.error('[Phase F.2] Full analysis save failed:', error);
+      setError(`Failed to save result: ${error.message}`);
+      setState('ERROR');
+      
+      // Return error to parent
+      onMeasurementComplete({
+        success: false,
+        fullAnalysis: true,
+        shouldNavigateToHub: false,
+        error: error.message
+      });
+    }
+  }, [capturedImageFile, metrics, identificationResult, co2Sequestered, userLocation, compassHeading, distance, scaleFactor, additionalDetails, session, onMeasurementComplete]);
+
   // --- SUBMIT POINTS FOR SAM ANALYSIS ---
   const handleSubmitPoints = useCallback(
     async () => {
@@ -785,6 +964,14 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         const primaryPoint = tapPoints[0];
         setTapPoint({ x: primaryPoint.x, y: primaryPoint.y });
 
+        // PHASE A.2: Debug logging before SAM call
+        console.log('[Phase A.2] Calling SAM with:');
+        console.log('  - Distance:', distance, 'm');
+        console.log('  - Scale factor:', scaleFactor);
+        console.log('  - Primary point:', primaryPoint);
+        console.log('  - All points:', tapPoints);
+        console.log('  - Image dimensions:', canvas.width, 'x', canvas.height);
+
         // Call SAM
         const response = await samAutoSegment(
           imageFile,
@@ -795,6 +982,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
         if (response.status !== 'success') {
           throw new Error(response.message || 'Tree measurement failed');
+        }
+
+        // PHASE A.2: Debug logging after SAM response
+        console.log('[Phase A.2] SAM Response:');
+        console.log('  - Height (m):', response.metrics.height_m);
+        console.log('  - Canopy (m):', response.metrics.canopy_m);
+        console.log('  - DBH (cm):', response.metrics.dbh_cm);
+        console.log('  - Scale factor returned:', response.scale_factor);
+        
+        if (response.metrics.dbh_cm === 0 || response.metrics.height_m === 0) {
+          console.error('[Phase A.2] ⚠️ WARNING: Zero dimensions detected!');
+          console.error('  - This indicates a scale factor or distance calculation error');
+          console.error('  - Check the debug logs above for incorrect values');
         }
 
         setMetrics(response.metrics);
@@ -811,14 +1011,22 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             setSpeciesConfidence(speciesResult.bestMatch.score);
             setIdentificationResult(speciesResult);
 
-            // Calculate CO2 sequestration
-            const woodDensity = speciesResult.woodDensity?.value || 500; // Default 500 kg/m³
-            try {
-              const co2Result = await calculateCO2(response.metrics, woodDensity);
-              setCO2Sequestered(co2Result.co2_sequestered_kg);
-              console.log('[LiveAR] CO2 calculated:', co2Result.co2_sequestered_kg, 'kg');
-            } catch (co2Err) {
-              console.error('[LiveAR] CO2 calculation error:', co2Err);
+            // PHASE A.1: Fix CO2 calculation - Match Photo Method exactly
+            // Use backend wood density, fallback to 650 kg/m³ (0.65 g/cm³) - standard hardwood density
+            const woodDensity = speciesResult.woodDensity?.value || 650; // kg/m³
+            
+            // Only call CO2 API if metrics are valid (prevent 400 Bad Request)
+            if (response.metrics.height_m > 0 && response.metrics.dbh_cm > 0) {
+              try {
+                const co2Result = await calculateCO2(response.metrics, woodDensity);
+                setCO2Sequestered(co2Result.co2_sequestered_kg);
+                console.log('[LiveAR Phase A.1] CO2 calculated:', co2Result.co2_sequestered_kg, 'kg (density:', woodDensity, 'kg/m³)');
+              } catch (co2Err) {
+                console.error('[LiveAR Phase A.1] CO2 calculation error:', co2Err);
+                // Non-fatal error - continue without CO2 data
+              }
+            } else {
+              console.warn('[LiveAR Phase A.1] Invalid metrics - skipping CO2 calculation');
             }
           } else {
             setSpeciesName('Unknown species');
@@ -1434,22 +1642,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
               {/* Quick Save Option */}
               <button
-                onClick={() => {
-                  // Direct save without additional details
-                  if (capturedImageFile && maskImageBase64 && metrics) {
-                    onMeasurementComplete(
-                      metrics, 
-                      capturedImageFile, 
-                      maskImageBase64,
-                      speciesName || undefined,
-                      speciesConfidence || undefined,
-                      identificationResult,
-                      co2Sequestered,
-                      userLocation,
-                      compassHeading
-                    );
-                  }
-                }}
+                onClick={handleQuickSave}
                 className="w-full mb-4 p-5 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-2 border-blue-500 rounded-xl hover:from-blue-500/30 hover:to-cyan-500/30 transition-all group"
               >
                 <div className="flex items-start gap-4">
@@ -1598,23 +1791,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                       Back
                     </button>
                     <button
-                      onClick={() => {
-                        if (capturedImageFile && maskImageBase64 && metrics) {
-                          // TODO: Pass additional details to parent
-                          // For now, just save with the basic data
-                          onMeasurementComplete(
-                            metrics, 
-                            capturedImageFile, 
-                            maskImageBase64,
-                            speciesName || undefined,
-                            speciesConfidence || undefined,
-                            identificationResult,
-                            co2Sequestered,
-                            userLocation,
-                            compassHeading
-                          );
-                        }
-                      }}
+                      onClick={handleFullAnalysisSave}
                       className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
                     >
                       <Check className="w-5 h-5" />
