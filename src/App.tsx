@@ -5,7 +5,7 @@ import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Spar
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
-import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_CORRECT';
+import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_Enhanced';
 import { FeatureFlags } from './config/featureFlags';
 // --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
@@ -903,16 +903,24 @@ function App() {
         <LiveARMeasureView
           fovRatio={fovRatio}
           focalLength={focalLength}
-          onMeasurementComplete={(metrics, capturedImageFile, maskImageBase64) => {
+          onMeasurementComplete={(metrics, capturedImageFile, maskImageBase64, speciesName) => {
             // Live AR measurement complete - ALL metrics already calculated by SAM!
             setCurrentMetrics(metrics);
             setCurrentMeasurementFile(capturedImageFile);
             setResultImageSrc(`data:image/png;base64,${maskImageBase64}`);
             setOriginalImageSrc(URL.createObjectURL(capturedImageFile));
+            
+            // If species was identified automatically, show it in instruction
+            if (speciesName && speciesName !== 'Unknown species' && speciesName !== 'Species identification failed') {
+              setInstructionText(`Live AR measurement complete! Species identified as ${speciesName}.`);
+              // Note: Species will still be shown via SpeciesIdentifier component after user confirms
+            } else {
+              setInstructionText("Live AR measurement complete! Now identify the species to save.");
+            }
+            
             setIsLiveARModeActive(false);
             setAppStatus('ANALYSIS_COMPLETE');
             setIsPanelOpen(true);
-            setInstructionText("Live AR measurement complete! Now identify the species to save.");
           }}
           onCancel={() => {
             setIsLiveARModeActive(false);
