@@ -266,3 +266,24 @@ canvas {
   /* Use safe area insets for notched devices */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
+
+/* 
+  ==============================================
+  PHASE 5: SLIDE-UP ANIMATION
+  ==============================================
+  Smooth slide-up animation for additional details panel
+*/
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out forwards;
+}

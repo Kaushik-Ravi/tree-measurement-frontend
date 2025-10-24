@@ -21,7 +21,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import {
   Camera, Check, X, TreePine, Loader2, 
-  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw, Leaf
+  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw, Leaf,
+  Zap, Users, Edit3
 } from 'lucide-react';
 import { samAutoSegment, identifySpecies, calculateCO2 } from '../../apiService';
 import type { Metrics, IdentificationResponse } from '../../apiService';
@@ -60,6 +61,8 @@ type MeasurementState =
   | 'PROCESSING_SAM'       // SAM processing
   | 'IDENTIFYING_SPECIES'  // PlantNet API call
   | 'COMPLETE'             // Show results
+  | 'SAVE_CHOICE'          // Phase 5: Choose Quick Save or Community Analysis
+  | 'ADDITIONAL_DETAILS'   // Phase 5: Fill additional details form
   | 'ERROR';               // Error state
 
 interface TapPoint {
@@ -97,6 +100,13 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // Phase 4: AR-anchored mask orientation tracking
   const [baseOrientation, setBaseOrientation] = useState<{ alpha: number; beta: number; gamma: number } | null>(null);
   const [maskTransform, setMaskTransform] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
+
+  // Phase 5: Two-flow + Additional Details
+  const [additionalDetails, setAdditionalDetails] = useState<{
+    condition: string;
+    ownership: string;
+    remarks: string;
+  }>({ condition: '', ownership: '', remarks: '' });
 
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1306,7 +1316,31 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               )}
 
               <button
+                onClick={() => setState('SAVE_CHOICE')}
+                className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg font-bold text-lg hover:opacity-90 flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-5 h-5" />
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Phase 5: Save Choice Screen */}
+        {state === 'SAVE_CHOICE' && metrics && (
+          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
+            <div className="max-w-md mx-auto">
+              <h2 className="text-2xl font-bold text-center mb-3">
+                How would you like to save?
+              </h2>
+              <p className="text-center text-gray-300 text-sm mb-6">
+                Choose your workflow based on your needs
+              </p>
+
+              {/* Quick Save Option */}
+              <button
                 onClick={() => {
+                  // Direct save without additional details
                   if (capturedImageFile && maskImageBase64 && metrics) {
                     onMeasurementComplete(
                       metrics, 
@@ -1321,11 +1355,179 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                     );
                   }
                 }}
-                className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg font-bold text-lg hover:opacity-90 flex items-center justify-center gap-2"
+                className="w-full mb-4 p-5 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-2 border-blue-500 rounded-xl hover:from-blue-500/30 hover:to-cyan-500/30 transition-all group"
               >
-                <Sparkles className="w-5 h-5" />
-                Save Measurement
+                <div className="flex items-start gap-4">
+                  <div className="bg-blue-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+                      Quick Save
+                      <span className="text-xs bg-blue-500 px-2 py-0.5 rounded-full">Fast</span>
+                    </h3>
+                    <p className="text-sm text-gray-300">
+                      Save measurement instantly with basic details. Perfect for quick surveys.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-blue-300">
+                      <Check className="w-4 h-4" />
+                      <span>Measurements • Species • CO₂ • Location</span>
+                    </div>
+                  </div>
+                </div>
               </button>
+
+              {/* Community Analysis Option */}
+              <button
+                onClick={() => setState('ADDITIONAL_DETAILS')}
+                className="w-full p-5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-500 rounded-xl hover:from-green-500/30 hover:to-emerald-500/30 transition-all group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="bg-green-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div className="text-left flex-1">
+                    <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+                      Community Analysis
+                      <span className="text-xs bg-green-500 px-2 py-0.5 rounded-full">Detailed</span>
+                    </h3>
+                    <p className="text-sm text-gray-300">
+                      Add tree health, notes, and additional photos for comprehensive tracking.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-green-300">
+                      <Check className="w-4 h-4" />
+                      <span>Everything in Quick + Health • Notes • Photos</span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {/* Back button */}
+              <button
+                onClick={() => setState('COMPLETE')}
+                className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-all"
+              >
+                Back to Results
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Phase 5: Additional Details Form */}
+        {state === 'ADDITIONAL_DETAILS' && metrics && (
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm z-30 overflow-y-auto"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="min-h-full flex items-end">
+              {/* Slide-up panel */}
+              <div className="w-full bg-gradient-to-b from-gray-900 to-black rounded-t-3xl p-6 text-white animate-slide-up">
+                <div className="max-w-md mx-auto">
+                  {/* Handle bar */}
+                  <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-6"></div>
+
+                  <h2 className="text-2xl font-bold mb-2">Additional Details</h2>
+                  <p className="text-gray-400 text-sm mb-6">
+                    Help us build a comprehensive tree database
+                  </p>
+
+                  {/* Condition */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <TreePine className="w-4 h-4 text-green-400" />
+                      Tree Condition
+                    </label>
+                    <select
+                      value={additionalDetails.condition}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, condition: e.target.value })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="" className="bg-gray-900">Select condition...</option>
+                      <option value="Healthy" className="bg-gray-900">🌳 Healthy - Thriving and vigorous</option>
+                      <option value="Average" className="bg-gray-900">🌿 Average - Normal growth</option>
+                      <option value="Poor" className="bg-gray-900">🍂 Poor - Stressed or damaged</option>
+                      <option value="Dead" className="bg-gray-900">💀 Dead - No signs of life</option>
+                    </select>
+                  </div>
+
+                  {/* Ownership */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-blue-400" />
+                      Location Type / Ownership
+                    </label>
+                    <select
+                      value={additionalDetails.ownership}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, ownership: e.target.value })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="" className="bg-gray-900">Select type...</option>
+                      <option value="Private" className="bg-gray-900">🏠 Private Property</option>
+                      <option value="Public" className="bg-gray-900">🏛️ Public Space</option>
+                      <option value="Government" className="bg-gray-900">🏢 Government Land</option>
+                      <option value="Semi Government" className="bg-gray-900">🏛️ Semi Government</option>
+                      <option value="Avenues" className="bg-gray-900">🛣️ Avenues</option>
+                      <option value="Garden" className="bg-gray-900">🌺 Garden</option>
+                      <option value="On Road" className="bg-gray-900">🚗 On Road</option>
+                      <option value="On Divider" className="bg-gray-900">🚦 On Divider</option>
+                      <option value="On Foot Path" className="bg-gray-900">🚶 On Foot Path</option>
+                      <option value="On Bridge" className="bg-gray-900">🌉 On Bridge</option>
+                      <option value="On Wall" className="bg-gray-900">🧱 On Wall</option>
+                      <option value="In Well" className="bg-gray-900">🕳️ In Well</option>
+                      <option value="Industrial" className="bg-gray-900">🏭 Industrial Area</option>
+                    </select>
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-purple-400" />
+                      Notes & Observations
+                    </label>
+                    <textarea
+                      value={additionalDetails.remarks}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, remarks: e.target.value })}
+                      rows={4}
+                      placeholder="e.g., Leaning towards east, evidence of fungal growth on trunk, nest visible in upper canopy..."
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Optional - Any additional observations</p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setState('SAVE_CHOICE')}
+                      className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-semibold transition-all"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (capturedImageFile && maskImageBase64 && metrics) {
+                          // TODO: Pass additional details to parent
+                          // For now, just save with the basic data
+                          onMeasurementComplete(
+                            metrics, 
+                            capturedImageFile, 
+                            maskImageBase64,
+                            speciesName || undefined,
+                            speciesConfidence || undefined,
+                            identificationResult,
+                            co2Sequestered,
+                            userLocation,
+                            compassHeading
+                          );
+                        }
+                      }}
+                      className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                    >
+                      <Check className="w-5 h-5" />
+                      Save All
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
