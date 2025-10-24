@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- CRITICAL FIX: Enhanced viewport for WebXR AR sessions -->
+    <!-- viewport-fit=cover ensures proper display in AR mode without shifting -->
+    <!-- user-scalable=no prevents zoom gestures that can interfere with AR -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Elite Tree Measurement</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

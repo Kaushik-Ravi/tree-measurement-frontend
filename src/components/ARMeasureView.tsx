@@ -134,6 +134,20 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     rendererRef.current = renderer;
+    
+    // CRITICAL FIX: Apply proper WebXR canvas styling to prevent viewport shifts
+    // This ensures the canvas fills the entire viewport correctly during AR sessions
+    Object.assign(renderer.domElement.style, {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      width: '100%',
+      height: '100%',
+      display: 'block',
+      touchAction: 'none', // Prevent touch gestures from interfering
+      zIndex: '1' // Behind UI overlay
+    });
+    
     currentContainer.appendChild(renderer.domElement);
     
     // --- 2. Scene Lighting & Objects ---
