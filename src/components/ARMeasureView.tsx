@@ -397,7 +397,13 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     const onWindowResize = () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // CRITICAL FIX: Only resize if not in active XR session
+        // This prevents the "Can't change size while VR device is presenting" error
+        const xrSession = renderer.xr.getSession();
+        if (!xrSession || !renderer.xr.isPresenting) {
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     };
     window.addEventListener('resize', onWindowResize);
 

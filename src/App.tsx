@@ -230,7 +230,10 @@ function App() {
   useEffect(() => { if (isPanelOpen) setShowInstructionToast(false) }, [isPanelOpen]);
 
   useEffect(() => {
-    if (currentView !== 'SESSION') return;
+    // CRITICAL FIX: Don't listen to device orientation when AR mode is active
+    // This prevents conflict between WebXR camera and DeviceOrientationEvent
+    // which caused flickering and sensor access issues
+    if (currentView !== 'SESSION' || isArModeActive || isLiveARModeActive) return;
     
     const handleLiveOrientation = (event: DeviceOrientationEvent) => {
       if (event.alpha !== null) {
@@ -245,7 +248,7 @@ function App() {
     return () => {
       window.removeEventListener('deviceorientation', handleLiveOrientation, true);
     };
-  }, [prereqStatus.compass, currentView]);
+  }, [prereqStatus.compass, currentView, isArModeActive, isLiveARModeActive]);
 
   const handleReturnToHub = () => {
     softReset(currentView);
