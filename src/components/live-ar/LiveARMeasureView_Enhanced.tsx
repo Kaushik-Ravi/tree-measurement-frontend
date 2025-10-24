@@ -43,11 +43,13 @@ interface LiveARMeasureViewProps {
 }
 
 type MeasurementState =
+  | 'CHECKING_AR_SUPPORT'  // Checking if WebXR AR is available
   | 'AR_INIT'              // Starting WebXR
   | 'AR_SCANNING'          // Looking for surface
   | 'AR_PLACE_FIRST'       // Place marker at tree base
   | 'AR_PLACE_SECOND'      // Place marker at user position
   | 'AR_DISTANCE_COMPLETE' // Distance measured, transitioning to camera
+  | 'DISTANCE_INPUT'       // Manual distance input (fallback)
   | 'CAMERA_READY'         // Live camera feed ready for tap
   | 'PROCESSING_SAM'       // SAM processing
   | 'IDENTIFYING_SPECIES'  // PlantNet API call
@@ -61,8 +63,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   focalLength,
 }) => {
   // --- STATE ---
-  const [state, setState] = useState<MeasurementState>('AR_INIT');
+  const [state, setState] = useState<MeasurementState>('CHECKING_AR_SUPPORT');
   const [distance, setDistance] = useState<number | null>(null);
+  const [manualDistanceInput, setManualDistanceInput] = useState('');
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const [capturedImageFile, setCapturedImageFile] = useState<File | null>(null);
   const [maskImageBase64, setMaskImageBase64] = useState<string>('');
@@ -71,7 +74,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [speciesConfidence, setSpeciesConfidence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tapPoint, setTapPoint] = useState<{ x: number; y: number } | null>(null);
-  const [instruction, setInstruction] = useState<string>('Initializing AR...');
+  const [instruction, setInstruction] = useState<string>('Checking AR support...');
 
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
@@ -89,22 +92,67 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const pointsRef = useRef<THREE.Vector3[]>([]);
   const distanceRef = useRef<number | null>(null);
 
-  // --- WEBXR SETUP ---
+  // --- WEBXR SETUP (with fallback to manual distance) ---
   useEffect(() => {
     let isMounted = true;
     let renderer: THREE.WebGLRenderer | null = null;
     let hitTestSource: XRHitTestSource | null = null;
     let hitTestSourceRequested = false;
 
-    const initWebXR = async () => {
+    const checkARSupportAndInit = async () => {
       try {
+        // Check if WebXR is available
         if (!navigator.xr) {
-          throw new Error('WebXR not supported on this device');
+          console.log('[LiveAR] WebXR not available - falling back to manual distance');
+          await startCameraForManualMode();
+          return;
         }
 
         const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
         if (!isSupported) {
-          throw new Error('AR not supported on this device');
+          console.log('[LiveAR] AR not supported - falling back to manual distance');
+          await startCameraForManualMode();
+          return;
+        }
+
+        // WebXR is supported, try to start AR session
+        await initWebXR();
+        
+      } catch (err: any) {
+        console.error('[LiveAR] AR initialization error:', err);
+        console.log('[LiveAR] Falling back to manual distance input');
+        await startCameraForManualMode();
+      }
+    };
+
+    const startCameraForManualMode = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+        
+        streamRef.current = stream;
+        setState('DISTANCE_INPUT');
+        setInstruction('Enter distance to tree');
+      } catch (err: any) {
+        console.error('[LiveAR] Camera error:', err);
+        setError('Failed to access camera');
+        setState('ERROR');
+      }
+    };
+
+    const initWebXR = async () => {
+      try {
+        setState('AR_INIT');
+
+        // Double-check navigator.xr exists (TypeScript safety)
+        if (!navigator.xr) {
+          throw new Error('WebXR not available');
         }
 
         // Setup Three.js scene
@@ -174,10 +222,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         scene.add(line);
         lineRef.current = line;
 
-        // Start AR session
+        // Start AR session - make hit-test OPTIONAL to support more devices
         const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
+          requiredFeatures: [], // No required features
+          optionalFeatures: ['hit-test', 'dom-overlay'],
           domOverlay: { root: document.body }
         });
 
@@ -297,15 +345,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setInstruction('Move your device to scan surfaces...');
 
       } catch (err: any) {
-        console.error('[LiveAR] WebXR initialization error:', err);
-        if (isMounted) {
-          setError(err.message || 'Failed to start AR');
-          setState('ERROR');
-        }
+        console.error('[LiveAR] WebXR session error:', err);
+        throw err; // Will be caught by checkARSupportAndInit
       }
     };
 
-    initWebXR();
+    checkARSupportAndInit();
 
     return () => {
       isMounted = false;
@@ -319,7 +364,72 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     };
   }, []);
 
-  // --- TRANSITION TO CAMERA MODE ---
+  // --- CALCULATE SCALE FACTOR ---
+  const calculateScaleFactor = useCallback(
+    (dist: number, imageWidth: number, imageHeight: number): number | null => {
+      let cameraConstant: number | null = null;
+
+      if (focalLength) {
+        cameraConstant = 36.0 / focalLength;
+      } else if (fovRatio) {
+        cameraConstant = fovRatio;
+      } else {
+        setError('Camera not calibrated. Please calibrate first.');
+        return null;
+      }
+
+      const distMM = dist * 1000;
+      const horizontalPixels = Math.max(imageWidth, imageHeight);
+      const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
+      
+      return finalScaleFactor;
+    },
+    [focalLength, fovRatio]
+  );
+
+  // --- ATTACH VIDEO STREAM (for manual distance mode) ---
+  useEffect(() => {
+    const attachStream = async () => {
+      if (streamRef.current && videoRef.current && state === 'DISTANCE_INPUT') {
+        try {
+          videoRef.current.srcObject = streamRef.current;
+          await videoRef.current.play();
+        } catch (err) {
+          console.error('[LiveAR] Video play error:', err);
+        }
+      }
+    };
+    
+    attachStream();
+  }, [state]);
+
+  // --- HANDLE MANUAL DISTANCE INPUT ---
+  const handleManualDistanceSubmit = useCallback(() => {
+    const dist = parseFloat(manualDistanceInput);
+    if (isNaN(dist) || dist <= 0) {
+      setError('Please enter a valid distance greater than 0');
+      return;
+    }
+
+    if (!videoRef.current || videoRef.current.videoWidth === 0) {
+      setError('Camera not ready. Please wait...');
+      return;
+    }
+
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+
+    const sf = calculateScaleFactor(dist, videoWidth, videoHeight);
+    if (!sf) return; // Error already set
+
+    setDistance(dist);
+    setScaleFactor(sf);
+    setError(null);
+    setState('CAMERA_READY');
+    setInstruction('Tap on the tree trunk');
+  }, [manualDistanceInput, calculateScaleFactor]);
+
+  // --- TRANSITION TO CAMERA MODE (after AR distance) ---
   const transitionToCamera = useCallback(async (dist: number) => {
     try {
       // Request camera
@@ -355,30 +465,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       setError(err.message || 'Failed to access camera');
       setState('ERROR');
     }
-  }, [fovRatio, focalLength]);
-
-  // --- CALCULATE SCALE FACTOR ---
-  const calculateScaleFactor = useCallback(
-    (dist: number, imageWidth: number, imageHeight: number): number | null => {
-      let cameraConstant: number | null = null;
-
-      if (focalLength) {
-        cameraConstant = 36.0 / focalLength;
-      } else if (fovRatio) {
-        cameraConstant = fovRatio;
-      } else {
-        setError('Camera not calibrated. Please calibrate first.');
-        return null;
-      }
-
-      const distMM = dist * 1000;
-      const horizontalPixels = Math.max(imageWidth, imageHeight);
-      const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
-      
-      return finalScaleFactor;
-    },
-    [focalLength, fovRatio]
-  );
+  }, [calculateScaleFactor]);
 
   // --- HANDLE TAP ON VIDEO ---
   const handleVideoTap = useCallback(
@@ -470,6 +557,18 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   );
 
   // --- RENDER ---
+
+  if (state === 'CHECKING_AR_SUPPORT') {
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+        <div className="text-center text-white max-w-md px-6">
+          <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
+          <p className="text-xl font-bold mb-2">Checking AR Capabilities</p>
+          <p className="text-sm text-gray-400">Detecting device features...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (state === 'ERROR') {
     return (
@@ -619,6 +718,51 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
       {/* Bottom UI */}
       <div className="absolute bottom-0 left-0 right-0 z-20">
+        {state === 'DISTANCE_INPUT' && (
+          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
+            <div className="max-w-md mx-auto">
+              <div className="bg-green-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Navigation className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-center mb-2">
+                Distance to Tree
+              </h2>
+              <p className="text-center text-gray-300 mb-4 text-sm">
+                Position yourself to see the full tree, then enter distance to base
+              </p>
+
+              <div className="space-y-4">
+                <input
+                  type="number"
+                  step="0.1"
+                  value={manualDistanceInput}
+                  onChange={(e) => setManualDistanceInput(e.target.value)}
+                  placeholder="e.g., 10.5"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 text-center text-2xl font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-400 text-center">
+                  Recommended: 5-20 meters
+                </p>
+
+                {error && (
+                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-sm text-red-200">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleManualDistanceSubmit}
+                  disabled={!manualDistanceInput}
+                  className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg font-bold text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {state === 'CAMERA_READY' && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
             <div className="max-w-md mx-auto text-center">
