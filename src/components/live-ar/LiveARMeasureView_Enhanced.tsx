@@ -19,8 +19,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import {
   Camera, Check, X, TreePine, Loader2, 
-  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw, Leaf,
-  Zap, Users, Edit3
+  AlertCircle, Sparkles, Target, Navigation, RotateCcw, Leaf,
+  Zap, Users, Edit3, ArrowLeft
 } from 'lucide-react';
 import { 
   samAutoSegment, 
@@ -117,13 +117,13 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [tapPoint, setTapPoint] = useState<{ x: number; y: number } | null>(null);
   const [tapPoints, setTapPoints] = useState<TapPoint[]>([]); // Multiple points for better SAM
+  const [freezeFrameImage, setFreezeFrameImage] = useState<string | null>(null); // PHASE D.2: Freeze frame for point selection
   const [instruction, setInstruction] = useState<string>('Checking AR support...');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [compassHeading, setCompassHeading] = useState<number | null>(null);
   
-  // Phase 4: AR-anchored mask orientation tracking
-  const [baseOrientation, setBaseOrientation] = useState<{ alpha: number; beta: number; gamma: number } | null>(null);
-  const [maskTransform, setMaskTransform] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
+  // PHASE E.2: AR mask tracking REMOVED (user feedback: looked "artificial")
+  // Simplified UI without device orientation tracking
 
   // Phase 5: Two-flow + Additional Details
   const [additionalDetails, setAdditionalDetails] = useState<{
@@ -204,71 +204,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     };
   }, []);
 
-  // --- PHASE 4: AR-ANCHORED MASK ORIENTATION TRACKING ---
-  useEffect(() => {
-    if (state !== 'FULL_ANALYSIS_COMPLETE' || !maskImageBase64) {
-      return; // Only track when mask is displayed (after full analysis)
-    }
-
-    // Capture base orientation when mask first appears
-    if (!baseOrientation) {
-      const captureBaseOrientation = (event: DeviceOrientationEvent) => {
-        if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
-          setBaseOrientation({
-            alpha: event.alpha,
-            beta: event.beta,
-            gamma: event.gamma
-          });
-          console.log('[LiveAR Phase 4] Base orientation captured:', event.alpha, event.beta, event.gamma);
-          window.removeEventListener('deviceorientation', captureBaseOrientation);
-        }
-      };
-      
-      window.addEventListener('deviceorientation', captureBaseOrientation);
-      return () => window.removeEventListener('deviceorientation', captureBaseOrientation);
-    }
-
-    // Track orientation changes and update mask transform
-    const handleOrientationChange = (event: DeviceOrientationEvent) => {
-      if (event.alpha === null || event.beta === null || event.gamma === null) return;
-      if (!baseOrientation) return;
-
-      // Calculate deltas from base orientation
-      let deltaAlpha = event.alpha - baseOrientation.alpha;
-      let deltaBeta = event.beta - baseOrientation.beta;
-      let deltaGamma = event.gamma - baseOrientation.gamma;
-
-      // Normalize alpha to -180 to 180 range
-      if (deltaAlpha > 180) deltaAlpha -= 360;
-      if (deltaAlpha < -180) deltaAlpha += 360;
-
-      // Convert orientation to screen transform
-      // Beta (tilt forward/back): affects Y position
-      // Gamma (tilt left/right): affects X position
-      // Alpha (compass): affects rotation (minimal for mask stability)
-      
-      // Scale factors: adjust these to tune sensitivity
-      const xSensitivity = 3.5; // pixels per degree
-      const ySensitivity = 3.5; // pixels per degree
-      const scaleSensitivity = 0.003; // scale change per degree
-
-      const x = deltaGamma * xSensitivity;
-      const y = deltaBeta * ySensitivity;
-      
-      // Slight scale adjustment for depth perception when tilting
-      const avgTilt = (Math.abs(deltaBeta) + Math.abs(deltaGamma)) / 2;
-      const scale = 1 + (avgTilt * scaleSensitivity);
-
-      setMaskTransform({ x, y, scale });
-    };
-
-    window.addEventListener('deviceorientation', handleOrientationChange);
-    console.log('[LiveAR Phase 4] Orientation tracking active');
-
-    return () => {
-      window.removeEventListener('deviceorientation', handleOrientationChange);
-    };
-  }, [state, maskImageBase64, baseOrientation]);
+  // PHASE E.2: AR mask orientation tracking REMOVED (simplified UI)
 
   // --- WEBXR SETUP (with fallback to manual distance) ---
   useEffect(() => {
@@ -719,6 +655,20 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       const videoX = Math.round(tapX * scaleX);
       const videoY = Math.round(tapY * scaleY);
 
+      // PHASE D.2: Freeze frame on first tap (prevents camera shake during point selection)
+      if (tapPoints.length === 0 && !freezeFrameImage) {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0);
+          const frozenImage = canvas.toDataURL('image/jpeg', 0.95);
+          setFreezeFrameImage(frozenImage);
+          console.log('[PHASE D.2] Freeze frame captured on first tap');
+        }
+      }
+
       // Add point to collection
       const pointNumber = tapPoints.length + 1;
       let label = '';
@@ -757,7 +707,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setInstruction(`${pointNumber} points selected. Tap "Analyze" when ready`);
       }
     },
-    [state, tapPoints]
+    [state, tapPoints, freezeFrameImage]
   );
 
   // --- UNDO LAST POINT ---
@@ -770,9 +720,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     if (newPoints.length === 0) {
       setState('CAMERA_READY');
       setInstruction('Tap on the tree trunk to start selection');
-      // Phase 4: Reset orientation tracking for next measurement
-      setBaseOrientation(null);
-      setMaskTransform({ x: 0, y: 0, scale: 1 });
+      // PHASE E.2: AR mask tracking removed (simplified)
+      // PHASE D.2: Clear freeze frame
+      setFreezeFrameImage(null);
     } else if (newPoints.length === 1) {
       setInstruction('Good! Tap another point on the trunk');
     } else if (newPoints.length === 2) {
@@ -785,10 +735,72 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setTapPoints([]);
     setState('CAMERA_READY');
     setInstruction('Tap on the tree trunk to start selection');
-    // Phase 4: Reset orientation tracking for next measurement
-    setBaseOrientation(null);
-    setMaskTransform({ x: 0, y: 0, scale: 1 });
+    // PHASE E.2: AR mask tracking removed (simplified)
+    // PHASE D.2: Clear freeze frame
+    setFreezeFrameImage(null);
   }, []);
+
+  // --- PHASE E.1: BACK BUTTON NAVIGATION ---
+  const handleBack = useCallback(() => {
+    switch (state) {
+      case 'TWO_FLOW_CHOICE':
+        // Go back to distance input (allows user to re-enter distance)
+        setState('DISTANCE_INPUT');
+        setInstruction('Enter distance to tree (optional if AR fails)');
+        setDistance(null);
+        setScaleFactor(null);
+        break;
+
+      case 'CAMERA_READY':
+        // Go back to TWO_FLOW_CHOICE
+        setState('TWO_FLOW_CHOICE');
+        setInstruction('Choose your measurement path');
+        // Keep distance and scaleFactor
+        break;
+
+      case 'POINT_SELECTION':
+        // Go back to CAMERA_READY (clear all points)
+        handleClearPoints();
+        break;
+
+      case 'QUICK_SAVE_DETAILS':
+        // Go back to Two Flow Choice (to re-choose path)
+        setState('TWO_FLOW_CHOICE');
+        setInstruction('Choose your measurement path');
+        break;
+
+      case 'FULL_ANALYSIS_DETAILS':
+        // Go back to FULL_ANALYSIS_COMPLETE (results screen)
+        setState('FULL_ANALYSIS_COMPLETE');
+        setInstruction('Analysis complete! Review or edit details');
+        break;
+
+      case 'FULL_ANALYSIS_COMPLETE':
+        // Go back to CAMERA_READY (restart multi-point selection)
+        setState('CAMERA_READY');
+        setInstruction('Tap on the tree trunk to start selection');
+        // Clear previous results
+        setMetrics(null);
+        setMaskImageBase64('');  // Empty string instead of null
+        setCO2Sequestered(null);
+        setSpeciesName(null);
+        setSpeciesConfidence(0);
+        setIdentificationResult(null);
+        setTapPoints([]);
+        setFreezeFrameImage(null);
+        break;
+
+      // Cannot go back during processing states
+      case 'PROCESSING_SAM':
+      case 'IDENTIFYING_SPECIES':
+      case 'SAVING':
+        console.warn('[Phase E.1] Cannot go back during processing');
+        break;
+
+      default:
+        console.warn('[Phase E.1] Back navigation not defined for state:', state);
+    }
+  }, [state, handleClearPoints]);
 
   // --- PHASE C: EXIF-PRESERVING PHOTO CAPTURE ---
   const capturePhotoWithEXIF = useCallback(async (videoElement: HTMLVideoElement): Promise<File> => {
@@ -1286,9 +1298,20 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           muted
           className="absolute inset-0 w-full h-full object-cover"
         />
+        
+        {/* PHASE D.2: Frozen frame overlay during point selection (prevents camera shake) */}
+        {freezeFrameImage && state === 'POINT_SELECTION' && (
+          <img
+            src={freezeFrameImage}
+            alt="Frozen frame"
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+        
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Multi-point markers */}
+        {/* PHASE D.3: Multi-point markers - 8px dots (matching Photo Method) */}
         {(state === 'POINT_SELECTION' || state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && 
           tapPoints.map((point, index) => (
             <div
@@ -1300,24 +1323,21 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                 transform: 'translate(-50%, -50%)',
               }}
             >
-              {/* Point marker */}
+              {/* PHASE D.3: Small 8px dot marker */}
               <div
-                className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white shadow-lg"
+                className="w-2 h-2 rounded-full shadow-lg border-2 border-white"
                 style={{
-                  borderColor: point.color,
-                  backgroundColor: `${point.color}80`, // 50% opacity
+                  backgroundColor: point.color,
                   animation: state === 'POINT_SELECTION' ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none'
                 }}
-              >
-                {index + 1}
-              </div>
-              {/* Label */}
+              />
+              {/* Label - positioned below dot */}
               {state === 'POINT_SELECTION' && (
                 <div
-                  className="absolute top-12 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white shadow-lg whitespace-nowrap"
-                  style={{ backgroundColor: point.color }}
+                  className="absolute top-3 left-1/2 transform -translate-x-1/2 px-2 py-0.5 rounded text-[10px] font-semibold text-white shadow-lg whitespace-nowrap border border-white/30"
+                  style={{ backgroundColor: `${point.color}cc` }}
                 >
-                  {point.label}
+                  {index + 1}
                 </div>
               )}
             </div>
@@ -1336,17 +1356,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           />
         )}
 
-        {/* Mask overlay - Phase 4: AR-anchored with orientation tracking */}
+        {/* PHASE E.2: Mask overlay - simplified (no orientation tracking) */}
         {state === 'FULL_ANALYSIS_COMPLETE' && maskImageBase64 && (
           <img
             src={`data:image/png;base64,${maskImageBase64}`}
             alt="Tree mask"
             className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen"
-            style={{
-              transform: `translate(${maskTransform.x}px, ${maskTransform.y}px) scale(${maskTransform.scale})`,
-              transition: 'transform 0.05s ease-out', // Smooth 50ms transition for natural tracking
-              willChange: 'transform' // Performance optimization
-            }}
           />
         )}
 
@@ -1481,116 +1496,99 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         )}
 
         {state === 'CAMERA_READY' && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
-            <div className="max-w-md mx-auto text-center">
-              {/* Stand Still Warning */}
-              <div className="mb-4 bg-amber-500/20 border border-amber-500 rounded-lg p-3">
-                <p className="text-amber-200 text-sm font-bold flex items-center justify-center gap-2">
-                  <span className="text-xl">⚠️</span>
-                  Keep camera steady and stay in position
-                </p>
-              </div>
+          <>
+            {/* PHASE E.1: Back button */}
+            <button
+              onClick={handleBack}
+              className="absolute top-4 left-4 z-20 bg-black/80 backdrop-blur-sm hover:bg-black/90 p-2 rounded-full transition-colors border border-white/20"
+              title="Back"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
 
-              <Crosshair className="w-20 h-20 mx-auto mb-4 text-green-500 animate-pulse" />
-              <h2 className="text-2xl font-bold mb-2">Tap on Tree Trunk</h2>
-              <p className="text-gray-300 mb-4">
-                Tap multiple points on the trunk and canopy for better accuracy
-              </p>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                <p className="text-sm text-gray-400">Distance: {distance?.toFixed(2)}m</p>
+            {/* PHASE D.1: Minimal top instruction banner (floating pill) */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+              <div className="bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm max-w-xs text-center shadow-lg border border-white/20">
+                Tap trunk for analysis
               </div>
             </div>
-          </div>
+
+            {/* PHASE D.4: High-contrast species badge (only if species identified) */}
+            {speciesName && speciesName !== 'Unknown species' && speciesName !== 'Species identification failed' && (
+              <div className="absolute top-16 right-4 z-20 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg opacity-0 hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-2">
+                  <Leaf className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <div>
+                    <div className="text-white font-semibold text-xs leading-tight">{speciesName}</div>
+                    {speciesConfidence && <div className="text-gray-300 text-[10px]">{(speciesConfidence * 100).toFixed(0)}%</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {state === 'POINT_SELECTION' && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
-            <div className="max-w-md mx-auto">
-              {/* Stand Still Warning */}
-              <div className="mb-4 bg-amber-500/20 border border-amber-500 rounded-lg p-3">
-                <p className="text-amber-200 text-sm font-bold flex items-center justify-center gap-2">
-                  <span className="text-xl">⚠️</span>
-                  Keep camera steady - don't move yet!
-                </p>
-              </div>
+          <>
+            {/* PHASE E.1: Back button */}
+            <button
+              onClick={handleBack}
+              className="absolute top-4 left-4 z-20 bg-black/80 backdrop-blur-sm hover:bg-black/90 p-2 rounded-full transition-colors border border-white/20"
+              title="Back to Camera Ready"
+            >
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
 
-              {/* Instruction */}
-              <div className="text-center mb-4">
-                <h2 className="text-xl font-bold mb-2">{instruction}</h2>
-                <p className="text-sm text-gray-400">{tapPoints.length} point{tapPoints.length !== 1 ? 's' : ''} selected</p>
-              </div>
-
-              {/* Points List */}
-              <div className="mb-4 space-y-2">
-                {tapPoints.map((point, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 bg-white/5 backdrop-blur-sm rounded-lg p-3 border"
-                    style={{ borderColor: point.color }}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                      style={{ backgroundColor: point.color }}
-                    >
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm">{point.label}</p>
-                      <p className="text-xs text-gray-400">X: {point.x}, Y: {point.y}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Control Buttons */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <button
-                  onClick={handleUndoPoint}
-                  disabled={tapPoints.length === 0}
-                  className="flex flex-col items-center justify-center gap-1 p-3 bg-orange-500/20 border border-orange-500 rounded-lg hover:bg-orange-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  <RotateCcw className="w-5 h-5" />
-                  <span className="text-xs font-semibold">Undo</span>
-                </button>
-                
-                <button
-                  onClick={handleClearPoints}
-                  disabled={tapPoints.length === 0}
-                  className="flex flex-col items-center justify-center gap-1 p-3 bg-red-500/20 border border-red-500 rounded-lg hover:bg-red-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  <X className="w-5 h-5" />
-                  <span className="text-xs font-semibold">Clear</span>
-                </button>
-                
-                <button
-                  onClick={handleSubmitPoints}
-                  disabled={tapPoints.length < 2}
-                  className="flex flex-col items-center justify-center gap-1 p-3 bg-green-500/20 border border-green-500 rounded-lg hover:bg-green-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  <Check className="w-5 h-5" />
-                  <span className="text-xs font-semibold">Analyze</span>
-                </button>
-              </div>
-
-              {/* Requirement Notice */}
-              {tapPoints.length < 2 && (
-                <div className="text-center text-sm text-yellow-300 bg-yellow-500/10 rounded-lg p-2 border border-yellow-500/30">
-                  ⓘ At least 2 points required for analysis
-                </div>
-              )}
-
-              {tapPoints.length >= 2 && (
-                <div className="text-center text-sm text-green-300 bg-green-500/10 rounded-lg p-2 border border-green-500/30">
-                  ✓ Ready to analyze! Tap "Analyze" button
-                </div>
-              )}
-
-              {/* Distance Info */}
-              <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
-                <p className="text-xs text-gray-400 text-center">Distance: {distance?.toFixed(2)}m</p>
+            {/* PHASE D.1: Minimal top status banner */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+              <div className="bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-xs max-w-xs text-center shadow-lg border border-white/20">
+                {tapPoints.length} point{tapPoints.length !== 1 ? 's' : ''} • {tapPoints.length < 2 ? 'Tap 2+ to analyze' : 'Ready to analyze'}
               </div>
             </div>
-          </div>
+
+            {/* PHASE D.1: Minimal bottom controls (circular floating buttons) */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+              <button
+                onClick={handleUndoPoint}
+                disabled={tapPoints.length === 0}
+                className="bg-orange-600/90 backdrop-blur-sm text-white p-3 rounded-full shadow-xl hover:bg-orange-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border border-white/20"
+                title="Undo"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
+              
+              <button
+                onClick={handleClearPoints}
+                disabled={tapPoints.length === 0}
+                className="bg-red-600/90 backdrop-blur-sm text-white p-3 rounded-full shadow-xl hover:bg-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border border-white/20"
+                title="Clear"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <button
+                onClick={handleSubmitPoints}
+                disabled={tapPoints.length < 2}
+                className="bg-green-600/90 backdrop-blur-sm text-white px-6 py-3 rounded-full font-semibold shadow-xl hover:bg-green-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed border border-white/20"
+              >
+                <Check className="w-5 h-5 inline mr-1" />
+                Analyze ({tapPoints.length})
+              </button>
+            </div>
+
+            {/* PHASE D.4: High-contrast species badge (only if species identified) */}
+            {speciesName && speciesName !== 'Unknown species' && speciesName !== 'Species identification failed' && (
+              <div className="absolute top-16 right-4 z-20 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg opacity-0 hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-2">
+                  <Leaf className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <div>
+                    <div className="text-white font-semibold text-xs leading-tight">{speciesName}</div>
+                    {speciesConfidence && <div className="text-gray-300 text-[10px]">{(speciesConfidence * 100).toFixed(0)}%</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {(state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && (
@@ -1625,6 +1623,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         {state === 'FULL_ANALYSIS_COMPLETE' && metrics && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
             <div className="max-w-md mx-auto">
+              {/* PHASE E.1: Back button */}
+              <button
+                onClick={handleBack}
+                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors z-20"
+                title="Back to point selection"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
               {/* Species badge */}
               {speciesName && (
                 <div className="mb-4 p-4 bg-gradient-to-r from-green-500/20 to-blue-500/20 border border-green-500/50 rounded-lg">
@@ -1711,6 +1718,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         {state === 'TWO_FLOW_CHOICE' && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
             <div className="max-w-md mx-auto">
+              {/* PHASE E.1: Back button */}
+              <button
+                onClick={handleBack}
+                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors"
+                title="Back"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
               <h2 className="text-2xl font-bold text-center mb-3">
                 How would you like to proceed?
               </h2>
@@ -1790,6 +1806,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                 <div className="max-w-md mx-auto">
                   {/* Handle bar */}
                   <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-6"></div>
+
+                  {/* PHASE E.1: Back button */}
+                  <button
+                    onClick={handleBack}
+                    className="absolute top-6 left-6 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors"
+                    title="Back"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
 
                   <h2 className="text-2xl font-bold mb-2">Quick Save - Additional Details</h2>
                   <p className="text-gray-400 text-sm mb-6">
@@ -1893,6 +1918,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                 <div className="max-w-md mx-auto">
                   {/* Handle bar */}
                   <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-6"></div>
+
+                  {/* PHASE E.1: Back button */}
+                  <button
+                    onClick={handleBack}
+                    className="absolute top-6 left-6 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors"
+                    title="Back to results"
+                  >
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
 
                   <h2 className="text-2xl font-bold mb-2">Additional Details</h2>
                   <p className="text-gray-400 text-sm mb-6">
