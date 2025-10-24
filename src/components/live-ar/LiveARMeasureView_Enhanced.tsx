@@ -21,7 +21,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import {
   Camera, Check, X, TreePine, Loader2, 
-  AlertCircle, Sparkles, Target, Navigation, Crosshair
+  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw
 } from 'lucide-react';
 import { samAutoSegment, identifySpecies } from '../../apiService';
 import type { Metrics } from '../../apiService';
@@ -51,10 +51,18 @@ type MeasurementState =
   | 'AR_DISTANCE_COMPLETE' // Distance measured, transitioning to camera
   | 'DISTANCE_INPUT'       // Manual distance input (fallback)
   | 'CAMERA_READY'         // Live camera feed ready for tap
+  | 'POINT_SELECTION'      // User tapping multiple points (trunk + canopy)
   | 'PROCESSING_SAM'       // SAM processing
   | 'IDENTIFYING_SPECIES'  // PlantNet API call
   | 'COMPLETE'             // Show results
   | 'ERROR';               // Error state
+
+interface TapPoint {
+  x: number;
+  y: number;
+  label: string;
+  color: string;
+}
 
 export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   onMeasurementComplete,
@@ -74,6 +82,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [speciesConfidence, setSpeciesConfidence] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tapPoint, setTapPoint] = useState<{ x: number; y: number } | null>(null);
+  const [tapPoints, setTapPoints] = useState<TapPoint[]>([]); // Multiple points for better SAM
   const [instruction, setInstruction] = useState<string>('Checking AR support...');
 
   // --- REFS ---
@@ -480,13 +489,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     }
   }, [calculateScaleFactor]);
 
-  // --- HANDLE TAP ON VIDEO ---
+  // --- HANDLE TAP ON VIDEO (Multi-Point Selection) ---
   const handleVideoTap = useCallback(
-    async (event: React.MouseEvent<HTMLDivElement>) => {
-      if (state !== 'CAMERA_READY' || !videoRef.current || !canvasRef.current) return;
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if ((state !== 'CAMERA_READY' && state !== 'POINT_SELECTION') || !videoRef.current) return;
 
       const video = videoRef.current;
-      const canvas = canvasRef.current;
       const rect = video.getBoundingClientRect();
 
       // Get tap position
@@ -499,7 +507,82 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       const videoX = Math.round(tapX * scaleX);
       const videoY = Math.round(tapY * scaleY);
 
-      setTapPoint({ x: videoX, y: videoY });
+      // Add point to collection
+      const pointNumber = tapPoints.length + 1;
+      let label = '';
+      let color = '';
+      
+      if (pointNumber === 1) {
+        label = 'Trunk Point 1';
+        color = '#22c55e'; // Green
+      } else if (pointNumber === 2) {
+        label = 'Trunk Point 2';
+        color = '#10b981'; // Emerald
+      } else if (pointNumber === 3) {
+        label = 'Canopy Point';
+        color = '#3b82f6'; // Blue
+      } else {
+        label = `Point ${pointNumber}`;
+        color = '#8b5cf6'; // Purple
+      }
+
+      const newPoint: TapPoint = {
+        x: videoX,
+        y: videoY,
+        label,
+        color
+      };
+
+      setTapPoints([...tapPoints, newPoint]);
+      setState('POINT_SELECTION');
+      
+      // Update instruction based on number of points
+      if (pointNumber === 1) {
+        setInstruction('Good! Tap another point on the trunk');
+      } else if (pointNumber === 2) {
+        setInstruction('Great! Now tap a point on the canopy');
+      } else {
+        setInstruction(`${pointNumber} points selected. Tap "Analyze" when ready`);
+      }
+    },
+    [state, tapPoints]
+  );
+
+  // --- UNDO LAST POINT ---
+  const handleUndoPoint = useCallback(() => {
+    if (tapPoints.length === 0) return;
+    
+    const newPoints = tapPoints.slice(0, -1);
+    setTapPoints(newPoints);
+    
+    if (newPoints.length === 0) {
+      setState('CAMERA_READY');
+      setInstruction('Tap on the tree trunk to start selection');
+    } else if (newPoints.length === 1) {
+      setInstruction('Good! Tap another point on the trunk');
+    } else if (newPoints.length === 2) {
+      setInstruction('Great! Now tap a point on the canopy');
+    }
+  }, [tapPoints]);
+
+  // --- CLEAR ALL POINTS ---
+  const handleClearPoints = useCallback(() => {
+    setTapPoints([]);
+    setState('CAMERA_READY');
+    setInstruction('Tap on the tree trunk to start selection');
+  }, []);
+
+  // --- SUBMIT POINTS FOR SAM ANALYSIS ---
+  const handleSubmitPoints = useCallback(
+    async () => {
+      if (tapPoints.length < 2 || !videoRef.current || !canvasRef.current) {
+        setError('Please select at least 2 points');
+        return;
+      }
+
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
       setState('PROCESSING_SAM');
       setInstruction('Analyzing tree structure...');
 
@@ -523,12 +606,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
         setCapturedImageFile(imageFile);
 
+        // Use the first point for SAM (or could send all points to backend if supported)
+        const primaryPoint = tapPoints[0];
+        setTapPoint({ x: primaryPoint.x, y: primaryPoint.y });
+
         // Call SAM
         const response = await samAutoSegment(
           imageFile,
           distance!,
           scaleFactor!,
-          { x: videoX, y: videoY }
+          { x: primaryPoint.x, y: primaryPoint.y }
         );
 
         if (response.status !== 'success') {
@@ -543,7 +630,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setInstruction('Identifying species...');
 
         try {
-          const speciesResult = await identifySpecies(imageFile, 'auto'); // 'auto' for leaf/flower/bark detection
+          const speciesResult = await identifySpecies(imageFile, 'auto');
           if (speciesResult.bestMatch) {
             setSpeciesName(speciesResult.bestMatch.scientificName);
             setSpeciesConfidence(speciesResult.bestMatch.score);
@@ -566,7 +653,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setState('ERROR');
       }
     },
-    [state, distance, scaleFactor]
+    [tapPoints, distance, scaleFactor]
   );
 
   // --- RENDER ---
@@ -679,8 +766,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       {/* Camera feed */}
       <div
         className="relative flex-1 overflow-hidden"
-        onClick={state === 'CAMERA_READY' ? handleVideoTap : undefined}
-        style={{ cursor: state === 'CAMERA_READY' ? 'crosshair' : 'default' }}
+        onClick={(state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? handleVideoTap : undefined}
+        style={{ cursor: (state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? 'crosshair' : 'default' }}
       >
         <video
           ref={videoRef}
@@ -691,8 +778,44 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         />
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Tap indicator */}
-        {tapPoint && (state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && (
+        {/* Multi-point markers */}
+        {(state === 'POINT_SELECTION' || state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && 
+          tapPoints.map((point, index) => (
+            <div
+              key={index}
+              className="absolute"
+              style={{
+                left: `${(point.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
+                top: `${(point.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              {/* Point marker */}
+              <div
+                className="w-10 h-10 rounded-full border-4 flex items-center justify-center font-bold text-white shadow-lg"
+                style={{
+                  borderColor: point.color,
+                  backgroundColor: `${point.color}80`, // 50% opacity
+                  animation: state === 'POINT_SELECTION' ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none'
+                }}
+              >
+                {index + 1}
+              </div>
+              {/* Label */}
+              {state === 'POINT_SELECTION' && (
+                <div
+                  className="absolute top-12 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full text-xs font-semibold text-white shadow-lg whitespace-nowrap"
+                  style={{ backgroundColor: point.color }}
+                >
+                  {point.label}
+                </div>
+              )}
+            </div>
+          ))
+        }
+
+        {/* Single tap indicator (legacy, for processing) */}
+        {tapPoint && (state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && tapPoints.length === 0 && (
           <div
             className="absolute w-8 h-8 border-4 border-green-500 rounded-full animate-ping"
             style={{
@@ -852,10 +975,100 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               <Crosshair className="w-20 h-20 mx-auto mb-4 text-green-500 animate-pulse" />
               <h2 className="text-2xl font-bold mb-2">Tap on Tree Trunk</h2>
               <p className="text-gray-300 mb-4">
-                Tap anywhere on the main trunk to start measurement
+                Tap multiple points on the trunk and canopy for better accuracy
               </p>
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <p className="text-sm text-gray-400">Distance: {distance?.toFixed(2)}m</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {state === 'POINT_SELECTION' && (
+          <div className="p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
+            <div className="max-w-md mx-auto">
+              {/* Stand Still Warning */}
+              <div className="mb-4 bg-amber-500/20 border border-amber-500 rounded-lg p-3">
+                <p className="text-amber-200 text-sm font-bold flex items-center justify-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  Keep camera steady - don't move yet!
+                </p>
+              </div>
+
+              {/* Instruction */}
+              <div className="text-center mb-4">
+                <h2 className="text-xl font-bold mb-2">{instruction}</h2>
+                <p className="text-sm text-gray-400">{tapPoints.length} point{tapPoints.length !== 1 ? 's' : ''} selected</p>
+              </div>
+
+              {/* Points List */}
+              <div className="mb-4 space-y-2">
+                {tapPoints.map((point, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 bg-white/5 backdrop-blur-sm rounded-lg p-3 border"
+                    style={{ borderColor: point.color }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm"
+                      style={{ backgroundColor: point.color }}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{point.label}</p>
+                      <p className="text-xs text-gray-400">X: {point.x}, Y: {point.y}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Control Buttons */}
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <button
+                  onClick={handleUndoPoint}
+                  disabled={tapPoints.length === 0}
+                  className="flex flex-col items-center justify-center gap-1 p-3 bg-orange-500/20 border border-orange-500 rounded-lg hover:bg-orange-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  <span className="text-xs font-semibold">Undo</span>
+                </button>
+                
+                <button
+                  onClick={handleClearPoints}
+                  disabled={tapPoints.length === 0}
+                  className="flex flex-col items-center justify-center gap-1 p-3 bg-red-500/20 border border-red-500 rounded-lg hover:bg-red-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <X className="w-5 h-5" />
+                  <span className="text-xs font-semibold">Clear</span>
+                </button>
+                
+                <button
+                  onClick={handleSubmitPoints}
+                  disabled={tapPoints.length < 2}
+                  className="flex flex-col items-center justify-center gap-1 p-3 bg-green-500/20 border border-green-500 rounded-lg hover:bg-green-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <Check className="w-5 h-5" />
+                  <span className="text-xs font-semibold">Analyze</span>
+                </button>
+              </div>
+
+              {/* Requirement Notice */}
+              {tapPoints.length < 2 && (
+                <div className="text-center text-sm text-yellow-300 bg-yellow-500/10 rounded-lg p-2 border border-yellow-500/30">
+                  ⓘ At least 2 points required for analysis
+                </div>
+              )}
+
+              {tapPoints.length >= 2 && (
+                <div className="text-center text-sm text-green-300 bg-green-500/10 rounded-lg p-2 border border-green-500/30">
+                  ✓ Ready to analyze! Tap "Analyze" button
+                </div>
+              )}
+
+              {/* Distance Info */}
+              <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
+                <p className="text-xs text-gray-400 text-center">Distance: {distance?.toFixed(2)}m</p>
               </div>
             </div>
           </div>
