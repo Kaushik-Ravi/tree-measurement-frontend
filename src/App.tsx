@@ -5,7 +5,7 @@ import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Spar
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
-import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView';
+import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_CORRECT';
 import { FeatureFlags } from './config/featureFlags';
 // --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
@@ -898,18 +898,18 @@ function App() {
       {/* --- START: LIVE AR MODE --- */}
       {isLiveARModeActive && (
         <LiveARMeasureView
-          onMeasurementComplete={(height, measurement) => {
-            // Live AR measurement complete - set metrics directly
-            setCurrentMetrics({
-              height_m: height,
-              canopy_m: 0, // Will be measured separately or estimated
-              dbh_cm: 0,   // Will be measured separately or estimated
-            });
-            setDistance(measurement.distance.toFixed(2));
+          fovRatio={fovRatio}
+          focalLength={focalLength}
+          onMeasurementComplete={(metrics, capturedImageFile, maskImageBase64) => {
+            // Live AR measurement complete - ALL metrics already calculated by SAM!
+            setCurrentMetrics(metrics);
+            setCurrentMeasurementFile(capturedImageFile);
+            setResultImageSrc(`data:image/png;base64,${maskImageBase64}`);
+            setOriginalImageSrc(URL.createObjectURL(capturedImageFile));
             setIsLiveARModeActive(false);
             setAppStatus('ANALYSIS_COMPLETE');
             setIsPanelOpen(true);
-            setInstructionText("Live AR measurement complete! Identify the species to save.");
+            setInstructionText("Live AR measurement complete! Now identify the species to save.");
           }}
           onCancel={() => {
             setIsLiveARModeActive(false);
@@ -1124,8 +1124,30 @@ function App() {
                 <p className="mt-4 max-w-2xl mx-auto text-lg text-content-subtle">
                   Turn your photos into valuable data. Measure, identify, and contribute to a global tree inventory with precision tools.
                 </p>
-                <button onClick={handleStartSession} className="mt-8 px-8 py-4 bg-brand-primary text-content-on-brand rounded-lg font-bold text-lg hover:bg-brand-primary-hover transition-transform active:scale-95 shadow-lg shadow-brand-primary/20">
-                  Start Mapping a Tree
+                
+                {/* --- PRIMARY ACTION: LIVE AR MODE (when feature enabled) --- */}
+                {FeatureFlags.LIVE_AR_MODE && (
+                  <button 
+                    onClick={() => {
+                      setCurrentView('SESSION');
+                      setIsLiveARModeActive(true);
+                      setAppStatus('IDLE');
+                      setInstructionText("Starting Live AR measurement...");
+                    }} 
+                    className="mt-8 px-8 py-4 bg-gradient-to-r from-brand-primary to-brand-secondary text-white rounded-lg font-bold text-lg hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-brand-primary/30 flex items-center justify-center gap-3 mx-auto"
+                  >
+                    <Camera size={24} />
+                    Live AR Measurement (Beta)
+                  </button>
+                )}
+                
+                {/* --- SECONDARY ACTION: PHOTO-BASED FLOW --- */}
+                <button 
+                  onClick={handleStartSession} 
+                  className={`${FeatureFlags.LIVE_AR_MODE ? 'mt-4' : 'mt-8'} px-8 py-4 ${FeatureFlags.LIVE_AR_MODE ? 'bg-background-default border-2 border-stroke-default text-content-default hover:bg-background-subtle' : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover shadow-lg shadow-brand-primary/20'} rounded-lg font-bold text-lg transition-transform active:scale-95 flex items-center justify-center gap-3 mx-auto`}
+                >
+                  {FeatureFlags.LIVE_AR_MODE && <ImageIcon size={20} />}
+                  {FeatureFlags.LIVE_AR_MODE ? 'Photo-Based Measurement' : 'Start Mapping a Tree'}
                 </button>
               </div>
 
