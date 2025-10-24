@@ -531,7 +531,17 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   }, []);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50">
+    <div ref={containerRef} className="fixed inset-0 z-50" style={{
+      /* CRITICAL FIX: Ensure container properly fills viewport */
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: '100%',
+      height: '100%',
+      overflow: 'hidden',
+    }}>
       {/* AR Entry Screen - Only shown before AR session starts */}
       {!arSessionActive && (
         <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
@@ -608,7 +618,15 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       )}
 
       {/* AR Session Overlay - Only shown during active AR session */}
-      <div id="ar-overlay" className="absolute inset-0 pointer-events-none">
+      <div id="ar-overlay" className="absolute inset-0 pointer-events-none" style={{
+        /* CRITICAL FIX: Overlay must be fixed to viewport, not canvas */
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 10,
+      }}>
         <div className="w-full h-full flex flex-col justify-between p-4 md:p-6">
           
           {/* Top Bar: Instructions & Distance Display */}

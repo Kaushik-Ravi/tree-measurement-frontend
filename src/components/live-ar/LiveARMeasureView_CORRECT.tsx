@@ -67,41 +67,69 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
 
   // --- CAMERA SETUP ---
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: false,
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setState('DISTANCE_INPUT');
-      }
-    } catch (err: any) {
-      console.error('Camera access error:', err);
-      setError(
-        err.name === 'NotAllowedError'
-          ? 'Camera permission denied'
-          : 'Could not access camera'
-      );
-      setState('ERROR');
-    }
-  }, []);
-
+  // CRITICAL FIX: Remove startCamera from useEffect to prevent infinite loop
   useEffect(() => {
-    startCamera();
+    let isMounted = true;
+    
+    const initCamera = async () => {
+      try {
+        console.log('[LiveAR] Requesting camera access...');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+          audio: false,
+        });
+
+        if (isMounted && videoRef.current) {
+          console.log('[LiveAR] Camera access granted, setting up video...');
+          videoRef.current.srcObject = stream;
+          streamRef.current = stream;
+          
+          // Wait for video to actually start playing
+          videoRef.current.onloadedmetadata = async () => {
+            console.log('[LiveAR] Video metadata loaded');
+            if (isMounted && videoRef.current) {
+              try {
+                // CRITICAL FIX: Explicitly call play() in case autoplay is blocked
+                await videoRef.current.play();
+                console.log('[LiveAR] Video play() called successfully');
+                setState('DISTANCE_INPUT');
+              } catch (playErr) {
+                console.error('[LiveAR] Video play() error:', playErr);
+                // Still transition to distance input - user can manually tap to play
+                setState('DISTANCE_INPUT');
+              }
+            }
+          };
+        }
+      } catch (err: any) {
+        console.error('[LiveAR] Camera access error:', err);
+        if (isMounted) {
+          setError(
+            err.name === 'NotAllowedError'
+              ? 'Camera permission denied. Please enable camera access in browser settings.'
+              : err.name === 'NotFoundError'
+              ? 'No camera found on device.'
+              : 'Could not access camera. Please check permissions and try again.'
+          );
+          setState('ERROR');
+        }
+      }
+    };
+
+    initCamera();
+
     return () => {
+      isMounted = false;
       if (streamRef.current) {
+        console.log('[LiveAR] Stopping camera stream...');
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [startCamera]);
+  }, []); // Empty deps - run once on mount
 
   // --- CALCULATE SCALE FACTOR ---
   /**
@@ -284,6 +312,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           playsInline
           muted
           className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            /* CRITICAL FIX: Ensure video fills container properly */
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
+          onPlay={() => console.log('[LiveAR] Video started playing')}
+          onError={(e) => console.error('[LiveAR] Video error:', e)}
         />
         <canvas ref={canvasRef} className="hidden" />
 
