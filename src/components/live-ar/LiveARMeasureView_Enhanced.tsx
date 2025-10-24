@@ -297,12 +297,25 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             const session = renderer.xr.getSession();
             if (!session) return;
 
-            // Request hit-test source
+            // Request hit-test source with proper reference space
             if (!hitTestSourceRequested) {
-              session.requestReferenceSpace('viewer').then(viewerSpace => {
-                session.requestHitTestSource?.({ space: viewerSpace })?.then(source => {
+              // CRITICAL FIX: Use 'local-floor' instead of 'viewer' for better device compatibility
+              session.requestReferenceSpace('local-floor').then(localSpace => {
+                session.requestHitTestSource?.({ space: localSpace })?.then(source => {
                   hitTestSource = source;
+                }).catch(err => {
+                  console.warn('[LiveAR] Hit-test source failed, trying viewer space:', err);
+                  // Fallback to viewer space if local-floor fails
+                  session.requestReferenceSpace('viewer').then(viewerSpace => {
+                    session.requestHitTestSource?.({ space: viewerSpace })?.then(source => {
+                      hitTestSource = source;
+                    });
+                  }).catch(err2 => {
+                    console.error('[LiveAR] All reference spaces failed:', err2);
+                  });
                 });
+              }).catch(err => {
+                console.error('[LiveAR] local-floor reference space failed:', err);
               });
               session.addEventListener('end', () => {
                 hitTestSourceRequested = false;
@@ -488,7 +501,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
       setTapPoint({ x: videoX, y: videoY });
       setState('PROCESSING_SAM');
-      setInstruction('Processing with SAM...');
+      setInstruction('Analyzing tree structure...');
 
       try {
         // Capture video frame
@@ -519,7 +532,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         );
 
         if (response.status !== 'success') {
-          throw new Error(response.message || 'SAM segmentation failed');
+          throw new Error(response.message || 'Tree measurement failed');
         }
 
         setMetrics(response.metrics);
@@ -719,45 +732,107 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       {/* Bottom UI */}
       <div className="absolute bottom-0 left-0 right-0 z-20">
         {state === 'DISTANCE_INPUT' && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
+          <div className="p-4 pb-6 bg-gradient-to-t from-black/98 via-black/95 to-transparent text-white"
+               style={{ 
+                 paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+                 maxHeight: '85vh',
+                 overflowY: 'auto'
+               }}>
             <div className="max-w-md mx-auto">
-              <div className="bg-green-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Navigation className="w-8 h-8" />
-              </div>
-              <h2 className="text-2xl font-bold text-center mb-2">
-                Distance to Tree
-              </h2>
-              <p className="text-center text-gray-300 mb-4 text-sm">
-                Position yourself to see the full tree, then enter distance to base
-              </p>
-
-              <div className="space-y-4">
-                <input
-                  type="number"
-                  step="0.1"
-                  value={manualDistanceInput}
-                  onChange={(e) => setManualDistanceInput(e.target.value)}
-                  placeholder="e.g., 10.5"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 text-center text-2xl font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
-                  autoFocus
-                />
-                <p className="text-xs text-gray-400 text-center">
-                  Recommended: 5-20 meters
-                </p>
-
-                {error && (
-                  <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-sm text-red-200">
-                    {error}
+              {/* Visual Guide - Distance Illustration */}
+              <div className="mb-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-400 flex items-center justify-center mb-1">
+                      <span className="text-2xl">🧍</span>
+                    </div>
+                    <p className="text-xs text-blue-300">You</p>
                   </div>
-                )}
+                  
+                  <div className="flex-1 mx-3 flex items-center">
+                    <div className="flex-1 border-t-2 border-dashed border-green-400 relative">
+                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                        <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full whitespace-nowrap font-semibold">
+                          Distance
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-full bg-green-500/20 border-2 border-green-400 flex items-center justify-center mb-1">
+                      <TreePine className="w-6 h-6 text-green-400" />
+                    </div>
+                    <p className="text-xs text-green-300">Tree Base</p>
+                  </div>
+                </div>
+                <p className="text-xs text-center text-gray-400 mt-2">
+                  Measure from your position to the base of the tree trunk
+                </p>
+              </div>
 
-                <button
-                  onClick={handleManualDistanceSubmit}
-                  disabled={!manualDistanceInput}
-                  className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg font-bold text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Continue
-                </button>
+              {/* Important Instructions */}
+              <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                <p className="text-amber-200 text-sm font-semibold flex items-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  Stand still during measurement
+                </p>
+                <p className="text-amber-100/70 text-xs mt-1">
+                  Keep your camera steady and remain in the same position throughout the entire process
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-green-500/10 to-blue-500/10 border border-green-500/30 backdrop-blur-sm rounded-xl p-4 mb-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="bg-green-500 w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Navigation className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      Distance to Tree Base
+                    </h2>
+                    <p className="text-sm text-gray-300">
+                      Enter distance in meters
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <input
+                    type="number"
+                    step="0.1"
+                    inputMode="decimal"
+                    value={manualDistanceInput}
+                    onChange={(e) => setManualDistanceInput(e.target.value)}
+                    placeholder="e.g., 10.5"
+                    className="w-full px-4 py-4 bg-black/30 border-2 border-white/20 rounded-xl text-white placeholder-gray-400 text-center text-3xl font-mono focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    autoFocus
+                  />
+                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                    <span className="bg-white/10 px-3 py-1 rounded-full">Recommended: 5-20m</span>
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 text-sm text-red-200 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleManualDistanceSubmit}
+                    disabled={!manualDistanceInput}
+                    className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-xl font-bold text-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg transition-all"
+                  >
+                    Continue to Measurement
+                  </button>
+                </div>
+              </div>
+
+              {/* Tips */}
+              <div className="text-center text-xs text-gray-500 space-y-1">
+                <p>💡 Tip: Use a measuring tape or estimate by counting steps</p>
+                <p>(1 step ≈ 0.8 meters)</p>
               </div>
             </div>
           </div>
@@ -766,12 +841,20 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         {state === 'CAMERA_READY' && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
             <div className="max-w-md mx-auto text-center">
+              {/* Stand Still Warning */}
+              <div className="mb-4 bg-amber-500/20 border border-amber-500 rounded-lg p-3">
+                <p className="text-amber-200 text-sm font-bold flex items-center justify-center gap-2">
+                  <span className="text-xl">⚠️</span>
+                  Keep camera steady and stay in position
+                </p>
+              </div>
+
               <Crosshair className="w-20 h-20 mx-auto mb-4 text-green-500 animate-pulse" />
-              <h2 className="text-2xl font-bold mb-2">{instruction}</h2>
+              <h2 className="text-2xl font-bold mb-2">Tap on Tree Trunk</h2>
               <p className="text-gray-300 mb-4">
-                Tap anywhere on the main trunk to measure
+                Tap anywhere on the main trunk to start measurement
               </p>
-              <div className="bg-white/10 rounded-lg p-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <p className="text-sm text-gray-400">Distance: {distance?.toFixed(2)}m</p>
               </div>
             </div>
@@ -782,11 +865,13 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
             <div className="max-w-md mx-auto text-center">
               <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
-              <h2 className="text-2xl font-bold mb-2">{instruction}</h2>
+              <h2 className="text-2xl font-bold mb-2">
+                {state === 'PROCESSING_SAM' ? 'Analyzing Tree Structure...' : 'Identifying Species...'}
+              </h2>
               <p className="text-gray-300 text-sm">
                 {state === 'PROCESSING_SAM' 
-                  ? 'Analyzing tree structure...'
-                  : 'Searching plant database...'}
+                  ? 'Measuring dimensions and detecting tree features'
+                  : 'Searching our plant database for a match'}
               </p>
             </div>
           </div>
