@@ -790,6 +790,48 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setMaskTransform({ x: 0, y: 0, scale: 1 });
   }, []);
 
+  // --- PHASE C: EXIF-PRESERVING PHOTO CAPTURE ---
+  const capturePhotoWithEXIF = useCallback(async (videoElement: HTMLVideoElement): Promise<File> => {
+    const videoTrack = streamRef.current?.getVideoTracks()[0];
+    
+    // Try ImageCapture API first (preserves EXIF metadata)
+    if (videoTrack && typeof ImageCapture !== 'undefined') {
+      try {
+        // @ts-ignore - ImageCapture not in all type definitions
+        const imageCapture = new ImageCapture(videoTrack);
+        
+        console.log('[Phase C] Attempting photo capture with EXIF preservation...');
+        
+        // Try takePhoto() first (best quality + EXIF)
+        try {
+          const blob = await imageCapture.takePhoto();
+          console.log('[Phase C] ✅ Photo captured with EXIF metadata via takePhoto()');
+          return new File([blob], `tree_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        } catch (takePhotoErr) {
+          console.log('[Phase C] takePhoto() failed, falling back to canvas:', takePhotoErr);
+          // Fall through to canvas fallback
+        }
+      } catch (err) {
+        console.error('[Phase C] ImageCapture API failed:', err);
+        // Fall through to canvas fallback
+      }
+    }
+    
+    // Fallback: Canvas-based capture (no EXIF, but works everywhere)
+    console.log('[Phase C] Using canvas fallback (no EXIF preservation)');
+    const canvas = canvasRef.current!;
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(videoElement, 0, 0);
+    
+    const blob = await new Promise<Blob>((resolve) => {
+      canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.95);
+    });
+    
+    return new File([blob], `tree_${Date.now()}.jpg`, { type: 'image/jpeg' });
+  }, []);
+
   // --- PHASE B: HANDLE QUICK SAVE CHOICE ---
   const handleChooseQuickSave = useCallback(async () => {
     // Quick Save: Capture photo immediately (no SAM processing)
@@ -803,25 +845,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
     try {
       const video = videoRef.current;
-      const canvas = canvasRef.current;
 
-      // Capture video frame
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas context failed');
-
-      ctx.drawImage(video, 0, 0);
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', 0.95)
-      );
-      if (!blob) throw new Error('Failed to capture image');
-
-      const imageFile = new File([blob], `tree_quicksave_${Date.now()}.jpg`, {
-        type: 'image/jpeg',
-      });
-
+      // Phase C: Capture photo with EXIF preservation
+      const imageFile = await capturePhotoWithEXIF(video);
       setCapturedImageFile(imageFile);
 
       // Go to additional details for quick save
@@ -833,7 +859,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       setError(err.message || 'Failed to capture photo');
       setState('ERROR');
     }
-  }, []);
+  }, [capturePhotoWithEXIF]);
 
   // --- PHASE B: HANDLE FULL ANALYSIS CHOICE ---
   const handleChooseFullAnalysis = useCallback(() => {
@@ -933,7 +959,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       console.log('[Phase F.2] Image uploaded:', imageUrl);
 
       // 2. Prepare result payload (same as Photo Method)
-      const newResultPayload = {
+      const newResultPayload: any = {
         fileName: capturedImageFile.name,
         metrics: metrics,
         species: identificationResult?.bestMatch ?? undefined,
@@ -943,8 +969,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         longitude: userLocation?.lng,
         heading: compassHeading,
         image_url: imageUrl,
-        distance_m: distance,
-        scale_factor: scaleFactor,
+        distance_m: distance ?? undefined, // Convert null to undefined for API
+        scale_factor: scaleFactor ?? undefined,
         measurement_method: 'live-ar', // Track measurement type
         ...additionalDetails, // condition, ownership, remarks
       };
@@ -997,23 +1023,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       setInstruction('Analyzing tree structure...');
 
       try {
-        // Capture video frame
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Canvas context failed');
-
-        ctx.drawImage(video, 0, 0);
-
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, 'image/jpeg', 0.95)
-        );
-        if (!blob) throw new Error('Failed to capture image');
-
-        const imageFile = new File([blob], `tree_${Date.now()}.jpg`, {
-          type: 'image/jpeg',
-        });
-
+        // Phase C: Capture photo with EXIF preservation
+        const imageFile = await capturePhotoWithEXIF(video);
         setCapturedImageFile(imageFile);
 
         // Phase 6: Try Tier 1 calibration (EXIF extraction) from captured image
