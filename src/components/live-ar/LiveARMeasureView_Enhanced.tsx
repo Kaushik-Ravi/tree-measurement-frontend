@@ -21,10 +21,10 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 import {
   Camera, Check, X, TreePine, Loader2, 
-  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw
+  AlertCircle, Sparkles, Target, Navigation, Crosshair, RotateCcw, Leaf
 } from 'lucide-react';
-import { samAutoSegment, identifySpecies } from '../../apiService';
-import type { Metrics } from '../../apiService';
+import { samAutoSegment, identifySpecies, calculateCO2 } from '../../apiService';
+import type { Metrics, IdentificationResponse } from '../../apiService';
 
 interface LiveARMeasureViewProps {
   /** Callback when measurement is complete */
@@ -32,7 +32,12 @@ interface LiveARMeasureViewProps {
     metrics: Metrics,
     capturedImageFile: File,
     maskImageBase64: string,
-    speciesName?: string
+    speciesName?: string,
+    speciesConfidence?: number,
+    identificationResult?: IdentificationResponse | null,
+    co2Sequestered?: number | null,
+    userLocation?: { lat: number; lng: number } | null,
+    compassHeading?: number | null
   ) => void;
   /** Callback when user cancels */
   onCancel: () => void;
@@ -80,10 +85,14 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [speciesName, setSpeciesName] = useState<string | null>(null);
   const [speciesConfidence, setSpeciesConfidence] = useState<number | null>(null);
+  const [co2Sequestered, setCO2Sequestered] = useState<number | null>(null);
+  const [identificationResult, setIdentificationResult] = useState<IdentificationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tapPoint, setTapPoint] = useState<{ x: number; y: number } | null>(null);
   const [tapPoints, setTapPoints] = useState<TapPoint[]>([]); // Multiple points for better SAM
   const [instruction, setInstruction] = useState<string>('Checking AR support...');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [compassHeading, setCompassHeading] = useState<number | null>(null);
 
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +109,48 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const lineRef = useRef<THREE.Line | null>(null);
   const pointsRef = useRef<THREE.Vector3[]>([]);
   const distanceRef = useRef<number | null>(null);
+
+  // --- GET LOCATION & COMPASS ---
+  useEffect(() => {
+    // Request location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+          console.log('[LiveAR] Location acquired:', position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.error('[LiveAR] Location error:', error);
+        }
+      );
+    }
+
+    // Request compass
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      (DeviceOrientationEvent as any).requestPermission()
+        .then((permissionState: string) => {
+          if (permissionState === 'granted') {
+            window.addEventListener('deviceorientationabsolute', handleOrientation);
+          }
+        })
+        .catch(console.error);
+    } else {
+      window.addEventListener('deviceorientationabsolute', handleOrientation);
+    }
+
+    function handleOrientation(event: DeviceOrientationEvent) {
+      if (event.alpha !== null) {
+        setCompassHeading(event.alpha);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation);
+    };
+  }, []);
 
   // --- WEBXR SETUP (with fallback to manual distance) ---
   useEffect(() => {
@@ -634,6 +685,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           if (speciesResult.bestMatch) {
             setSpeciesName(speciesResult.bestMatch.scientificName);
             setSpeciesConfidence(speciesResult.bestMatch.score);
+            setIdentificationResult(speciesResult);
+
+            // Calculate CO2 sequestration
+            const woodDensity = speciesResult.woodDensity?.value || 500; // Default 500 kg/m³
+            try {
+              const co2Result = await calculateCO2(response.metrics, woodDensity);
+              setCO2Sequestered(co2Result.co2_sequestered_kg);
+              console.log('[LiveAR] CO2 calculated:', co2Result.co2_sequestered_kg, 'kg');
+            } catch (co2Err) {
+              console.error('[LiveAR] CO2 calculation error:', co2Err);
+            }
           } else {
             setSpeciesName('Unknown species');
             setSpeciesConfidence(0);
@@ -1142,6 +1204,26 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                 </div>
               </div>
 
+              {/* CO2 Sequestration Card */}
+              {co2Sequestered && co2Sequestered > 0 && (
+                <div className="mb-4 p-4 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/50 rounded-lg backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-emerald-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Leaf className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-400">Carbon Sequestration</p>
+                      <p className="text-2xl font-mono font-bold text-emerald-300">
+                        {co2Sequestered.toFixed(2)} kg CO₂
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Estimated total lifetime sequestration
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => {
                   if (capturedImageFile && maskImageBase64 && metrics) {
@@ -1149,7 +1231,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                       metrics, 
                       capturedImageFile, 
                       maskImageBase64,
-                      speciesName || undefined
+                      speciesName || undefined,
+                      speciesConfidence || undefined,
+                      identificationResult,
+                      co2Sequestered,
+                      userLocation,
+                      compassHeading
                     );
                   }
                 }}

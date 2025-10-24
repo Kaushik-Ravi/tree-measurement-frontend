@@ -903,19 +903,44 @@ function App() {
         <LiveARMeasureView
           fovRatio={fovRatio}
           focalLength={focalLength}
-          onMeasurementComplete={(metrics, capturedImageFile, maskImageBase64, speciesName) => {
+          onMeasurementComplete={(
+            metrics, 
+            capturedImageFile, 
+            maskImageBase64, 
+            speciesName,
+            speciesConfidence,
+            identificationResult,
+            co2Sequestered,
+            userLocation,
+            compassHeading
+          ) => {
             // Live AR measurement complete - ALL metrics already calculated by SAM!
             setCurrentMetrics(metrics);
             setCurrentMeasurementFile(capturedImageFile);
             setResultImageSrc(`data:image/png;base64,${maskImageBase64}`);
             setOriginalImageSrc(URL.createObjectURL(capturedImageFile));
             
-            // If species was identified automatically, show it in instruction
+            // Set species identification if available
+            if (identificationResult) {
+              setCurrentIdentification(identificationResult);
+            }
+            
+            // Set CO2 if available
+            if (co2Sequestered) {
+              setCurrentCO2(co2Sequestered);
+            }
+            
+            // Set location if available
+            if (userLocation) {
+              setCurrentLocation(userLocation);
+              setCapturedHeading(compassHeading || null);
+            }
+            
+            // Update instruction based on what was identified
             if (speciesName && speciesName !== 'Unknown species' && speciesName !== 'Species identification failed') {
-              setInstructionText(`Live AR measurement complete! Species identified as ${speciesName}.`);
-              // Note: Species will still be shown via SpeciesIdentifier component after user confirms
+              setInstructionText(`Live AR measurement complete! Species identified as ${speciesName}. CO2 sequestration: ${co2Sequestered?.toFixed(2) || 'N/A'} kg.`);
             } else {
-              setInstructionText("Live AR measurement complete! Now identify the species to save.");
+              setInstructionText("Live AR measurement complete! Please identify the species to save.");
             }
             
             setIsLiveARModeActive(false);
