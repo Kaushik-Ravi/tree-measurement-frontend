@@ -26,6 +26,11 @@ import {
 } from 'lucide-react';
 import { samAutoSegment, identifySpecies, calculateCO2 } from '../../apiService';
 import type { Metrics, IdentificationResponse } from '../../apiService';
+import { 
+  loadSavedCalibration, 
+  autoCalibrate,
+  type CameraCalibration 
+} from '../../utils/cameraCalibration';
 
 interface LiveARMeasureViewProps {
   /** Callback when measurement is complete */
@@ -108,6 +113,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     remarks: string;
   }>({ condition: '', ownership: '', remarks: '' });
 
+  // Phase 6: Camera Calibration
+  const [cameraCalibration, setCameraCalibration] = useState<CameraCalibration | null>(null);
+
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -123,6 +131,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const lineRef = useRef<THREE.Line | null>(null);
   const pointsRef = useRef<THREE.Vector3[]>([]);
   const distanceRef = useRef<number | null>(null);
+
+  // --- PHASE 6: LOAD SAVED CALIBRATION ---
+  useEffect(() => {
+    const savedCalibration = loadSavedCalibration();
+    if (savedCalibration) {
+      setCameraCalibration(savedCalibration);
+      console.log('[Phase 6] Loaded saved calibration:', savedCalibration.calibrationMethod);
+    } else {
+      console.log('[Phase 6] No saved calibration found - will auto-calibrate on camera start');
+    }
+  }, []);
 
   // --- GET LOCATION & COMPASS ---
   useEffect(() => {
@@ -277,6 +296,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         });
         
         streamRef.current = stream;
+        
+        // Phase 6: Auto-calibrate camera if not already calibrated
+        if (!cameraCalibration || cameraCalibration.calibrationMethod === 'none') {
+          console.log('[Phase 6] Auto-calibrating camera...');
+          const newCalibration = await autoCalibrate(undefined, stream);
+          setCameraCalibration(newCalibration);
+          console.log('[Phase 6] Auto-calibration complete:', newCalibration.calibrationMethod);
+        }
+        
         setState('DISTANCE_INPUT');
         setInstruction('Enter distance to tree');
       } catch (err: any) {
@@ -742,6 +770,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         });
 
         setCapturedImageFile(imageFile);
+
+        // Phase 6: Try Tier 1 calibration (EXIF extraction) from captured image
+        if (!cameraCalibration || cameraCalibration.calibrationMethod === 'none' || cameraCalibration.calibrationMethod === 'api') {
+          console.log('[Phase 6] Attempting Tier 1 calibration from captured image...');
+          const exifCalibration = await autoCalibrate(imageFile, undefined);
+          if (exifCalibration.calibrationMethod === 'exif') {
+            setCameraCalibration(exifCalibration);
+            console.log('[Phase 6] Upgraded to EXIF calibration');
+          }
+        }
 
         // Use the first point for SAM (or could send all points to backend if supported)
         const primaryPoint = tapPoints[0];
