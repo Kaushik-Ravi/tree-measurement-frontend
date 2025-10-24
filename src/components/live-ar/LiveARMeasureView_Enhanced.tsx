@@ -93,6 +93,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [instruction, setInstruction] = useState<string>('Checking AR support...');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [compassHeading, setCompassHeading] = useState<number | null>(null);
+  
+  // Phase 4: AR-anchored mask orientation tracking
+  const [baseOrientation, setBaseOrientation] = useState<{ alpha: number; beta: number; gamma: number } | null>(null);
+  const [maskTransform, setMaskTransform] = useState<{ x: number; y: number; scale: number }>({ x: 0, y: 0, scale: 1 });
 
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
@@ -151,6 +155,72 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       window.removeEventListener('deviceorientationabsolute', handleOrientation);
     };
   }, []);
+
+  // --- PHASE 4: AR-ANCHORED MASK ORIENTATION TRACKING ---
+  useEffect(() => {
+    if (state !== 'COMPLETE' || !maskImageBase64) {
+      return; // Only track when mask is displayed
+    }
+
+    // Capture base orientation when mask first appears
+    if (!baseOrientation) {
+      const captureBaseOrientation = (event: DeviceOrientationEvent) => {
+        if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
+          setBaseOrientation({
+            alpha: event.alpha,
+            beta: event.beta,
+            gamma: event.gamma
+          });
+          console.log('[LiveAR Phase 4] Base orientation captured:', event.alpha, event.beta, event.gamma);
+          window.removeEventListener('deviceorientation', captureBaseOrientation);
+        }
+      };
+      
+      window.addEventListener('deviceorientation', captureBaseOrientation);
+      return () => window.removeEventListener('deviceorientation', captureBaseOrientation);
+    }
+
+    // Track orientation changes and update mask transform
+    const handleOrientationChange = (event: DeviceOrientationEvent) => {
+      if (event.alpha === null || event.beta === null || event.gamma === null) return;
+      if (!baseOrientation) return;
+
+      // Calculate deltas from base orientation
+      let deltaAlpha = event.alpha - baseOrientation.alpha;
+      let deltaBeta = event.beta - baseOrientation.beta;
+      let deltaGamma = event.gamma - baseOrientation.gamma;
+
+      // Normalize alpha to -180 to 180 range
+      if (deltaAlpha > 180) deltaAlpha -= 360;
+      if (deltaAlpha < -180) deltaAlpha += 360;
+
+      // Convert orientation to screen transform
+      // Beta (tilt forward/back): affects Y position
+      // Gamma (tilt left/right): affects X position
+      // Alpha (compass): affects rotation (minimal for mask stability)
+      
+      // Scale factors: adjust these to tune sensitivity
+      const xSensitivity = 3.5; // pixels per degree
+      const ySensitivity = 3.5; // pixels per degree
+      const scaleSensitivity = 0.003; // scale change per degree
+
+      const x = deltaGamma * xSensitivity;
+      const y = deltaBeta * ySensitivity;
+      
+      // Slight scale adjustment for depth perception when tilting
+      const avgTilt = (Math.abs(deltaBeta) + Math.abs(deltaGamma)) / 2;
+      const scale = 1 + (avgTilt * scaleSensitivity);
+
+      setMaskTransform({ x, y, scale });
+    };
+
+    window.addEventListener('deviceorientation', handleOrientationChange);
+    console.log('[LiveAR Phase 4] Orientation tracking active');
+
+    return () => {
+      window.removeEventListener('deviceorientation', handleOrientationChange);
+    };
+  }, [state, maskImageBase64, baseOrientation]);
 
   // --- WEBXR SETUP (with fallback to manual distance) ---
   useEffect(() => {
@@ -609,6 +679,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     if (newPoints.length === 0) {
       setState('CAMERA_READY');
       setInstruction('Tap on the tree trunk to start selection');
+      // Phase 4: Reset orientation tracking for next measurement
+      setBaseOrientation(null);
+      setMaskTransform({ x: 0, y: 0, scale: 1 });
     } else if (newPoints.length === 1) {
       setInstruction('Good! Tap another point on the trunk');
     } else if (newPoints.length === 2) {
@@ -621,6 +694,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setTapPoints([]);
     setState('CAMERA_READY');
     setInstruction('Tap on the tree trunk to start selection');
+    // Phase 4: Reset orientation tracking for next measurement
+    setBaseOrientation(null);
+    setMaskTransform({ x: 0, y: 0, scale: 1 });
   }, []);
 
   // --- SUBMIT POINTS FOR SAM ANALYSIS ---
@@ -888,12 +964,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           />
         )}
 
-        {/* Mask overlay */}
+        {/* Mask overlay - Phase 4: AR-anchored with orientation tracking */}
         {state === 'COMPLETE' && maskImageBase64 && (
           <img
             src={`data:image/png;base64,${maskImageBase64}`}
             alt="Tree mask"
             className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen"
+            style={{
+              transform: `translate(${maskTransform.x}px, ${maskTransform.y}px) scale(${maskTransform.scale})`,
+              transition: 'transform 0.05s ease-out', // Smooth 50ms transition for natural tracking
+              willChange: 'transform' // Performance optimization
+            }}
           />
         )}
 
