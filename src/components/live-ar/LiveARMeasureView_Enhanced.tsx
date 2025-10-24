@@ -1,20 +1,18 @@
 // src/components/live-ar/LiveARMeasureView_Enhanced.tsx
 /**
- * Live AR Tree Measurement - ENHANCED WITH AR DISTANCE
+ * Live AR Tree Measurement - PHASE B: RESTRUCTURED WORKFLOW
  * 
- * NEW FEATURES:
- * 1. AR hit-test for automatic distance measurement (no manual input)
- * 2. Automatic species identification after SAM
- * 3. Professional UI/UX
+ * RESTRUCTURED FLOW (matching Photo Method):
+ * 1. AR distance measurement OR manual distance input
+ * 2. TWO-FLOW CHOICE: Quick Save or Full Analysis
+ * 3. Quick Path: Additional Details → Save → Hub
+ * 4. Full Path: Camera Ready → Multi-point SAM → Species → CO2 → Additional Details → Save → Hub
  * 
- * Flow:
- * 1. Open WebXR AR session
- * 2. Use hit-test to place two markers (tree base + user position)
- * 3. Calculate distance automatically
- * 4. Switch to video capture mode
- * 5. Tap trunk → SAM processing
- * 6. Auto species ID via PlantNet
- * 7. Show results with species info
+ * KEY CHANGES:
+ * - Choice screen appears AFTER distance (not after SAM)
+ * - Quick Save skips SAM entirely (just captures photo + metadata)
+ * - Full Analysis performs complete measurement workflow
+ * - Additional Details form stays IN Live AR view (slide-up overlay)
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -61,6 +59,7 @@ interface LiveARMeasureViewProps {
 }
 
 type MeasurementState =
+  // --- INITIALIZATION & DISTANCE ---
   | 'CHECKING_AR_SUPPORT'  // Checking if WebXR AR is available
   | 'AR_INIT'              // Starting WebXR
   | 'AR_SCANNING'          // Looking for surface
@@ -68,13 +67,23 @@ type MeasurementState =
   | 'AR_PLACE_SECOND'      // Place marker at user position
   | 'AR_DISTANCE_COMPLETE' // Distance measured, transitioning to camera
   | 'DISTANCE_INPUT'       // Manual distance input (fallback)
+  
+  // --- PHASE B: TWO-FLOW CHOICE (immediately after distance) ---
+  | 'TWO_FLOW_CHOICE'      // Choose Quick Save or Full Analysis
+  
+  // --- QUICK SAVE PATH ---
+  | 'QUICK_SAVE_DETAILS'   // Fill additional details for quick save
+  
+  // --- FULL ANALYSIS PATH ---
   | 'CAMERA_READY'         // Live camera feed ready for tap
   | 'POINT_SELECTION'      // User tapping multiple points (trunk + canopy)
   | 'PROCESSING_SAM'       // SAM processing
   | 'IDENTIFYING_SPECIES'  // PlantNet API call
-  | 'COMPLETE'             // Show results
-  | 'SAVE_CHOICE'          // Phase 5: Choose Quick Save or Community Analysis
-  | 'ADDITIONAL_DETAILS'   // Phase 5: Fill additional details form
+  | 'FULL_ANALYSIS_COMPLETE' // Show SAM results
+  | 'FULL_ANALYSIS_DETAILS'  // Fill additional details for full analysis
+  
+  // --- COMMON STATES ---
+  | 'SAVING'               // Saving to database
   | 'ERROR';               // Error state
 
 interface TapPoint {
@@ -197,8 +206,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // --- PHASE 4: AR-ANCHORED MASK ORIENTATION TRACKING ---
   useEffect(() => {
-    if (state !== 'COMPLETE' || !maskImageBase64) {
-      return; // Only track when mask is displayed
+    if (state !== 'FULL_ANALYSIS_COMPLETE' || !maskImageBase64) {
+      return; // Only track when mask is displayed (after full analysis)
     }
 
     // Capture base orientation when mask first appears
@@ -624,6 +633,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   }, [state]);
 
   // --- HANDLE MANUAL DISTANCE INPUT ---
+  // --- PHASE B: HANDLE MANUAL DISTANCE INPUT → TWO_FLOW_CHOICE ---
   const handleManualDistanceSubmit = useCallback(() => {
     const dist = parseFloat(manualDistanceInput);
     if (isNaN(dist) || dist <= 0) {
@@ -645,14 +655,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setDistance(dist);
     setScaleFactor(sf);
     setError(null);
-    setState('CAMERA_READY');
-    setInstruction('Tap on the tree trunk');
+    
+    // PHASE B: Go to two-flow choice instead of camera ready
+    setState('TWO_FLOW_CHOICE');
+    setInstruction('Choose how you want to proceed');
   }, [manualDistanceInput, calculateScaleFactor]);
 
-  // --- TRANSITION TO CAMERA MODE (after AR distance) ---
+  // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
   const transitionToCamera = useCallback(async (dist: number) => {
     try {
-      // Request camera
+      // Request camera for photo capture
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -676,8 +688,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         
         if (sf) {
           setScaleFactor(sf);
-          setState('CAMERA_READY');
-          setInstruction('Tap on the tree trunk');
+          
+          // PHASE B: Go to two-flow choice instead of camera ready
+          setState('TWO_FLOW_CHOICE');
+          setInstruction('Choose how you want to proceed');
         }
       }
     } catch (err: any) {
@@ -774,6 +788,58 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     // Phase 4: Reset orientation tracking for next measurement
     setBaseOrientation(null);
     setMaskTransform({ x: 0, y: 0, scale: 1 });
+  }, []);
+
+  // --- PHASE B: HANDLE QUICK SAVE CHOICE ---
+  const handleChooseQuickSave = useCallback(async () => {
+    // Quick Save: Capture photo immediately (no SAM processing)
+    if (!videoRef.current || !canvasRef.current) {
+      setError('Camera not ready');
+      return;
+    }
+
+    setState('SAVING');
+    setInstruction("Capturing photo for quick save...");
+
+    try {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      // Capture video frame
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context failed');
+
+      ctx.drawImage(video, 0, 0);
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', 0.95)
+      );
+      if (!blob) throw new Error('Failed to capture image');
+
+      const imageFile = new File([blob], `tree_quicksave_${Date.now()}.jpg`, {
+        type: 'image/jpeg',
+      });
+
+      setCapturedImageFile(imageFile);
+
+      // Go to additional details for quick save
+      setState('QUICK_SAVE_DETAILS');
+      setInstruction('Add optional details before saving');
+
+    } catch (err: any) {
+      console.error('[Phase B] Quick save photo capture error:', err);
+      setError(err.message || 'Failed to capture photo');
+      setState('ERROR');
+    }
+  }, []);
+
+  // --- PHASE B: HANDLE FULL ANALYSIS CHOICE ---
+  const handleChooseFullAnalysis = useCallback(() => {
+    // Full Analysis: Go to camera tap mode for SAM processing
+    setState('CAMERA_READY');
+    setInstruction('Tap on the tree trunk to begin analysis');
   }, []);
 
   // --- PHASE F.1: QUICK SAVE DATABASE INTEGRATION ---
@@ -1038,8 +1104,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           setSpeciesConfidence(0);
         }
 
-        setState('COMPLETE');
-        setInstruction('Measurement complete!');
+        // PHASE B: Full Analysis complete - go to results view
+        setState('FULL_ANALYSIS_COMPLETE');
+        setInstruction('Full analysis complete!');
 
       } catch (err: any) {
         console.error('[LiveAR] Processing error:', err);
@@ -1259,7 +1326,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         )}
 
         {/* Mask overlay - Phase 4: AR-anchored with orientation tracking */}
-        {state === 'COMPLETE' && maskImageBase64 && (
+        {state === 'FULL_ANALYSIS_COMPLETE' && maskImageBase64 && (
           <img
             src={`data:image/png;base64,${maskImageBase64}`}
             alt="Tree mask"
@@ -1544,7 +1611,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           </div>
         )}
 
-        {state === 'COMPLETE' && metrics && (
+        {state === 'FULL_ANALYSIS_COMPLETE' && metrics && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
             <div className="max-w-md mx-auto">
               {/* Species badge */}
@@ -1619,22 +1686,22 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               )}
 
               <button
-                onClick={() => setState('SAVE_CHOICE')}
+                onClick={() => setState('FULL_ANALYSIS_DETAILS')}
                 className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-500 rounded-lg font-bold text-lg hover:opacity-90 flex items-center justify-center gap-2"
               >
                 <Sparkles className="w-5 h-5" />
-                Continue
+                Continue to Save
               </button>
             </div>
           </div>
         )}
 
-        {/* Phase 5: Save Choice Screen */}
-        {state === 'SAVE_CHOICE' && metrics && (
+        {/* PHASE B: Two-Flow Choice Screen (appears AFTER distance, BEFORE SAM) */}
+        {state === 'TWO_FLOW_CHOICE' && (
           <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
             <div className="max-w-md mx-auto">
               <h2 className="text-2xl font-bold text-center mb-3">
-                How would you like to save?
+                How would you like to proceed?
               </h2>
               <p className="text-center text-gray-300 text-sm mb-6">
                 Choose your workflow based on your needs
@@ -1642,7 +1709,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
               {/* Quick Save Option */}
               <button
-                onClick={handleQuickSave}
+                onClick={handleChooseQuickSave}
                 className="w-full mb-4 p-5 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-2 border-blue-500 rounded-xl hover:from-blue-500/30 hover:to-cyan-500/30 transition-all group"
               >
                 <div className="flex items-start gap-4">
@@ -1659,15 +1726,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                     </p>
                     <div className="mt-2 flex items-center gap-2 text-xs text-blue-300">
                       <Check className="w-4 h-4" />
-                      <span>Measurements • Species • CO₂ • Location</span>
+                      <span>Photo • Distance • Location • Basic Details</span>
                     </div>
                   </div>
                 </div>
               </button>
 
-              {/* Community Analysis Option */}
+              {/* Full Analysis Option */}
               <button
-                onClick={() => setState('ADDITIONAL_DETAILS')}
+                onClick={handleChooseFullAnalysis}
                 className="w-full p-5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-2 border-green-500 rounded-xl hover:from-green-500/30 hover:to-emerald-500/30 transition-all group"
               >
                 <div className="flex items-start gap-4">
@@ -1676,33 +1743,135 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   </div>
                   <div className="text-left flex-1">
                     <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
-                      Community Analysis
+                      Full Analysis
                       <span className="text-xs bg-green-500 px-2 py-0.5 rounded-full">Detailed</span>
                     </h3>
                     <p className="text-sm text-gray-300">
-                      Add tree health, notes, and additional photos for comprehensive tracking.
+                      Complete measurement with AI analysis, species identification, and CO₂ calculation.
                     </p>
                     <div className="mt-2 flex items-center gap-2 text-xs text-green-300">
                       <Check className="w-4 h-4" />
-                      <span>Everything in Quick + Health • Notes • Photos</span>
+                      <span>SAM Analysis • Species • CO₂ • Full Details</span>
                     </div>
                   </div>
                 </div>
               </button>
 
-              {/* Back button */}
-              <button
-                onClick={() => setState('COMPLETE')}
-                className="w-full mt-4 py-3 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-all"
-              >
-                Back to Results
-              </button>
+              {/* Info */}
+              <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
+                <p className="text-xs text-gray-400 text-center">Distance: {distance?.toFixed(2)}m</p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Phase 5: Additional Details Form */}
-        {state === 'ADDITIONAL_DETAILS' && metrics && (
+        {/* Phase 5: Save Choice Screen - REMOVED (moved to TWO_FLOW_CHOICE) */}
+
+        {/* PHASE B: Additional Details Form for QUICK SAVE */}
+        {state === 'QUICK_SAVE_DETAILS' && (
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm z-30 overflow-y-auto"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            <div className="min-h-full flex items-end">
+              {/* Slide-up panel */}
+              <div className="w-full bg-gradient-to-b from-gray-900 to-black rounded-t-3xl p-6 text-white animate-slide-up">
+                <div className="max-w-md mx-auto">
+                  {/* Handle bar */}
+                  <div className="w-12 h-1.5 bg-gray-600 rounded-full mx-auto mb-6"></div>
+
+                  <h2 className="text-2xl font-bold mb-2">Quick Save - Additional Details</h2>
+                  <p className="text-gray-400 text-sm mb-6">
+                    Optional information to enrich the database
+                  </p>
+
+                  {/* Condition */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <TreePine className="w-4 h-4 text-green-400" />
+                      Tree Condition
+                    </label>
+                    <select
+                      value={additionalDetails.condition}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, condition: e.target.value })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="" className="bg-gray-900">Select condition...</option>
+                      <option value="Healthy" className="bg-gray-900">🌳 Healthy - Thriving and vigorous</option>
+                      <option value="Average" className="bg-gray-900">🌿 Average - Normal growth</option>
+                      <option value="Poor" className="bg-gray-900">🍂 Poor - Stressed or damaged</option>
+                      <option value="Dead" className="bg-gray-900">💀 Dead - No signs of life</option>
+                    </select>
+                  </div>
+
+                  {/* Ownership */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Navigation className="w-4 h-4 text-blue-400" />
+                      Location Type / Ownership
+                    </label>
+                    <select
+                      value={additionalDetails.ownership}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, ownership: e.target.value })}
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="" className="bg-gray-900">Select type...</option>
+                      <option value="Private" className="bg-gray-900">🏠 Private Property</option>
+                      <option value="Public" className="bg-gray-900">🏛️ Public Space</option>
+                      <option value="Government" className="bg-gray-900">🏢 Government Land</option>
+                      <option value="Semi Government" className="bg-gray-900">🏛️ Semi Government</option>
+                      <option value="Avenues" className="bg-gray-900">🛣️ Avenues</option>
+                      <option value="Garden" className="bg-gray-900">🌺 Garden</option>
+                      <option value="On Road" className="bg-gray-900">🚗 On Road</option>
+                      <option value="On Divider" className="bg-gray-900">🚦 On Divider</option>
+                      <option value="On Foot Path" className="bg-gray-900">🚶 On Foot Path</option>
+                      <option value="On Bridge" className="bg-gray-900">🌉 On Bridge</option>
+                      <option value="On Wall" className="bg-gray-900">🧱 On Wall</option>
+                      <option value="In Well" className="bg-gray-900">🕳️ In Well</option>
+                      <option value="Industrial" className="bg-gray-900">🏭 Industrial Area</option>
+                    </select>
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-purple-400" />
+                      Notes & Observations
+                    </label>
+                    <textarea
+                      value={additionalDetails.remarks}
+                      onChange={(e) => setAdditionalDetails({ ...additionalDetails, remarks: e.target.value })}
+                      rows={4}
+                      placeholder="e.g., Leaning towards east, evidence of fungal growth on trunk..."
+                      className="w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Optional - Any additional observations</p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setState('TWO_FLOW_CHOICE')}
+                      className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-semibold transition-all"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleQuickSave}
+                      className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                    >
+                      <Check className="w-5 h-5" />
+                      Save Quick Capture
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PHASE B: Additional Details Form for FULL ANALYSIS */}
+        {state === 'FULL_ANALYSIS_DETAILS' && metrics && (
           <div 
             className="absolute inset-0 bg-black/50 backdrop-blur-sm z-30 overflow-y-auto"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
@@ -1783,9 +1952,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   </div>
 
                   {/* Action Buttons */}
+                  {/* Action Buttons */}
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setState('SAVE_CHOICE')}
+                      onClick={() => setState('FULL_ANALYSIS_COMPLETE')}
                       className="flex-1 py-3 bg-white/10 hover:bg-white/20 rounded-lg font-semibold transition-all"
                     >
                       Back
@@ -1795,7 +1965,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                       className="flex-1 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:opacity-90 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
                     >
                       <Check className="w-5 h-5" />
-                      Save All
+                      Save Full Analysis
                     </button>
                   </div>
                 </div>
