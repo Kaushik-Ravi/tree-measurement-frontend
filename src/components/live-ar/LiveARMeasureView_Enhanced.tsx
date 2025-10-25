@@ -392,6 +392,14 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         console.log('[LiveAR E.5] ✅ Video playing');
+        console.log('[LiveAR E.5] 📹 Video element check:',{
+          exists: !!videoRef.current,
+          srcObject: !!videoRef.current.srcObject,
+          readyState: videoRef.current.readyState,
+          paused: videoRef.current.paused,
+          currentTime: videoRef.current.currentTime,
+          style: videoRef.current.style.cssText
+        });
 
         // Calculate scale factor inline
         const videoWidth = videoRef.current.videoWidth;
@@ -2258,7 +2266,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         )}
 
         {(state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
+          <div className="absolute inset-0 flex items-center justify-center p-6 bg-gradient-to-t from-black/95 via-black/70 to-black/30 text-white">
             <div className="max-w-md mx-auto text-center">
               <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
               <h2 className="text-2xl font-bold mb-2">
@@ -2287,12 +2295,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         )}
 
         {state === 'FULL_ANALYSIS_COMPLETE' && metrics && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
-            <div className="max-w-md mx-auto">
+          <div className="absolute inset-0 flex items-end p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
+            <div className="w-full max-w-md mx-auto">
               {/* PHASE E.1: Back button */}
               <button
                 onClick={handleBack}
-                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors z-20"
+                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors z-10"
                 title="Back to point selection"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -2382,12 +2390,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
         {/* PHASE B: Two-Flow Choice Screen (appears AFTER distance, BEFORE SAM) */}
         {state === 'TWO_FLOW_CHOICE' && (
-          <div className="p-6 bg-gradient-to-t from-black/95 via-black/90 to-transparent text-white">
-            <div className="max-w-md mx-auto">
+          <div className="absolute inset-0 flex items-end p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
+            <div className="w-full max-w-md mx-auto">
               {/* PHASE E.1: Back button */}
               <button
                 onClick={handleBack}
-                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors"
+                className="absolute top-4 left-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 p-2 rounded-full transition-colors z-10"
                 title="Back"
               >
                 <ArrowLeft className="w-5 h-5" />
