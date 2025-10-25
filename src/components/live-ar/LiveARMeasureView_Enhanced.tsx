@@ -335,26 +335,6 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     };
   }, [cleanupResources]);
 
-  // --- PHASE E.5: CAMERA INITIALIZATION AFTER AR (Fix blank screen bug) ---
-  useEffect(() => {
-    if (state === 'CAMERA_INITIALIZING' && distanceRef.current !== null) {
-      console.log('[LiveAR E.5] 🎥 CAMERA_INITIALIZING state - starting camera init...');
-      
-      const initCamera = async () => {
-        try {
-          await transitionToCamera(distanceRef.current!);
-          console.log('[LiveAR E.5] ✅ Camera initialized successfully');
-        } catch (err) {
-          console.error('[LiveAR E.5] ❌ Camera init failed:', err);
-          setError('Failed to start camera. Please try again.');
-          setState('USER_CHOICE');
-        }
-      };
-      
-      initCamera();
-    }
-  }, [state, transitionToCamera]);
-
   // --- PHASE E.4: COPY PHOTO AR UI INTERACTION PATTERN ---
   const handleUIButtonClick = useCallback((callback: () => void) => {
     // Disable marker placement during UI interaction
@@ -443,6 +423,27 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       setState('ERROR');
     }
   }, [focalLength, fovRatio]);
+
+  // --- PHASE E.5: CAMERA INITIALIZATION AFTER AR (Fix blank screen bug) ---
+  // NOTE: This useEffect must come AFTER transitionToCamera definition to avoid hoisting errors
+  useEffect(() => {
+    if (state === 'CAMERA_INITIALIZING' && distanceRef.current !== null) {
+      console.log('[LiveAR E.5] 🎥 CAMERA_INITIALIZING state - starting camera init...');
+      
+      const initCamera = async () => {
+        try {
+          await transitionToCamera(distanceRef.current!);
+          console.log('[LiveAR E.5] ✅ Camera initialized successfully');
+        } catch (err) {
+          console.error('[LiveAR E.5] ❌ Camera init failed:', err);
+          setError('Failed to start camera. Please try again.');
+          setState('USER_CHOICE');
+        }
+      };
+      
+      initCamera();
+    }
+  }, [state, transitionToCamera]);
 
   // --- PHASE E.4: USER-TRIGGERED AR INITIALIZATION (Copy Photo AR ARButton Pattern) ---
   // This function is called ONLY when user taps "Use AR" button
