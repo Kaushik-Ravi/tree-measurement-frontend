@@ -21,7 +21,7 @@ import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import {
   Camera, Check, X, TreePine, Loader2, 
   AlertCircle, Sparkles, Target, Navigation, RotateCcw, Leaf,
-  Zap, Users, Edit3, ArrowLeft
+  Zap, Users, Edit3, ArrowLeft, Move, Scan
 } from 'lucide-react';
 import { 
   samAutoSegment, 
@@ -355,8 +355,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
   const transitionToCamera = useCallback(async (dist: number) => {
+    console.log('[LiveAR E.5] 🎥 Starting camera transition, distance:', dist.toFixed(2), 'm');
+    
     try {
       // Request camera for photo capture
+      console.log('[LiveAR E.5] Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -366,22 +369,28 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         audio: false,
       });
 
+      console.log('[LiveAR E.5] ✅ Camera access granted');
       streamRef.current = stream;
 
       // Wait for video element and attach stream
       if (videoRef.current) {
+        console.log('[LiveAR E.5] Attaching stream to video element...');
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        console.log('[LiveAR E.5] ✅ Video playing');
 
         // Calculate scale factor inline
         const videoWidth = videoRef.current.videoWidth;
         const videoHeight = videoRef.current.videoHeight;
+        console.log('[LiveAR E.5] Video dimensions:', videoWidth, 'x', videoHeight);
         
         let cameraConstant: number | null = null;
         if (focalLength) {
           cameraConstant = 36.0 / focalLength;
+          console.log('[LiveAR E.5] Using focal length:', focalLength, '→ constant:', cameraConstant);
         } else if (fovRatio) {
           cameraConstant = fovRatio;
+          console.log('[LiveAR E.5] Using FOV ratio:', fovRatio);
         }
         
         if (cameraConstant) {
@@ -389,19 +398,26 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           const horizontalPixels = Math.max(videoWidth, videoHeight);
           const sf = (distMM * cameraConstant) / horizontalPixels;
           
+          console.log('[LiveAR E.5] Scale factor calculated:', sf);
+          
           distanceRef.current = dist; // Store in ref
           setUiDistance(dist); // Update UI
           setScaleFactor(sf);
           
           // PHASE B: Go to two-flow choice instead of camera ready
+          console.log('[LiveAR E.5] ✅ Transitioning to TWO_FLOW_CHOICE');
           setState('TWO_FLOW_CHOICE');
           setInstruction('Choose how you want to proceed');
         } else {
+          console.error('[LiveAR E.5] ❌ Camera not calibrated');
           throw new Error('Camera not calibrated');
         }
+      } else {
+        console.error('[LiveAR E.5] ❌ Video ref not available');
+        throw new Error('Video element not available');
       }
     } catch (err: any) {
-      console.error('[LiveAR] Camera error:', err);
+      console.error('[LiveAR E.5] ❌ Camera transition error:', err);
       setError(err.message || 'Failed to access camera');
       setState('ERROR');
     }
@@ -538,36 +554,47 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
       // --- THE CHIMERA AR BUTTON STRATEGY (COPY FROM PHOTO AR) ---
       // Create ARButton (handles session lifecycle automatically)
-      console.log('[LiveAR E.4] Creating ARButton...');
+      console.log('[LiveAR E.5] Creating ARButton...');
       const arButton = ARButton.createButton(renderer, {
         requiredFeatures: ['hit-test'],
         optionalFeatures: ['dom-overlay'],
         domOverlay: { root: currentContainer }
       });
 
-      // Style the button to match our UI
+      // PHASE E.5: Style button to match Photo AR's beautiful design
       Object.assign(arButton.style, {
-        position: 'absolute',
-        bottom: '2rem',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        padding: '1rem 2rem',
-        fontSize: '1.1rem',
+        width: '100%',
+        padding: '1rem 1.5rem',
+        fontSize: '1.125rem',
         fontWeight: '600',
-        backgroundColor: '#22c55e',
+        background: 'linear-gradient(to right, var(--brand-primary), var(--brand-secondary))',
         color: 'white',
         border: 'none',
-        borderRadius: '12px',
+        borderRadius: '0.75rem',
         cursor: 'pointer',
-        zIndex: '1000',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '0.5rem',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.2)',
+        transition: 'all 0.3s ease',
       });
 
-      arButton.textContent = 'Start AR';
+      arButton.textContent = '▶ Start AR Measurement';
       arButtonRef.current = arButton;
-      currentContainer.appendChild(arButton);
+      
+      // PHASE E.5: Append to beautiful entry screen container
+      const arButtonContainer = document.getElementById('arButtonContainer');
+      if (arButtonContainer) {
+        arButtonContainer.appendChild(arButton);
+        console.log('[LiveAR E.5] ✅ ARButton added to entry screen');
+      } else {
+        // Fallback: append to main container
+        currentContainer.appendChild(arButton);
+        console.log('[LiveAR E.5] ⚠️ arButtonContainer not found, using fallback');
+      }
 
-      console.log('[LiveAR E.4] ✅ ARButton created');
+      console.log('[LiveAR E.5] ✅ ARButton created');
 
       // Track AR session state (COPY FROM PHOTO AR)
       renderer.xr.addEventListener('sessionstart', () => {
@@ -584,16 +611,25 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         }
       });
 
-      renderer.xr.addEventListener('sessionend', () => {
-        console.log('[LiveAR E.4] AR session ended');
+      renderer.xr.addEventListener('sessionend', async () => {
+        console.log('[LiveAR E.5] AR session ended');
         setArSessionActive(false);
         isInitializingRef.current = false;
         
-        // Transition to camera view with measured distance
+        // PHASE E.5: Critical transition to camera with measured distance
         if (distanceRef.current !== null) {
-          transitionToCamera(distanceRef.current);
+          console.log('[LiveAR E.5] ✅ Distance confirmed, transitioning to camera:', distanceRef.current.toFixed(2), 'm');
+          try {
+            await transitionToCamera(distanceRef.current);
+            console.log('[LiveAR E.5] ✅ Camera transition successful');
+          } catch (err) {
+            console.error('[LiveAR E.5] ❌ Camera transition failed:', err);
+            setError('Failed to start camera. Please try again.');
+            setState('USER_CHOICE');
+          }
         } else {
           // User cancelled AR
+          console.log('[LiveAR E.5] User cancelled AR, returning to choice screen');
           setState('USER_CHOICE');
           setInstruction('Choose your measurement method');
         }
@@ -1642,8 +1678,88 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     );
   }
 
-  // AR Distance Measurement UI (PHASE E.4: Updated states)
-  if (state === 'AR_READY' || state === 'AR_ACTIVE' || state === 'AR_SCANNING' || 
+  // PHASE E.5: AR Entry Screen (copied from Photo AR)
+  if (state === 'AR_READY') {
+    return (
+      <div className="fixed inset-0 z-50">
+        {/* Beautiful entry screen - matches Photo AR exactly */}
+        <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset flex flex-col items-center justify-center p-6">
+          {/* Exit Button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 p-3 rounded-full bg-background-subtle border border-stroke-default hover:bg-background-inset transition-all z-10"
+          >
+            <X className="w-5 h-5 text-content-default" />
+          </button>
+
+          {/* Main Content */}
+          <div className="max-w-md w-full space-y-8 text-center">
+            {/* Animated Icon with glow */}
+            <div className="flex justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 bg-brand-primary/20 rounded-full blur-2xl animate-pulse" />
+                <div className="relative bg-gradient-to-br from-brand-primary to-brand-secondary p-6 rounded-full">
+                  <Move className="w-16 h-16 text-content-on-brand" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title & Description */}
+            <div className="space-y-3">
+              <h1 className="text-3xl font-bold text-content-default">
+                AR Distance Measurement
+              </h1>
+              <p className="text-content-subtle text-lg leading-relaxed">
+                Measure the distance from the tree's base to your position using augmented reality
+              </p>
+            </div>
+
+            {/* Instructions Card */}
+            <div className="bg-background-subtle border border-stroke-default rounded-2xl p-6 space-y-4 text-left">
+              <h2 className="font-semibold text-content-default flex items-center gap-2">
+                <Scan className="w-5 h-5 text-brand-accent" />
+                How it works:
+              </h2>
+              <ol className="space-y-3 text-sm text-content-subtle">
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">
+                    1
+                  </span>
+                  <span>Stand at your measurement position and scan the ground</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">
+                    2
+                  </span>
+                  <span>Point your camera at the tree's base and tap the screen</span>
+                </li>
+                <li className="flex gap-3">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-primary text-content-on-brand flex items-center justify-center text-xs font-bold">
+                    3
+                  </span>
+                  <span>Point your camera at your feet and tap the screen again</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Start AR Button - This is where ARButton gets appended */}
+            <div id="arButtonContainer" className="w-full">
+              {/* ARButton from Three.js gets inserted here via startArMeasurement() */}
+              {/* The button is styled to match this beautiful design */}
+            </div>
+
+            {/* Help Text */}
+            <p className="text-xs text-content-subtle">
+              Make sure you're on a flat surface with good lighting for best results
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // AR Session UI (PHASE E.5: Separate from entry screen)
+  if (state === 'AR_ACTIVE' || state === 'AR_SCANNING' || 
       state === 'AR_PLACE_FIRST' || state === 'AR_PLACE_SECOND' || 
       state === 'AR_COMPLETE') {
     return (
@@ -1675,12 +1791,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           {/* Instructions & UI Controls */}
           <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent pointer-events-auto">
             <div className="max-w-md mx-auto text-center text-white">
-              {(state === 'AR_READY' || state === 'AR_ACTIVE') && (
+              {state === 'AR_ACTIVE' && (
                 <>
                   <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-green-500" />
                   <p className="text-xl font-semibold">{instruction}</p>
                   <p className="text-sm text-gray-400 mt-2">
-                    Tap "Start AR" button to begin
+                    Initializing AR session...
                   </p>
                 </>
               )}
