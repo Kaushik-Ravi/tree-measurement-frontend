@@ -125,6 +125,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // PHASE E.2: AR mask tracking REMOVED (user feedback: looked "artificial")
   // Simplified UI without device orientation tracking
 
+  // PHASE E.3: XR Resource Management (robust AR initialization)
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+
   // Phase 5: Two-flow + Additional Details
   const [additionalDetails, setAdditionalDetails] = useState<{
     condition: string;
@@ -206,6 +209,70 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // PHASE E.2: AR mask orientation tracking REMOVED (simplified UI)
 
+  // --- PHASE E.3: ROBUST RESOURCE MANAGEMENT ---
+  const releaseAllResources = useCallback(async () => {
+    if (isCleaningUp) {
+      console.log('[LiveAR Phase E.3] ⚠️ Cleanup already in progress, skipping...');
+      return;
+    }
+
+    console.log('[LiveAR Phase E.3] 🧹 Releasing all resources...');
+    setIsCleaningUp(true);
+
+    try {
+      // CRITICAL: Stop camera stream FIRST (before XR session)
+      if (streamRef.current) {
+        console.log('[LiveAR Phase E.3] Stopping camera stream...');
+        const tracks = streamRef.current.getTracks();
+        for (const track of tracks) {
+          track.stop();
+          console.log(`[LiveAR Phase E.3] ✓ Track stopped: ${track.label} (${track.kind})`);
+        }
+        streamRef.current = null;
+      }
+
+      // Clean video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        videoRef.current.load();
+      }
+
+      // Stop XR session if active
+      if (rendererRef.current?.xr?.getSession()) {
+        console.log('[LiveAR Phase E.3] Ending XR session...');
+        try {
+          const session = rendererRef.current.xr.getSession();
+          if (session) {
+            await session.end();
+            console.log('[LiveAR Phase E.3] ✓ XR session ended');
+          }
+        } catch (err) {
+          console.warn('[LiveAR Phase E.3] XR session end warning (may already be closed):', err);
+        }
+      }
+
+      // Dispose Three.js renderer
+      if (rendererRef.current) {
+        console.log('[LiveAR Phase E.3] Disposing renderer...');
+        rendererRef.current.dispose();
+        if (rendererRef.current.domElement?.parentNode) {
+          rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current = null;
+      }
+
+      // CRITICAL: Wait for resources to fully release
+      console.log('[LiveAR Phase E.3] Waiting 500ms for resource release...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('[LiveAR Phase E.3] ✅ All resources released successfully');
+    } catch (err) {
+      console.error('[LiveAR Phase E.3] ❌ Cleanup error:', err);
+    } finally {
+      setIsCleaningUp(false);
+    }
+  }, [isCleaningUp]);
+
   // --- WEBXR SETUP (with fallback to manual distance) ---
   useEffect(() => {
     let isMounted = true;
@@ -215,6 +282,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
     const checkARSupportAndInit = async () => {
       try {
+        // PHASE E.3: Release any existing resources first
+        console.log('[LiveAR Phase E.3] 🔍 Pre-flight check: Cleaning up any existing resources...');
+        await releaseAllResources();
+
         // Check if WebXR is available
         if (!navigator.xr) {
           console.log('[LiveAR] WebXR not available - falling back to manual distance');
@@ -229,12 +300,35 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           return;
         }
 
-        // WebXR is supported, try to start AR session
-        await initWebXR();
+        // PHASE E.3: Retry logic for XR initialization
+        let lastError: Error | null = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            console.log(`[LiveAR Phase E.3] 🚀 AR initialization attempt ${attempt}/3...`);
+            
+            await initWebXR();
+            console.log('[LiveAR Phase E.3] ✅ AR initialization successful!');
+            return; // Success!
+            
+          } catch (err: any) {
+            lastError = err;
+            console.error(`[LiveAR Phase E.3] ❌ Attempt ${attempt} failed:`, err.message);
+            
+            if (attempt < 3) {
+              console.log(`[LiveAR Phase E.3] ⏳ Waiting 1s before retry ${attempt + 1}...`);
+              await releaseAllResources(); // Clean up before retry
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Cooldown
+            }
+          }
+        }
+
+        // All attempts failed
+        throw lastError || new Error('AR initialization failed after 3 attempts');
         
       } catch (err: any) {
-        console.error('[LiveAR] AR initialization error:', err);
+        console.error('[LiveAR] AR initialization failed completely:', err);
         console.log('[LiveAR] Falling back to manual distance input');
+        await releaseAllResources(); // Final cleanup
         await startCameraForManualMode();
       }
     };
@@ -345,17 +439,22 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         scene.add(line);
         lineRef.current = line;
 
-        // Start AR session - make hit-test OPTIONAL to support more devices
+        // PHASE E.3: Start AR session with robust error handling
+        console.log('[LiveAR Phase E.3] 📱 Requesting AR session...');
         const session = await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: [], // No required features
           optionalFeatures: ['hit-test', 'dom-overlay'],
           domOverlay: { root: document.body }
         });
+        console.log('[LiveAR Phase E.3] ✓ AR session granted');
 
+        console.log('[LiveAR Phase E.3] 🎨 Setting renderer session...');
         await renderer.xr.setSession(session);
+        console.log('[LiveAR Phase E.3] ✓ Renderer session configured');
 
         // Handle session end
         session.addEventListener('end', () => {
+          console.log('[LiveAR Phase E.3] AR session ended by user/system');
           if (isMounted) {
             setState('ERROR');
             setError('AR session ended');
@@ -505,16 +604,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     checkARSupportAndInit();
 
     return () => {
+      console.log('[LiveAR Phase E.3] 🧹 Component unmounting - cleaning up...');
       isMounted = false;
-      if (renderer) {
-        renderer.setAnimationLoop(null);
-        renderer.dispose();
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      
+      // Use our robust cleanup function
+      releaseAllResources().catch(err => {
+        console.error('[LiveAR Phase E.3] Unmount cleanup error:', err);
+      });
     };
-  }, []);
+  }, [releaseAllResources]);
 
   // --- CALCULATE SCALE FACTOR ---
   const calculateScaleFactor = useCallback(
