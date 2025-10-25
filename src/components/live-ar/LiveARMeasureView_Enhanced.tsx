@@ -418,10 +418,20 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
     isInitializingRef.current = true;
     console.log('[LiveAR E.4] 🚀 User initiated AR measurement');
+    console.log('[LiveAR E.4] Container ref status:', containerRef.current ? 'AVAILABLE ✅' : 'NULL ❌');
+    
     setState('AR_READY');
     setInstruction('Initializing AR...');
 
     try {
+      // PHASE E.4 FIX: Check container exists (mounted in USER_CHOICE)
+      const currentContainer = containerRef.current;
+      if (!currentContainer) {
+        throw new Error('Container not available - ref not set');
+      }
+      
+      console.log('[LiveAR E.4] ✅ Container verified, proceeding with AR setup');
+      
       // Setup Three.js scene (COPY FROM PHOTO AR)
       const scene = new THREE.Scene();
       sceneRef.current = scene;
@@ -442,12 +452,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
       rendererRef.current = renderer;
-
-      const currentContainer = containerRef.current;
-      if (!currentContainer) {
-        throw new Error('Container not available');
-      }
       
+      console.log('[LiveAR E.4] ✅ Three.js renderer created');
       currentContainer.appendChild(renderer.domElement);
 
       // Add lighting
@@ -1476,8 +1482,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // PHASE E.3 REBUILD: User choice screen - DELIBERATE CHOICE
   if (state === 'USER_CHOICE') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
-        <div className="max-w-lg w-full mx-4">
+      <>
+        {/* PHASE E.4 FIX: AR container - always mounted for Photo AR pattern */}
+        {/* Hidden during USER_CHOICE, visible during AR states */}
+        <div 
+          ref={containerRef} 
+          className="fixed inset-0"
+          style={{ 
+            visibility: 'hidden',
+            zIndex: -1 
+          }}
+        />
+        
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-4">
@@ -1574,7 +1591,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             💡 Both methods lead to full tree measurement and analysis
           </p>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -1630,7 +1647,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       state === 'AR_PLACE_FIRST' || state === 'AR_PLACE_SECOND' || 
       state === 'AR_COMPLETE') {
     return (
-      <div ref={containerRef} className="fixed inset-0 z-50">
+      <div className="fixed inset-0 z-50">
+        {/* PHASE E.4 FIX: Container ref is set in USER_CHOICE state */}
+        {/* Three.js appends its canvas to containerRef.current during AR init */}
+        {/* Now containerRef is guaranteed to exist before startArMeasurement() runs */}
+        
         {/* AR content renders here via Three.js */}
         
         {/* Overlay UI */}
