@@ -359,6 +359,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     console.log('[LiveAR E.5] 🎥 Starting camera transition, distance:', dist.toFixed(2), 'm');
     
     try {
+      // Store distance first
+      distanceRef.current = dist;
+      setUiDistance(dist);
+      
       // Request camera for photo capture
       console.log('[LiveAR E.5] Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -373,7 +377,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       console.log('[LiveAR E.5] ✅ Camera access granted');
       streamRef.current = stream;
 
-      // Wait for video element and attach stream
+      // CRITICAL FIX: Change state to TWO_FLOW_CHOICE FIRST to render the video element
+      // Then wait for next tick for DOM to update
+      console.log('[LiveAR E.5] Transitioning to TWO_FLOW_CHOICE to render video element...');
+      setState('TWO_FLOW_CHOICE');
+      setInstruction('Choose how you want to proceed');
+      
+      // Wait for React to render the video element
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Now attach stream to the rendered video element
       if (videoRef.current) {
         console.log('[LiveAR E.5] Attaching stream to video element...');
         videoRef.current.srcObject = stream;
@@ -400,21 +413,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           const sf = (distMM * cameraConstant) / horizontalPixels;
           
           console.log('[LiveAR E.5] Scale factor calculated:', sf);
-          
-          distanceRef.current = dist; // Store in ref
-          setUiDistance(dist); // Update UI
           setScaleFactor(sf);
           
-          // PHASE B: Go to two-flow choice instead of camera ready
-          console.log('[LiveAR E.5] ✅ Transitioning to TWO_FLOW_CHOICE');
-          setState('TWO_FLOW_CHOICE');
-          setInstruction('Choose how you want to proceed');
+          // State already set to TWO_FLOW_CHOICE above
+          console.log('[LiveAR E.5] ✅ Camera ready with scale factor');
         } else {
           console.error('[LiveAR E.5] ❌ Camera not calibrated');
           throw new Error('Camera not calibrated');
         }
       } else {
-        console.error('[LiveAR E.5] ❌ Video ref not available');
+        console.error('[LiveAR E.5] ❌ Video ref still not available after wait');
         throw new Error('Video element not available');
       }
     } catch (err: any) {
