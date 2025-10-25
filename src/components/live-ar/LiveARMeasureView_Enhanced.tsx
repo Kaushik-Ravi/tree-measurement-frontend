@@ -1532,102 +1532,106 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           }}
         />
         
-        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-4">
-              <Camera className="w-10 h-10 text-white" />
+        <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex flex-col z-50 overflow-y-auto">
+          {/* Scrollable container with proper padding */}
+          <div className="flex-1 flex flex-col justify-center px-6 py-8 max-w-2xl mx-auto w-full">
+            
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full mb-4">
+                <Camera className="w-10 h-10 text-white" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Choose Measurement Method</h1>
+              <p className="text-gray-400 text-sm md:text-base">
+                Select how you'd like to measure the distance to the tree
+              </p>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Choose Measurement Method</h1>
-            <p className="text-gray-400">
-              Select how you'd like to measure the distance to the tree
-            </p>
-          </div>
 
-          {/* Choice Cards */}
-          <div className="space-y-4 mb-6">
-            {/* AR Option */}
-            {isArAvailable ? (
+            {/* Choice Cards */}
+            <div className="space-y-4 mb-6">
+              {/* AR Option */}
+              {isArAvailable ? (
+                <button
+                  onClick={startArMeasurement}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 p-5 md:p-6 rounded-2xl text-left transition-all transform active:scale-95 shadow-lg"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                      <Sparkles className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg md:text-xl font-bold text-white mb-1 flex items-center gap-2 flex-wrap">
+                        Use Augmented Reality
+                        <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-semibold">
+                          RECOMMENDED
+                        </span>
+                      </h3>
+                      <p className="text-green-100 text-sm mb-2">
+                        Most accurate - uses device AR to measure distance
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-green-200">
+                        <Check className="w-4 h-4 flex-shrink-0" />
+                        <span>Point at tree base and your position</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <div className="w-full bg-gray-800 border border-gray-700 p-5 md:p-6 rounded-2xl text-left opacity-60">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
+                      <X className="w-6 h-6 text-gray-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg md:text-xl font-bold text-gray-400 mb-1">
+                        Augmented Reality
+                      </h3>
+                      <p className="text-gray-500 text-sm">
+                        Not available on this device
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Option */}
               <button
-                onClick={startArMeasurement}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 p-6 rounded-2xl text-left transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+                onClick={startManualMeasurement}
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 p-5 md:p-6 rounded-2xl text-left transition-all transform active:scale-95 shadow-lg"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-white" />
+                    <Target className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
-                      Use Augmented Reality
-                      <span className="text-xs bg-yellow-400 text-black px-2 py-0.5 rounded-full font-semibold">
-                        RECOMMENDED
-                      </span>
+                    <h3 className="text-lg md:text-xl font-bold text-white mb-1">
+                      Manual Distance Input
                     </h3>
-                    <p className="text-green-100 text-sm mb-2">
-                      Most accurate - uses device AR to measure distance
+                    <p className="text-blue-100 text-sm mb-2">
+                      Quick and simple - enter distance manually
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-green-200">
-                      <Check className="w-4 h-4" />
-                      <span>Point at tree base and your position</span>
+                    <div className="flex items-center gap-2 text-xs text-blue-200">
+                      <Check className="w-4 h-4 flex-shrink-0" />
+                      <span>Good for known distances or when AR unavailable</span>
                     </div>
                   </div>
                 </div>
               </button>
-            ) : (
-              <div className="w-full bg-gray-800 border border-gray-700 p-6 rounded-2xl text-left opacity-60">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 bg-gray-700 rounded-xl flex items-center justify-center">
-                    <X className="w-6 h-6 text-gray-500" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-400 mb-1">
-                      Augmented Reality
-                    </h3>
-                    <p className="text-gray-500 text-sm">
-                      Not available on this device
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
-            {/* Manual Option */}
+            {/* Cancel button */}
             <button
-              onClick={startManualMeasurement}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 p-6 rounded-2xl text-left transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+              onClick={onCancel}
+              className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all font-medium"
             >
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                  <Target className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-1">
-                    Manual Distance Input
-                  </h3>
-                  <p className="text-blue-100 text-sm mb-2">
-                    Quick and simple - enter distance manually
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-blue-200">
-                    <Check className="w-4 h-4" />
-                    <span>Good for known distances or when AR unavailable</span>
-                  </div>
-                </div>
-              </div>
+              Cancel
             </button>
+
+            {/* Info note */}
+            <p className="text-center text-xs text-gray-500 mt-4">
+              💡 Both methods lead to full tree measurement and analysis
+            </p>
           </div>
-
-          {/* Cancel button */}
-          <button
-            onClick={onCancel}
-            className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
-          >
-            Cancel
-          </button>
-
-          {/* Info note */}
-          <p className="text-center text-xs text-gray-500 mt-4">
-            💡 Both methods lead to full tree measurement and analysis
-          </p>
         </div>
       </>
     );
