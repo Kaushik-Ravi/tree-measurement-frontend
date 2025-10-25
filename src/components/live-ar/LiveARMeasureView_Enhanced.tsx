@@ -584,17 +584,18 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       });
 
       // CHIMERA STRATEGY: Style button to be INVISIBLE but FUNCTIONAL
-      // Users click the beautiful React button which triggers this one
+      // CRITICAL FIX: Use position: fixed + pointer-events: none during session
+      // This prevents the button from affecting layout or blocking AR interactions
       Object.assign(arButton.style, {
-        position: 'absolute',
+        position: 'fixed',      // FIXED - completely out of document flow
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
         opacity: '0',           // INVISIBLE - users don't see this
-        pointerEvents: 'auto',  // FUNCTIONAL - still clickable
+        pointerEvents: 'none',  // DISABLED during AR session (dummy button triggers it)
         width: '280px',         // Match dummy button size
         height: '80px',
-        zIndex: '100'
+        zIndex: '-1'            // Behind everything - won't interfere
       });
 
       arButton.textContent = 'Start AR'; // Text doesn't matter, it's invisible
@@ -1502,7 +1503,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     [tapPoints, getCurrentDistance, scaleFactor]
   );
 
-  // --- RENDER ---
+  // --- RENDER SECTION ---
 
   // PHASE E.3 REBUILD: Pre-flight check screen
   if (state === 'PRE_FLIGHT_CHECK') {
@@ -1766,7 +1767,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               {/* CHIMERA BUTTON: Beautiful dummy button that triggers invisible ARButton */}
               <div className="relative">
                 <button
-                  onClick={() => arButtonRef.current?.click()}
+                  onClick={() => {
+                    // Temporarily enable pointer-events to trigger ARButton
+                    if (arButtonRef.current) {
+                      arButtonRef.current.style.pointerEvents = 'auto';
+                      arButtonRef.current.click();
+                      // Disable again immediately (AR session will hide it anyway)
+                      setTimeout(() => {
+                        if (arButtonRef.current) {
+                          arButtonRef.current.style.pointerEvents = 'none';
+                        }
+                      }, 100);
+                    }
+                  }}
                   className="w-full bg-gradient-to-r from-brand-primary to-brand-secondary hover:from-brand-primary-hover hover:to-brand-secondary-hover text-content-on-brand font-bold py-5 px-8 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
                 >
                   <Move className="w-6 h-6 group-hover:animate-pulse" />
