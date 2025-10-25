@@ -17,6 +17,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
+import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import {
   Camera, Check, X, TreePine, Loader2, 
   AlertCircle, Sparkles, Target, Navigation, RotateCcw, Leaf,
@@ -63,12 +64,13 @@ type MeasurementState =
   | 'PRE_FLIGHT_CHECK'     // Initial check: AR available? Show user choice
   | 'USER_CHOICE'          // User chooses: "Use AR" or "Manual Distance"
   
-  // --- AR PATH (user-initiated) ---
-  | 'AR_INIT'              // Starting WebXR (after user taps "Use AR")
+  // --- AR PATH (user-initiated with ARButton) ---
+  | 'AR_READY'             // ARButton created, waiting for user tap
+  | 'AR_ACTIVE'            // AR session started (via ARButton)
   | 'AR_SCANNING'          // Looking for surface
   | 'AR_PLACE_FIRST'       // Place marker at tree base
   | 'AR_PLACE_SECOND'      // Place marker at user position
-  | 'AR_DISTANCE_COMPLETE' // Distance measured, transitioning to camera
+  | 'AR_COMPLETE'          // Distance measured, session ending
   
   // --- MANUAL PATH (user-initiated) ---
   | 'DISTANCE_INPUT'       // Manual distance input (user chose manual OR AR not available)
@@ -107,9 +109,25 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // --- AUTH CONTEXT (Phase F: Database Integration) ---
   const { session } = useAuth();
   
-  // --- STATE ---
+  // --- PHASE E.4: COPY PHOTO AR PATTERN - Use refs for AR state to prevent re-render cycles ---
+  const arStateRef = useRef<'SCANNING' | 'READY_FIRST' | 'READY_SECOND' | 'COMPLETE'>('SCANNING');
+  const distanceRef = useRef<number | null>(null);
+  const isInitializingRef = useRef(false); // Prevent concurrent AR inits
+  const isCleaningUpRef = useRef(false);   // Prevent concurrent cleanups
+  const allowMarkerPlacement = useRef(true); // Control flag for marker placement (Photo AR pattern)
+  const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const arButtonRef = useRef<HTMLElement | null>(null);
+  const isMountedRef = useRef(false);
+  
+  // --- UI STATE (safe to cause re-renders) ---
   const [state, setState] = useState<MeasurementState>('PRE_FLIGHT_CHECK');
-  const [distance, setDistance] = useState<number | null>(null);
+  const [uiDistance, setUiDistance] = useState<number | null>(null); // For display only
+  const [showConfirmButtons, setShowConfirmButtons] = useState(false);
+  const [showPlaceButton, setShowPlaceButton] = useState(false);
+  const [showUndoButton, setShowUndoButton] = useState(false);
+  const [isScanning, setIsScanning] = useState(true);
+  const [arSessionActive, setArSessionActive] = useState(false);
+  
   const [manualDistanceInput, setManualDistanceInput] = useState('');
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const [capturedImageFile, setCapturedImageFile] = useState<File | null>(null);
@@ -130,10 +148,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // PHASE E.2: AR mask tracking REMOVED (user feedback: looked "artificial")
   // Simplified UI without device orientation tracking
 
-  // PHASE E.3 REBUILD: Resource management + AR capability check
+  // PHASE E.4: AR capability check (removed xrSession state - ARButton handles it)
   const [isArAvailable, setIsArAvailable] = useState<boolean>(false);
   const [isCheckingAr, setIsCheckingAr] = useState<boolean>(true);
-  const [xrSession, setXrSession] = useState<XRSession | null>(null); // Track active session
 
   // Phase 5: Two-flow + Additional Details
   const [additionalDetails, setAdditionalDetails] = useState<{
@@ -155,11 +172,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const reticleRef = useRef<THREE.Mesh | null>(null);
+  const reticleRef = useRef<THREE.Mesh | THREE.Group | null>(null); // Can be Mesh or Group
   const markersRef = useRef<THREE.Group[]>([]);
   const lineRef = useRef<THREE.Line | null>(null);
   const pointsRef = useRef<THREE.Vector3[]>([]);
-  const distanceRef = useRef<number | null>(null);
 
   // --- PHASE 6: LOAD SAVED CALIBRATION ---
   useEffect(() => {
@@ -257,85 +273,156 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     checkArCapability();
   }, []); // Runs ONCE on mount, NO resource acquisition
 
-  // --- PHASE E.3 REBUILD: CLEANUP (single source of truth) ---
-  const cleanupAllResources = useCallback(async () => {
-    console.log('[LiveAR E.3] 🧹 Cleanup: Releasing all resources...');
+  // --- PHASE E.4: SIMPLIFIED CLEANUP (Copy Photo AR Pattern) ---
+  const cleanupResources = useCallback(() => {
+    if (isCleaningUpRef.current) return;
+    isCleaningUpRef.current = true;
+    
+    console.log('[LiveAR E.4] Cleanup: Releasing resources');
 
     try {
-      // 1. End XR session FIRST (most critical)
-      if (xrSession) {
-        console.log('[LiveAR E.3] 🧹 Ending XR session...');
-        try {
-          await xrSession.end();
-          setXrSession(null);
-          console.log('[LiveAR E.3] ✅ XR session ended');
-        } catch (err: any) {
-          // Already ended is OK
-          if (!err.message?.includes('already ended')) {
-            console.warn('[LiveAR E.3] ⚠️ XR session end warning:', err.message);
-          }
-          setXrSession(null);
-        }
+      // Clear timers
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
       }
 
-      // 2. Dispose Three.js renderer
+      // Dispose renderer (ARButton handles XR session)
       if (rendererRef.current) {
-        console.log('[LiveAR E.3] 🧹 Disposing renderer...');
+        console.log('[LiveAR E.4] Disposing renderer');
         rendererRef.current.dispose();
         if (rendererRef.current.domElement?.parentNode) {
           rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
         }
         rendererRef.current = null;
-        console.log('[LiveAR E.3] ✅ Renderer disposed');
       }
 
-      // 3. Stop camera stream (after XR is closed)
+      // Stop camera stream
       if (streamRef.current) {
-        console.log('[LiveAR E.3] 🧹 Stopping camera stream...');
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-          console.log(`[LiveAR E.3] ✅ Stopped: ${track.label}`);
-        });
+        console.log('[LiveAR E.4] Stopping camera');
+        streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
 
-      // 4. Clean video element
+      // Clean video element
       if (videoRef.current) {
         videoRef.current.srcObject = null;
-        videoRef.current.load();
       }
 
-      // 5. Wait for resources to fully release
-      await new Promise(resolve => setTimeout(resolve, 300));
-      console.log('[LiveAR E.3] ✅ All resources released');
+      // Remove AR button
+      if (arButtonRef.current?.parentNode) {
+        arButtonRef.current.parentNode.removeChild(arButtonRef.current);
+        arButtonRef.current = null;
+      }
 
+      console.log('[LiveAR E.4] ✅ Cleanup complete');
     } catch (err) {
-      console.error('[LiveAR E.3] ❌ Cleanup error:', err);
+      console.error('[LiveAR E.4] Cleanup error:', err);
+    } finally {
+      isCleaningUpRef.current = false;
     }
-  }, [xrSession]);
+  }, []);
 
-  // --- COMPONENT UNMOUNT CLEANUP ---
+  // --- COMPONENT UNMOUNT CLEANUP (Copy Photo AR Pattern) ---
   useEffect(() => {
+    isMountedRef.current = true;
+    
     return () => {
-      console.log('[LiveAR E.3] Component unmounting - final cleanup');
-      cleanupAllResources();
+      console.log('[LiveAR E.4] Component unmounting');
+      isMountedRef.current = false;
+      cleanupResources();
     };
-  }, [cleanupAllResources]);
+  }, [cleanupResources]);
 
-  // --- PHASE E.3 REBUILD: USER-TRIGGERED AR INITIALIZATION ---
+  // --- PHASE E.4: COPY PHOTO AR UI INTERACTION PATTERN ---
+  const handleUIButtonClick = useCallback((callback: () => void) => {
+    // Disable marker placement during UI interaction
+    allowMarkerPlacement.current = false;
+    
+    // Clear existing cooldown
+    if (cooldownTimerRef.current) {
+      clearTimeout(cooldownTimerRef.current);
+    }
+    
+    // Execute callback
+    callback();
+    
+    // Re-enable after cooldown
+    cooldownTimerRef.current = setTimeout(() => {
+      allowMarkerPlacement.current = true;
+    }, 300); // 300ms cooldown (Photo AR pattern)
+  }, []);
+
+  // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
+  const transitionToCamera = useCallback(async (dist: number) => {
+    try {
+      // Request camera for photo capture
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      // Wait for video element and attach stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        // Calculate scale factor inline
+        const videoWidth = videoRef.current.videoWidth;
+        const videoHeight = videoRef.current.videoHeight;
+        
+        let cameraConstant: number | null = null;
+        if (focalLength) {
+          cameraConstant = 36.0 / focalLength;
+        } else if (fovRatio) {
+          cameraConstant = fovRatio;
+        }
+        
+        if (cameraConstant) {
+          const distMM = dist * 1000;
+          const horizontalPixels = Math.max(videoWidth, videoHeight);
+          const sf = (distMM * cameraConstant) / horizontalPixels;
+          
+          distanceRef.current = dist; // Store in ref
+          setUiDistance(dist); // Update UI
+          setScaleFactor(sf);
+          
+          // PHASE B: Go to two-flow choice instead of camera ready
+          setState('TWO_FLOW_CHOICE');
+          setInstruction('Choose how you want to proceed');
+        } else {
+          throw new Error('Camera not calibrated');
+        }
+      }
+    } catch (err: any) {
+      console.error('[LiveAR] Camera error:', err);
+      setError(err.message || 'Failed to access camera');
+      setState('ERROR');
+    }
+  }, [focalLength, fovRatio]);
+
+  // --- PHASE E.4: USER-TRIGGERED AR INITIALIZATION (Copy Photo AR ARButton Pattern) ---
   // This function is called ONLY when user taps "Use AR" button
-  // Guarantees user activation for WebXR security requirements
-  const startArMeasurement = async () => {
-    console.log('[LiveAR E.3] 🚀 User initiated AR measurement');
-    setState('AR_INIT');
-    setInstruction('Starting AR...');
+  // Uses Three.js ARButton (battle-tested, handles session lifecycle automatically)
+  const startArMeasurement = useCallback(() => {
+    if (isInitializingRef.current) {
+      console.log('[LiveAR E.4] AR initialization already in progress');
+      return;
+    }
+
+    isInitializingRef.current = true;
+    console.log('[LiveAR E.4] 🚀 User initiated AR measurement');
+    setState('AR_READY');
+    setInstruction('Initializing AR...');
 
     try {
-      if (!navigator.xr) {
-        throw new Error('WebXR not available');
-      }
-
-      // Setup Three.js scene
+      // Setup Three.js scene (COPY FROM PHOTO AR)
       const scene = new THREE.Scene();
       sceneRef.current = scene;
 
@@ -356,9 +443,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       renderer.xr.enabled = true;
       rendererRef.current = renderer;
 
-      if (containerRef.current) {
-        containerRef.current.appendChild(renderer.domElement);
+      const currentContainer = containerRef.current;
+      if (!currentContainer) {
+        throw new Error('Container not available');
       }
+      
+      currentContainer.appendChild(renderer.domElement);
 
       // Add lighting
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -367,21 +457,40 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       directionalLight.position.set(0, 10, 0);
       scene.add(directionalLight);
 
-      // Create reticle (targeting circle)
-      const reticleGeometry = new THREE.RingGeometry(0.1, 0.12, 32);
-      const reticleMaterial = new THREE.MeshBasicMaterial({
-        color: 0x22c55e,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.8,
-      });
-      const reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      scene.add(reticle);
-      reticleRef.current = reticle;
+      // Create reticle (targeting circle) - PHOTO AR PATTERN
+      const reticleGroup = new THREE.Group();
+      
+      const reticleRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.1, 0.12, 32),
+        new THREE.MeshBasicMaterial({
+          color: 0x22c55e,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.8,
+        })
+      );
+      reticleRing.rotation.x = -Math.PI / 2;
+      
+      const reticleCenter = new THREE.Mesh(
+        new THREE.CircleGeometry(0.02, 32),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.9,
+        })
+      );
+      reticleCenter.rotation.x = -Math.PI / 2;
+      reticleCenter.position.y = 0.001;
+      
+      reticleGroup.add(reticleRing, reticleCenter);
+      reticleGroup.matrixAutoUpdate = false;
+      reticleGroup.visible = false;
+      scene.add(reticleGroup);
+      reticleRef.current = reticleGroup;
 
-      // Create markers (for placed points)
+      // Create markers (for placed points) - PHOTO AR PATTERN
+      markersRef.current = [];
       for (let i = 0; i < 2; i++) {
         const marker = new THREE.Group();
         const markerCylinder = new THREE.Mesh(
@@ -407,7 +516,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         markersRef.current.push(marker);
       }
 
-      // Create measurement line
+      // Create measurement line - PHOTO AR PATTERN
       const lineMaterial = new THREE.LineBasicMaterial({
         color: 0x4ade80,
         linewidth: 4,
@@ -421,30 +530,77 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       scene.add(line);
       lineRef.current = line;
 
-      // CRITICAL: Request session IMMEDIATELY (within user gesture)
-      console.log('[LiveAR E.3] 📱 Requesting AR session (user gesture active)...');
-      const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: [],
-        optionalFeatures: ['hit-test', 'dom-overlay'],
-        domOverlay: { root: document.body },
-      });
-      
-      setXrSession(session); // Track session for cleanup
-      console.log('[LiveAR E.3] ✅ AR session granted!');
-
-      console.log('[LiveAR E.3] 🎨 Setting renderer session...');
-      await renderer.xr.setSession(session);
-      console.log('[LiveAR E.3] ✅ Renderer configured!');
-
-      // Handle session end
-      session.addEventListener('end', () => {
-        console.log('[LiveAR E.3] AR session ended by user/system');
-        setXrSession(null);
-        transitionToCamera(distanceRef.current || 0);
+      // --- THE CHIMERA AR BUTTON STRATEGY (COPY FROM PHOTO AR) ---
+      // Create ARButton (handles session lifecycle automatically)
+      console.log('[LiveAR E.4] Creating ARButton...');
+      const arButton = ARButton.createButton(renderer, {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: currentContainer }
       });
 
-      // Select handler (screen tap)
+      // Style the button to match our UI
+      Object.assign(arButton.style, {
+        position: 'absolute',
+        bottom: '2rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '1rem 2rem',
+        fontSize: '1.1rem',
+        fontWeight: '600',
+        backgroundColor: '#22c55e',
+        color: 'white',
+        border: 'none',
+        borderRadius: '12px',
+        cursor: 'pointer',
+        zIndex: '1000',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+      });
+
+      arButton.textContent = 'Start AR';
+      arButtonRef.current = arButton;
+      currentContainer.appendChild(arButton);
+
+      console.log('[LiveAR E.4] ✅ ARButton created');
+
+      // Track AR session state (COPY FROM PHOTO AR)
+      renderer.xr.addEventListener('sessionstart', () => {
+        console.log('[LiveAR E.4] AR session started');
+        setArSessionActive(true);
+        setState('AR_ACTIVE');
+        arStateRef.current = 'SCANNING';
+        setIsScanning(true);
+        setInstruction('Move your device to scan surfaces...');
+        
+        // Hide AR button during session
+        if (arButtonRef.current) {
+          arButtonRef.current.style.display = 'none';
+        }
+      });
+
+      renderer.xr.addEventListener('sessionend', () => {
+        console.log('[LiveAR E.4] AR session ended');
+        setArSessionActive(false);
+        isInitializingRef.current = false;
+        
+        // Transition to camera view with measured distance
+        if (distanceRef.current !== null) {
+          transitionToCamera(distanceRef.current);
+        } else {
+          // User cancelled AR
+          setState('USER_CHOICE');
+          setInstruction('Choose your measurement method');
+        }
+      });
+
+      // Select handler (screen tap) - COPY FROM PHOTO AR PATTERN
       const onSelect = () => {
+        // Check cooldown protection
+        if (!allowMarkerPlacement.current) {
+          console.log('[LiveAR E.4] Marker placement blocked - UI interaction in progress');
+          return;
+        }
+
         const reticle = reticleRef.current;
         if (!reticle || !reticle.visible) return;
 
@@ -458,14 +614,17 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
           if (markerIndex === 0) {
             // First point placed (tree base)
-            setState('AR_PLACE_SECOND');
+            arStateRef.current = 'READY_SECOND';
+            setState('AR_PLACE_FIRST');
+            setShowPlaceButton(false);
+            setShowUndoButton(true);
             setInstruction('Now point at your feet and tap');
           } else {
             // Second point placed (user position)
             const [p1, p2] = pointsRef.current;
             const calculatedDistance = p1.distanceTo(p2);
             distanceRef.current = calculatedDistance;
-            setDistance(calculatedDistance);
+            setUiDistance(calculatedDistance);
 
             // Draw line
             const line = lineRef.current;
@@ -478,13 +637,13 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               line.visible = true;
             }
 
-            setState('AR_DISTANCE_COMPLETE');
-            setInstruction(`Distance: ${calculatedDistance.toFixed(2)}m`);
+            arStateRef.current = 'COMPLETE';
+            setState('AR_COMPLETE');
+            setShowConfirmButtons(true);
+            setShowUndoButton(false);
+            setInstruction(`Distance: ${calculatedDistance.toFixed(2)}m - Tap Confirm to continue`);
 
-            // End AR session after 2 seconds
-            setTimeout(() => {
-              session.end();
-            }, 2000);
+            console.log('[LiveAR E.4] ✅ Distance measured:', calculatedDistance.toFixed(2), 'm');
           }
         }
       };
@@ -493,140 +652,209 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       controller.addEventListener('select', onSelect);
       scene.add(controller);
 
-      // Setup hit-test
+      // Setup hit-test - SIMPLIFIED (COPY FROM PHOTO AR)
       let hitTestSource: XRHitTestSource | null = null;
       let hitTestSourceRequested = false;
+      let surfaceFound = false;
+      const clockRef = new THREE.Clock();
 
-      // Render loop
+      // Render loop - COPY FROM PHOTO AR PATTERN
       const render = (_: any, frame: XRFrame) => {
-        if (!renderer || !frame) return;
+        if (!isMountedRef.current) return;
+        
+        if (frame) {
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          const activeSession = renderer.xr.getSession();
+          if (!activeSession) return;
 
-        const referenceSpace = renderer.xr.getReferenceSpace();
-        const activeSession = renderer.xr.getSession();
-        if (!activeSession) return;
+          // Request hit-test source (PHOTO AR PATTERN - simplified)
+          if (!hitTestSourceRequested) {
+            activeSession.requestReferenceSpace('viewer').then(viewerSpace => {
+              activeSession.requestHitTestSource?.({ space: viewerSpace })?.then(source => {
+                hitTestSource = source;
+                console.log('[LiveAR E.4] ✅ Hit-test source ready');
+              }).catch((err: any) => {
+                console.warn('[LiveAR E.4] Hit-test source failed:', err.message);
+              });
+            }).catch((err: any) => {
+              console.warn('[LiveAR E.4] Reference space failed:', err.message);
+            });
 
-        // Request hit-test source
-        if (!hitTestSourceRequested) {
-          const tryReferenceSpaces = async () => {
-            const spaceTypes: XRReferenceSpaceType[] = [
-              'viewer',
-              'local',
-              'local-floor',
-              'unbounded',
-            ];
+            activeSession.addEventListener('end', () => {
+              hitTestSourceRequested = false;
+              hitTestSource = null;
+              surfaceFound = false;
+            });
+            
+            hitTestSourceRequested = true;
+          }
 
-            for (const spaceType of spaceTypes) {
-              try {
-                console.log(`[LiveAR E.3] Trying reference space: ${spaceType}`);
-                const refSpace = await activeSession.requestReferenceSpace(spaceType);
+          // Process hit-test results
+          if (hitTestSource) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+            const reticle = reticleRef.current;
 
-                if (activeSession.requestHitTestSource) {
-                  const source = await activeSession.requestHitTestSource({
-                    space: refSpace,
-                  });
-                  if (source) {
-                    hitTestSource = source;
-                    console.log(`[LiveAR E.3] ✅ Hit-test ready with: ${spaceType}`);
-                    return;
+            if (hitTestResults.length > 0 && reticle) {
+              const hit = hitTestResults[0];
+              const pose = hit.getPose(referenceSpace!);
+              if (pose) {
+                reticle.visible = true;
+                reticle.matrix.fromArray(pose.transform.matrix);
+
+                if (!surfaceFound) {
+                  surfaceFound = true;
+                  if (arStateRef.current === 'SCANNING') {
+                    arStateRef.current = 'READY_FIRST';
+                    setState('AR_PLACE_FIRST');
+                    setIsScanning(false);
+                    setShowPlaceButton(true);
+                    setInstruction("Point at tree's base, then tap screen");
+                    console.log('[LiveAR E.4] ✅ Surface found');
                   }
                 }
-              } catch (err: any) {
-                console.log(`[LiveAR E.3] ${spaceType} failed:`, err.message);
+
+                // Reticle pulse animation (PHOTO AR)
+                const reticleRing = reticle.children[0] as THREE.Mesh;
+                if (reticleRing.material) {
+                  (reticleRing.material as THREE.MeshBasicMaterial).opacity = 0.95;
+                }
+                
+                const pulseScale = 1 + Math.sin(clockRef.getElapsedTime() * 3) * 0.05;
+                reticle.children.forEach((child, index) => {
+                  if (index < 2) {
+                    child.scale.set(pulseScale, pulseScale, pulseScale);
+                  }
+                });
               }
-            }
-
-            console.warn('[LiveAR E.3] All reference spaces failed');
-          };
-
-          tryReferenceSpaces();
-          hitTestSourceRequested = true;
-
-          activeSession.addEventListener('end', () => {
-            hitTestSourceRequested = false;
-            hitTestSource = null;
-          });
-        }
-
-        // Process hit-test results
-        if (hitTestSource) {
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          const reticle = reticleRef.current;
-          
-          if (hitTestResults.length > 0 && reticle) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace!);
-            if (pose) {
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
-
-              if (state === 'AR_SCANNING' || state === 'AR_INIT') {
-                setState('AR_PLACE_FIRST');
-                setInstruction('Point at the base of the tree and tap');
+            } else if (reticle) {
+              reticle.visible = false;
+              const reticleRing = reticle.children[0] as THREE.Mesh;
+              if (reticleRing.material) {
+                (reticleRing.material as THREE.MeshBasicMaterial).opacity = 0.5;
               }
-            }
-          } else if (reticle) {
-            reticle.visible = false;
-            if (state === 'AR_PLACE_FIRST') {
-              setState('AR_SCANNING');
-              setInstruction('Move your device to scan surfaces...');
             }
           }
         }
+
+        // Marker pulse animation (PHOTO AR)
+        markersRef.current.forEach(marker => {
+          if (marker.visible) {
+            const pulse = marker.children[1] as THREE.Mesh;
+            pulse.scale.x = pulse.scale.y = 1 + Math.sin(clockRef.getElapsedTime() * 5) * 0.1;
+          }
+        });
 
         renderer.render(scene, camera);
       };
 
       renderer.setAnimationLoop(render);
-      setState('AR_SCANNING');
-      setInstruction('Move your device to scan surfaces...');
+      console.log('[LiveAR E.4] ✅ AR system ready - waiting for user to tap Start AR');
 
     } catch (err: any) {
-      console.error('[LiveAR E.3] ❌ AR initialization failed:', err);
+      console.error('[LiveAR E.4] ❌ AR initialization failed:', err);
+      isInitializingRef.current = false;
       setError(`AR failed: ${err.message}`);
       setState('ERROR');
-      
-      // Cleanup on error
-      await cleanupAllResources();
     }
-  };
+  }, [transitionToCamera]);
 
-  // --- PHASE E.3 REBUILD: USER-TRIGGERED MANUAL MODE ---
-  // This function is called ONLY when user taps "Manual Distance" button
-  const startManualMeasurement = async () => {
-    console.log('[LiveAR E.3] 📏 User chose manual measurement');
+  // --- PHASE E.4: MANUAL MODE WITH CAMERA INITIALIZATION (FIX: was broken before) ---
+  const startManualMeasurement = useCallback(async () => {
+    console.log('[LiveAR E.4] 📏 User chose manual measurement');
     setState('DISTANCE_INPUT');
-    setInstruction('Starting camera for manual measurement...');
+    setInstruction('Initializing camera...');
 
     try {
+      // Start camera stream immediately (THIS WAS MISSING!)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
           width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: false,
+          height: { ideal: 1080 }
+        }
       });
 
       streamRef.current = stream;
 
-      // Phase 6: Auto-calibrate camera if not already calibrated
-      if (!cameraCalibration || cameraCalibration.calibrationMethod === 'none') {
-        console.log('[Phase 6] Auto-calibrating camera...');
-        const newCalibration = await autoCalibrate(undefined, stream);
-        setCameraCalibration(newCalibration);
-        console.log(
-          '[Phase 6] Auto-calibration complete:',
-          newCalibration.calibrationMethod
-        );
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        console.log('[LiveAR E.4] ✅ Camera ready for manual mode');
+        setInstruction('Enter distance to tree base');
       }
-
-      setInstruction('Enter distance to tree');
     } catch (err: any) {
-      console.error('[LiveAR E.3] ❌ Camera access failed:', err);
-      setError('Failed to access camera');
+      console.error('[LiveAR E.4] ❌ Camera access error:', err);
+      setError('Camera access denied. Please allow camera permission.');
       setState('ERROR');
     }
-  };
+  }, []);
+
+  // --- PHASE E.4: AR BUTTON HANDLERS (Copy Photo AR Pattern) ---
+  const handleArConfirm = useCallback(() => {
+    console.log('[LiveAR E.4] User confirmed AR distance');
+    
+    // End AR session
+    if (rendererRef.current?.xr) {
+      const session = rendererRef.current.xr.getSession();
+      if (session) {
+        session.end(); // This triggers sessionend event which calls transitionToCamera
+      }
+    }
+  }, []);
+
+  const handleArConfirmSafe = useCallback(() => {
+    handleUIButtonClick(handleArConfirm);
+  }, [handleArConfirm, handleUIButtonClick]);
+
+  const handleArRedo = useCallback(() => {
+    console.log('[LiveAR E.4] User requested redo');
+    
+    // Reset markers and distance
+    pointsRef.current = [];
+    distanceRef.current = null;
+    arStateRef.current = 'READY_FIRST';
+    
+    // Update UI
+    setUiDistance(null);
+    setShowConfirmButtons(false);
+    setShowPlaceButton(true);
+    setShowUndoButton(false);
+    setIsScanning(false);
+    setState('AR_PLACE_FIRST');
+    setInstruction("Point at tree's base, then tap screen");
+    
+    // Reset visual elements
+    markersRef.current.forEach(marker => marker.visible = false);
+    if (lineRef.current) lineRef.current.visible = false;
+  }, []);
+
+  const handleArRedoSafe = useCallback(() => {
+    handleUIButtonClick(handleArRedo);
+  }, [handleArRedo, handleUIButtonClick]);
+
+  const handleArUndo = useCallback(() => {
+    console.log('[LiveAR E.4] User undid last marker');
+    
+    if (arStateRef.current === 'READY_SECOND' && pointsRef.current.length === 1) {
+      pointsRef.current.pop();
+      markersRef.current[0].visible = false;
+      
+      arStateRef.current = 'READY_FIRST';
+      setState('AR_SCANNING');
+      setShowPlaceButton(true);
+      setShowUndoButton(false);
+      setInstruction("Point at tree's base, then tap screen");
+    }
+  }, []);
+
+  const handleArUndoSafe = useCallback(() => {
+    handleUIButtonClick(handleArUndo);
+  }, [handleArUndo, handleUIButtonClick]);
+
+  // --- HELPER: Get current distance (from ref or UI state) ---
+  const getCurrentDistance = useCallback(() => {
+    return distanceRef.current || uiDistance || null;
+  }, [uiDistance]);
 
   // --- CALCULATE SCALE FACTOR ---
   const calculateScaleFactor = useCallback(
@@ -700,7 +928,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     const sf = calculateScaleFactor(dist, videoWidth, videoHeight);
     if (!sf) return; // Error already set
 
-    setDistance(dist);
+    distanceRef.current = dist; // Store in ref
+    setUiDistance(dist); // Update UI
     setScaleFactor(sf);
     setError(null);
     
@@ -708,46 +937,6 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setState('TWO_FLOW_CHOICE');
     setInstruction('Choose how you want to proceed');
   }, [manualDistanceInput, calculateScaleFactor]);
-
-  // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
-  const transitionToCamera = useCallback(async (dist: number) => {
-    try {
-      // Request camera for photo capture
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-
-      // Wait for video element and attach stream
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-
-        // Calculate scale factor
-        const videoWidth = videoRef.current.videoWidth;
-        const videoHeight = videoRef.current.videoHeight;
-        const sf = calculateScaleFactor(dist, videoWidth, videoHeight);
-        
-        if (sf) {
-          setScaleFactor(sf);
-          
-          // PHASE B: Go to two-flow choice instead of camera ready
-          setState('TWO_FLOW_CHOICE');
-          setInstruction('Choose how you want to proceed');
-        }
-      }
-    } catch (err: any) {
-      console.error('[LiveAR] Camera error:', err);
-      setError(err.message || 'Failed to access camera');
-      setState('ERROR');
-    }
-  }, [calculateScaleFactor]);
 
   // --- HANDLE TAP ON VIDEO (Multi-Point Selection) ---
   const handleVideoTap = useCallback(
@@ -859,7 +1048,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         // Go back to distance input (allows user to re-enter distance)
         setState('DISTANCE_INPUT');
         setInstruction('Enter distance to tree (optional if AR fails)');
-        setDistance(null);
+        distanceRef.current = null;
+        setUiDistance(null);
         setScaleFactor(null);
         break;
 
@@ -994,7 +1184,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // --- PHASE F.1: QUICK SAVE DATABASE INTEGRATION ---
   const handleQuickSave = useCallback(async () => {
-    if (!capturedImageFile || !distance || !userLocation || !session?.access_token) {
+    const currentDistance = getCurrentDistance();
+    if (!capturedImageFile || !currentDistance || !userLocation || !session?.access_token) {
       setError("Missing required data: image, distance, location, or not logged in.");
       setState('ERROR');
       return;
@@ -1008,7 +1199,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       let finalScaleFactor = scaleFactor;
       if (!finalScaleFactor && videoRef.current) {
         finalScaleFactor = calculateScaleFactor(
-          distance,
+          currentDistance,
           videoRef.current.videoWidth,
           videoRef.current.videoHeight
         );
@@ -1019,7 +1210,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       }
 
       console.log('[Phase F.1] Quick Save - calling API with:');
-      console.log('  - Distance:', distance, 'm');
+      console.log('  - Distance:', currentDistance, 'm');
       console.log('  - Scale Factor:', finalScaleFactor);
       console.log('  - Location:', userLocation);
       console.log('  - Compass:', compassHeading);
@@ -1027,7 +1218,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       // Call Quick Capture API (same as Photo Method)
       await quickCapture(
         capturedImageFile,
-        distance,
+        currentDistance,
         finalScaleFactor!,
         compassHeading,
         userLocation.lat,
@@ -1061,10 +1252,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         error: error.message
       });
     }
-  }, [capturedImageFile, distance, scaleFactor, userLocation, compassHeading, session, calculateScaleFactor, onMeasurementComplete]);
+  }, [capturedImageFile, getCurrentDistance, scaleFactor, userLocation, compassHeading, session, calculateScaleFactor, onMeasurementComplete]);
 
   // --- PHASE F.2: FULL ANALYSIS DATABASE INTEGRATION ---
   const handleFullAnalysisSave = useCallback(async () => {
+    const currentDistance = getCurrentDistance();
     if (!capturedImageFile || !metrics || !session?.access_token || !scaleFactor) {
       setError("Cannot save: missing data or not logged in.");
       setState('ERROR');
@@ -1093,7 +1285,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         longitude: userLocation?.lng,
         heading: compassHeading,
         image_url: imageUrl,
-        distance_m: distance ?? undefined, // Convert null to undefined for API
+        distance_m: currentDistance ?? undefined, // Convert null to undefined for API
         scale_factor: scaleFactor ?? undefined,
         measurement_method: 'live-ar', // Track measurement type
         ...additionalDetails, // condition, ownership, remarks
@@ -1130,7 +1322,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         error: error.message
       });
     }
-  }, [capturedImageFile, metrics, identificationResult, co2Sequestered, userLocation, compassHeading, distance, scaleFactor, additionalDetails, session, onMeasurementComplete]);
+  }, [capturedImageFile, metrics, identificationResult, co2Sequestered, userLocation, compassHeading, getCurrentDistance, scaleFactor, additionalDetails, session, onMeasurementComplete]);
 
   // --- SUBMIT POINTS FOR SAM ANALYSIS ---
   const handleSubmitPoints = useCallback(
@@ -1165,9 +1357,14 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         const primaryPoint = tapPoints[0];
         setTapPoint({ x: primaryPoint.x, y: primaryPoint.y });
 
+        const currentDistance = getCurrentDistance();
+        if (!currentDistance) {
+          throw new Error('Distance not available');
+        }
+
         // PHASE A.2: Debug logging before SAM call
         console.log('[Phase A.2] Calling SAM with:');
-        console.log('  - Distance:', distance, 'm');
+        console.log('  - Distance:', currentDistance, 'm');
         console.log('  - Scale factor:', scaleFactor);
         console.log('  - Primary point:', primaryPoint);
         console.log('  - All points:', tapPoints);
@@ -1176,7 +1373,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         // Call SAM
         const response = await samAutoSegment(
           imageFile,
-          distance!,
+          currentDistance,
           scaleFactor!,
           { x: primaryPoint.x, y: primaryPoint.y }
         );
@@ -1258,7 +1455,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setState('ERROR');
       }
     },
-    [tapPoints, distance, scaleFactor]
+    [tapPoints, getCurrentDistance, scaleFactor]
   );
 
   // --- RENDER ---
@@ -1428,13 +1625,13 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     );
   }
 
-  // AR Distance Measurement UI
-  if (state === 'AR_INIT' || state === 'AR_SCANNING' || 
+  // AR Distance Measurement UI (PHASE E.4: Updated states)
+  if (state === 'AR_READY' || state === 'AR_ACTIVE' || state === 'AR_SCANNING' || 
       state === 'AR_PLACE_FIRST' || state === 'AR_PLACE_SECOND' || 
-      state === 'AR_DISTANCE_COMPLETE') {
+      state === 'AR_COMPLETE') {
     return (
       <div ref={containerRef} className="fixed inset-0 z-50">
-        {/* AR content renders here */}
+        {/* AR content renders here via Three.js */}
         
         {/* Overlay UI */}
         <div className="fixed inset-0 pointer-events-none z-50">
@@ -1454,10 +1651,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             </div>
           </div>
 
-          {/* Instruction */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
+          {/* Instructions & UI Controls */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent pointer-events-auto">
             <div className="max-w-md mx-auto text-center text-white">
-              {state === 'AR_SCANNING' && (
+              {(state === 'AR_READY' || state === 'AR_ACTIVE') && (
+                <>
+                  <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-green-500" />
+                  <p className="text-xl font-semibold">{instruction}</p>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Tap "Start AR" button to begin
+                  </p>
+                </>
+              )}
+              {(state === 'AR_SCANNING' || isScanning) && (
                 <>
                   <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-green-500" />
                   <p className="text-xl font-semibold">{instruction}</p>
@@ -1466,13 +1672,22 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   </p>
                 </>
               )}
-              {state === 'AR_PLACE_FIRST' && (
+              {state === 'AR_PLACE_FIRST' && showPlaceButton && (
                 <>
                   <Target className="w-16 h-16 mx-auto mb-4 text-green-500 animate-pulse" />
                   <p className="text-xl font-semibold">{instruction}</p>
                   <p className="text-sm text-gray-400 mt-2">
                     Step 1 of 2: Position the reticle at the tree's base
                   </p>
+                  {showUndoButton && (
+                    <button
+                      onClick={handleArUndoSafe}
+                      className="mt-4 px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium"
+                    >
+                      <RotateCcw className="w-5 h-5 inline mr-2" />
+                      Undo
+                    </button>
+                  )}
                 </>
               )}
               {state === 'AR_PLACE_SECOND' && (
@@ -1482,15 +1697,40 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   <p className="text-sm text-gray-400 mt-2">
                     Step 2 of 2: Position the reticle at your current position
                   </p>
+                  {showUndoButton && (
+                    <button
+                      onClick={handleArUndoSafe}
+                      className="mt-4 px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium"
+                    >
+                      <RotateCcw className="w-5 h-5 inline mr-2" />
+                      Undo
+                    </button>
+                  )}
                 </>
               )}
-              {state === 'AR_DISTANCE_COMPLETE' && (
+              {state === 'AR_COMPLETE' && showConfirmButtons && (
                 <>
                   <Check className="w-16 h-16 mx-auto mb-4 text-green-500" />
                   <p className="text-2xl font-bold">{instruction}</p>
                   <p className="text-sm text-gray-400 mt-2">
-                    Switching to camera mode...
+                    Distance: {uiDistance?.toFixed(2)}m
                   </p>
+                  <div className="flex gap-4 mt-6 justify-center">
+                    <button
+                      onClick={handleArRedoSafe}
+                      className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg font-medium"
+                    >
+                      <RotateCcw className="w-5 h-5 inline mr-2" />
+                      Redo
+                    </button>
+                    <button
+                      onClick={handleArConfirmSafe}
+                      className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium"
+                    >
+                      <Check className="w-5 h-5 inline mr-2" />
+                      Confirm
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -2004,7 +2244,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
               {/* Info */}
               <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
-                <p className="text-xs text-gray-400 text-center">Distance: {distance?.toFixed(2)}m</p>
+                <p className="text-xs text-gray-400 text-center">Distance: {uiDistance?.toFixed(2)}m</p>
               </div>
             </div>
           </div>
