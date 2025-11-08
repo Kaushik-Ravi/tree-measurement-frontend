@@ -234,8 +234,8 @@ export function PermissionsCheckModal({
                 </div>
               </div>
               
-              {/* COMPASS SETUP INSTRUCTIONS - Always show for mobile devices */}
-              {deviceInfo.isMobile && compassStatus !== 'GRANTED' && compassStatus !== 'NOT_REQUIRED' && (
+              {/* COMPASS SETUP INSTRUCTIONS - Show until compass is GRANTED (has checkmark) */}
+              {deviceInfo.isMobile && compassStatus !== 'GRANTED' && (
                 <div className="mt-3 pt-3 border-t border-stroke-default">
                   <button 
                     onClick={() => setShowCompassHelp(!showCompassHelp)}
