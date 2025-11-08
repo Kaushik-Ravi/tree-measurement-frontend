@@ -36,6 +36,8 @@ import type { Metrics, IdentificationResponse } from '../../apiService';
 import { 
   loadSavedCalibration, 
   autoCalibrate,
+  extractCameraIntrinsicsFromStream,
+  saveCalibration,
   type CameraCalibration 
 } from '../../utils/cameraCalibration';
 import { useAuth } from '../../contexts/AuthContext';
@@ -183,10 +185,21 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     const savedCalibration = loadSavedCalibration();
     if (savedCalibration) {
       setCameraCalibration(savedCalibration);
-      console.log('[Phase 6] Loaded saved calibration:', savedCalibration.calibrationMethod);
+      console.log('[Calibration] ✅ Loaded saved calibration:', savedCalibration.calibrationMethod);
+      console.log('[Calibration] Data:', {
+        focalLength35mm: savedCalibration.focalLength35mm,
+        fovHorizontal: savedCalibration.fovHorizontal,
+        method: savedCalibration.calibrationMethod
+      });
     } else {
-      console.log('[Phase 6] No saved calibration found - will auto-calibrate on camera start');
+      console.log('[Calibration] ℹ️ No saved calibration found - will auto-calibrate when camera starts');
     }
+    
+    // Also log props received from parent
+    console.log('[Calibration] Props from App.tsx:', {
+      focalLength: focalLength,
+      fovRatio: fovRatio
+    });
   }, []);
 
   // --- GET LOCATION & COMPASS ---
@@ -354,7 +367,49 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     }, 300); // 300ms cooldown (Photo AR pattern)
   }, []);
 
+  // --- HELPER: Extract usable calibration values from CameraCalibration object ---
+  const getCalibrationValues = useCallback(() => {
+    // Priority 1: Use props from parent (App.tsx)
+    if (focalLength && focalLength > 0) {
+      const fovRatioCalculated = 36.0 / focalLength; // Convert focal length to FOV ratio
+      console.log('[LiveAR Calibration] Using props - Focal length:', focalLength, '→ FOV ratio:', fovRatioCalculated);
+      return { focalLength35mm: focalLength, fovRatio: fovRatioCalculated, source: 'props' };
+    }
+    
+    if (fovRatio && fovRatio > 0) {
+      console.log('[LiveAR Calibration] Using props - FOV ratio:', fovRatio);
+      return { focalLength35mm: null, fovRatio, source: 'props' };
+    }
+
+    // Priority 2: Use internal calibration state
+    if (cameraCalibration) {
+      const { focalLength35mm, fovHorizontal, calibrationMethod } = cameraCalibration;
+      
+      if (focalLength35mm && focalLength35mm > 0) {
+        const fovRatioCalculated = 36.0 / focalLength35mm;
+        console.log('[LiveAR Calibration] Using internal state - Method:', calibrationMethod, 'Focal length:', focalLength35mm, '→ FOV ratio:', fovRatioCalculated);
+        return { focalLength35mm, fovRatio: fovRatioCalculated, source: calibrationMethod };
+      }
+      
+      if (fovHorizontal && fovHorizontal > 0) {
+        const fovRadians = (fovHorizontal * Math.PI) / 180;
+        const fovRatioCalculated = Math.tan(fovRadians / 2);
+        console.log('[LiveAR Calibration] Using internal state - Method:', calibrationMethod, 'FOV:', fovHorizontal, '→ FOV ratio:', fovRatioCalculated);
+        return { focalLength35mm: null, fovRatio: fovRatioCalculated, source: calibrationMethod };
+      }
+    }
+
+    // No calibration available
+    console.warn('[LiveAR Calibration] ⚠️ No calibration data available (props and state are null)');
+    return { focalLength35mm: null, fovRatio: null, source: 'none' };
+  }, [focalLength, fovRatio, cameraCalibration]);
+
   // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
+  // PHASE 1-3 FIXES:
+  // - Uses getCalibrationValues() helper to check props first, then internal state
+  // - Implements Tier 2 auto-calibration from camera stream if needed
+  // - Falls back to default calibration (28mm) instead of throwing error
+  // - Improved error handling with ERROR state UI instead of immediate unmount
   const transitionToCamera = useCallback(async (dist: number) => {
     console.log('[LiveAR E.5] 🎥 Starting camera transition, distance:', dist.toFixed(2), 'm');
     
@@ -376,6 +431,47 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
       console.log('[LiveAR E.5] ✅ Camera access granted');
       streamRef.current = stream;
+
+      // PHASE 2: Auto-calibrate from camera stream (Tier 2) if needed
+      let needsCalibration = true;
+      const currentCalibration = getCalibrationValues();
+      
+      if (currentCalibration.fovRatio && currentCalibration.fovRatio > 0) {
+        console.log('[LiveAR E.5] ✅ Calibration already available from:', currentCalibration.source);
+        needsCalibration = false;
+      }
+
+      if (needsCalibration) {
+        console.log('[LiveAR Tier 2] 🔧 Attempting auto-calibration from camera stream...');
+        try {
+          const streamCalibration = await extractCameraIntrinsicsFromStream(stream);
+          
+          if (streamCalibration && (streamCalibration.focalLength35mm || streamCalibration.fovHorizontal)) {
+            // Merge with defaults to create complete calibration object
+            const fullCalibration: CameraCalibration = {
+              focalLength35mm: null,
+              fovHorizontal: null,
+              fovVertical: null,
+              sensorWidth: null,
+              sensorHeight: null,
+              imageWidth: 1920,
+              imageHeight: 1080,
+              calibrationMethod: 'none',
+              deviceId: '',
+              timestamp: Date.now(),
+              ...streamCalibration
+            };
+            
+            setCameraCalibration(fullCalibration);
+            saveCalibration(fullCalibration);
+            console.log('[LiveAR Tier 2] ✅ Auto-calibrated from stream - Method:', fullCalibration.calibrationMethod);
+          } else {
+            console.warn('[LiveAR Tier 2] ⚠️ Stream calibration failed, using defaults');
+          }
+        } catch (calibrationError) {
+          console.warn('[LiveAR Tier 2] ⚠️ Auto-calibration error:', calibrationError);
+        }
+      }
 
       // CRITICAL FIX: Change state to TWO_FLOW_CHOICE FIRST to render the video element
       // Then wait for next tick for DOM to update
@@ -406,13 +502,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         const videoHeight = videoRef.current.videoHeight;
         console.log('[LiveAR E.5] Video dimensions:', videoWidth, 'x', videoHeight);
         
+        // Get calibration using helper function (checks props, then internal state)
+        const calibrationData = getCalibrationValues();
         let cameraConstant: number | null = null;
-        if (focalLength) {
-          cameraConstant = 36.0 / focalLength;
-          console.log('[LiveAR E.5] Using focal length:', focalLength, '→ constant:', cameraConstant);
-        } else if (fovRatio) {
-          cameraConstant = fovRatio;
-          console.log('[LiveAR E.5] Using FOV ratio:', fovRatio);
+        
+        if (calibrationData.focalLength35mm) {
+          cameraConstant = 36.0 / calibrationData.focalLength35mm;
+          console.log('[LiveAR E.5] Using focal length from', calibrationData.source + ':', calibrationData.focalLength35mm, '→ constant:', cameraConstant);
+        } else if (calibrationData.fovRatio) {
+          cameraConstant = calibrationData.fovRatio;
+          console.log('[LiveAR E.5] Using FOV ratio from', calibrationData.source + ':', calibrationData.fovRatio);
         }
         
         if (cameraConstant) {
@@ -426,8 +525,18 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           // State already set to TWO_FLOW_CHOICE above
           console.log('[LiveAR E.5] ✅ Camera ready with scale factor');
         } else {
-          console.error('[LiveAR E.5] ❌ Camera not calibrated');
-          throw new Error('Camera not calibrated');
+          // PHASE 3: Improved error handling - use default calibration instead of failing
+          console.warn('[LiveAR E.5] ⚠️ No calibration available, using default values');
+          const defaultFocalLength = 28; // Conservative smartphone default
+          cameraConstant = 36.0 / defaultFocalLength;
+          
+          const distMM = dist * 1000;
+          const horizontalPixels = Math.max(videoWidth, videoHeight);
+          const sf = (distMM * cameraConstant) / horizontalPixels;
+          
+          setScaleFactor(sf);
+          console.log('[LiveAR E.5] ⚠️ Using default calibration - Scale factor:', sf);
+          console.log('[LiveAR E.5] 💡 Manual calibration recommended for better accuracy');
         }
       } else {
         console.error('[LiveAR E.5] ❌ Video ref still not available after wait');
@@ -438,7 +547,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       setError(err.message || 'Failed to access camera');
       setState('ERROR');
     }
-  }, [focalLength, fovRatio]);
+  }, [getCalibrationValues]); // Updated dependency
 
   // --- PHASE E.5: CAMERA INITIALIZATION AFTER AR (Fix blank screen bug) ---
   // NOTE: This useEffect must come AFTER transitionToCamera definition to avoid hoisting errors
@@ -450,10 +559,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         try {
           await transitionToCamera(distanceRef.current!);
           console.log('[LiveAR E.5] ✅ Camera initialized successfully');
-        } catch (err) {
+        } catch (err: any) {
           console.error('[LiveAR E.5] ❌ Camera init failed:', err);
-          setError('Failed to start camera. Please try again.');
-          setState('USER_CHOICE');
+          // PHASE 3: Don't auto-return to USER_CHOICE, let ERROR state render
+          setError(err.message || 'Failed to start camera. Please try again.');
+          setState('ERROR');
         }
       };
       
@@ -1951,6 +2061,61 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
           <p className="text-xl font-bold mb-2">Preparing Camera</p>
           <p className="text-sm text-gray-400">Setting up your camera for tree photography...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // PHASE 3: ERROR State - Proper error handling with recovery options
+  if (state === 'ERROR') {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50 p-6">
+        <div className="text-center text-white max-w-md">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-red-500/20 rounded-full mb-6">
+            <AlertCircle className="w-10 h-10 text-red-500" />
+          </div>
+          
+          <h2 className="text-2xl font-bold mb-3">Setup Issue</h2>
+          
+          <p className="text-gray-300 mb-6">
+            {error || 'An error occurred while setting up the camera. This might be due to camera calibration.'}
+          </p>
+
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm text-blue-200 mb-2">💡 <strong>What happened?</strong></p>
+            <p className="text-xs text-gray-400">
+              The app couldn't determine your camera's settings automatically. Don't worry - we'll use safe default values that work for most phones.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => {
+                // Retry with fresh state
+                setError(null);
+                setState('USER_CHOICE');
+                console.log('[LiveAR Error] User initiated retry');
+              }}
+              className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              <RotateCcw className="w-5 h-5" />
+              Try Again
+            </button>
+
+            <button
+              onClick={() => {
+                console.log('[LiveAR Error] User cancelled');
+                onCancel();
+              }}
+              className="w-full py-4 bg-gray-700 hover:bg-gray-600 rounded-xl font-semibold transition-all"
+            >
+              Go Back
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-4">
+            For best results, consider calibrating your camera in Settings
+          </p>
         </div>
       </div>
     );
