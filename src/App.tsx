@@ -1186,10 +1186,6 @@ function App() {
                   <Camera size={24} />
                   Measure a Tree Now
                 </button>
-                
-                <p className="mt-3 text-sm text-content-subtle">
-                  📸 Take a photo → 📏 AI measures it → 🌳 Identify species → 💾 Save to database
-                </p>
               </div>
 
               <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
