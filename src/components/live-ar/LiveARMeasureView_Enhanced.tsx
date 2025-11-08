@@ -41,6 +41,7 @@ import {
   type CameraCalibration 
 } from '../../utils/cameraCalibration';
 import { useAuth } from '../../contexts/AuthContext';
+import { LiveARPreFlightCheck } from './LiveARPreFlightCheck';
 
 interface LiveARMeasureViewProps {
   /** Callback when measurement is complete and saved to database */
@@ -165,6 +166,18 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // Phase 6: Camera Calibration
   const [cameraCalibration, setCameraCalibration] = useState<CameraCalibration | null>(null);
 
+  // PHASE 1: Pre-Flight Check Results
+  const [preFlightComplete, setPreFlightComplete] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState({
+    camera: false,
+    location: false,
+    ar: false,
+    motion: false,
+  });
+
+  // PHASE 2 & 4: Camera State Management
+  const cameraStateRef = useRef<'none' | 'ar-xr' | 'photo-stream'>('none');
+
   // --- REFS ---
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -246,46 +259,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // PHASE E.2: AR mask orientation tracking REMOVED (simplified UI)
 
-  // --- PHASE E.3 REBUILD: PRE-FLIGHT CHECK (runs once on mount, NO resource acquisition) ---
-  useEffect(() => {
-    const checkArCapability = async () => {
-      console.log('[LiveAR E.3] 🔍 Pre-flight check: Testing AR capability...');
-      setIsCheckingAr(true);
-      
-      try {
-        if (!navigator.xr) {
-          console.log('[LiveAR E.3] ❌ WebXR not available on this device');
-          setIsArAvailable(false);
-          setState('USER_CHOICE'); // Let user choose manual mode
-          setInstruction('AR not available - you can measure using manual distance');
-          return;
-        }
-
-        const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-        
-        if (isSupported) {
-          console.log('[LiveAR E.3] ✅ AR is available! Offering user choice...');
-          setIsArAvailable(true);
-          setState('USER_CHOICE');
-          setInstruction('Choose your measurement method');
-        } else {
-          console.log('[LiveAR E.3] ❌ AR not supported on this device');
-          setIsArAvailable(false);
-          setState('USER_CHOICE');
-          setInstruction('AR not available - you can measure using manual distance');
-        }
-      } catch (err) {
-        console.error('[LiveAR E.3] ❌ AR capability check error:', err);
-        setIsArAvailable(false);
-        setState('USER_CHOICE');
-        setInstruction('AR check failed - you can measure using manual distance');
-      } finally {
-        setIsCheckingAr(false);
-      }
-    };
-
-    checkArCapability();
-  }, []); // Runs ONCE on mount, NO resource acquisition
+  // --- PHASE E.3 REBUILD: PRE-FLIGHT CHECK NOW HANDLED BY LiveARPreFlightCheck MODAL ---
+  // Old AR capability check removed - now done in pre-flight modal with permissions
+  // The modal handles: camera permission, location permission, AR capability, motion sensors, and calibration loading
 
   // --- PHASE E.4: SIMPLIFIED CLEANUP (Copy Photo AR Pattern) ---
   const cleanupResources = useCallback(() => {
@@ -311,12 +287,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         rendererRef.current = null;
       }
 
-      // Stop camera stream
+      // PHASE 4: Stop camera stream and reset state
       if (streamRef.current) {
-        console.log('[LiveAR E.4] Stopping camera');
+        console.log('[LiveAR E.4] Stopping camera stream');
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
+      
+      // PHASE 4: Reset camera state
+      console.log('[LiveAR Phase 4] Resetting camera state to none');
+      cameraStateRef.current = 'none';
 
       // Clean video element
       if (videoRef.current) {
@@ -432,6 +412,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       console.log('[LiveAR E.5] ✅ Camera access granted');
       streamRef.current = stream;
 
+      // PHASE 2 & 4: Set camera state to photo-stream
+      cameraStateRef.current = 'photo-stream';
+
       // PHASE 2: Auto-calibrate from camera stream (Tier 2) if needed
       let needsCalibration = true;
       const currentCalibration = getCalibrationValues();
@@ -473,79 +456,126 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         }
       }
 
-      // CRITICAL FIX: Change state to TWO_FLOW_CHOICE FIRST to render the video element
-      // Then wait for next tick for DOM to update
-      console.log('[LiveAR E.5] Transitioning to TWO_FLOW_CHOICE to render video element...');
-      setState('TWO_FLOW_CHOICE');
-      setInstruction('Choose how you want to proceed');
+      // PHASE 2 FIX: Stay in CAMERA_INITIALIZING until video is ready
+      // This prevents the dark screen race condition
+      console.log('[LiveAR E.5] Preparing video element for stream...');
       
-      // Wait for React to render the video element
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for React to render the video element (still in CAMERA_INITIALIZING state)
+      await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Now attach stream to the rendered video element
-      if (videoRef.current) {
-        console.log('[LiveAR E.5] Attaching stream to video element...');
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        console.log('[LiveAR E.5] ✅ Video playing');
-        console.log('[LiveAR E.5] 📹 Video element check:',{
-          exists: !!videoRef.current,
-          srcObject: !!videoRef.current.srcObject,
-          readyState: videoRef.current.readyState,
-          paused: videoRef.current.paused,
-          currentTime: videoRef.current.currentTime,
-          style: videoRef.current.style.cssText
-        });
-
-        // Calculate scale factor inline
-        const videoWidth = videoRef.current.videoWidth;
-        const videoHeight = videoRef.current.videoHeight;
-        console.log('[LiveAR E.5] Video dimensions:', videoWidth, 'x', videoHeight);
-        
-        // Get calibration using helper function (checks props, then internal state)
-        const calibrationData = getCalibrationValues();
-        let cameraConstant: number | null = null;
-        
-        if (calibrationData.focalLength35mm) {
-          cameraConstant = 36.0 / calibrationData.focalLength35mm;
-          console.log('[LiveAR E.5] Using focal length from', calibrationData.source + ':', calibrationData.focalLength35mm, '→ constant:', cameraConstant);
-        } else if (calibrationData.fovRatio) {
-          cameraConstant = calibrationData.fovRatio;
-          console.log('[LiveAR E.5] Using FOV ratio from', calibrationData.source + ':', calibrationData.fovRatio);
-        }
-        
-        if (cameraConstant) {
-          const distMM = dist * 1000;
-          const horizontalPixels = Math.max(videoWidth, videoHeight);
-          const sf = (distMM * cameraConstant) / horizontalPixels;
-          
-          console.log('[LiveAR E.5] Scale factor calculated:', sf);
-          setScaleFactor(sf);
-          
-          // State already set to TWO_FLOW_CHOICE above
-          console.log('[LiveAR E.5] ✅ Camera ready with scale factor');
-        } else {
-          // PHASE 3: Improved error handling - use default calibration instead of failing
-          console.warn('[LiveAR E.5] ⚠️ No calibration available, using default values');
-          const defaultFocalLength = 28; // Conservative smartphone default
-          cameraConstant = 36.0 / defaultFocalLength;
-          
-          const distMM = dist * 1000;
-          const horizontalPixels = Math.max(videoWidth, videoHeight);
-          const sf = (distMM * cameraConstant) / horizontalPixels;
-          
-          setScaleFactor(sf);
-          console.log('[LiveAR E.5] ⚠️ Using default calibration - Scale factor:', sf);
-          console.log('[LiveAR E.5] 💡 Manual calibration recommended for better accuracy');
-        }
-      } else {
-        console.error('[LiveAR E.5] ❌ Video ref still not available after wait');
+      // Attach stream to video element
+      if (!videoRef.current) {
         throw new Error('Video element not available');
+      }
+
+      console.log('[LiveAR E.5] Attaching stream to video element...');
+      videoRef.current.srcObject = stream;
+      
+      // PHASE 2 CRITICAL FIX: Wait for video to be ready before transitioning
+      // Use canplay event to ensure video has loaded enough data
+      const videoReady = new Promise<void>((resolve, reject) => {
+        const video = videoRef.current!;
+        const timeout = setTimeout(() => {
+          reject(new Error('Video load timeout after 5 seconds'));
+        }, 5000);
+
+        const handleCanPlay = () => {
+          console.log('[LiveAR E.5] ✅ Video canplay event - readyState:', video.readyState);
+          clearTimeout(timeout);
+          video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('error', handleError);
+          resolve();
+        };
+
+        const handleError = (e: Event) => {
+          console.error('[LiveAR E.5] ❌ Video error event:', e);
+          clearTimeout(timeout);
+          video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('error', handleError);
+          reject(new Error('Video failed to load'));
+        };
+
+        // Check if already ready
+        if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+          console.log('[LiveAR E.5] ✅ Video already ready - readyState:', video.readyState);
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          video.addEventListener('canplay', handleCanPlay);
+          video.addEventListener('error', handleError);
+        }
+      });
+
+      // Start playing
+      await videoRef.current.play();
+      
+      // Wait for video to be ready
+      await videoReady;
+      console.log('[LiveAR E.5] ✅ Video playing and ready');
+      console.log('[LiveAR E.5] 📹 Video element check:', {
+        exists: !!videoRef.current,
+        srcObject: !!videoRef.current.srcObject,
+        readyState: videoRef.current.readyState,
+        paused: videoRef.current.paused,
+        currentTime: videoRef.current.currentTime,
+        videoWidth: videoRef.current.videoWidth,
+        videoHeight: videoRef.current.videoHeight,
+      });
+
+      // Calculate scale factor inline
+      const videoWidth = videoRef.current.videoWidth;
+      const videoHeight = videoRef.current.videoHeight;
+      console.log('[LiveAR E.5] Video dimensions:', videoWidth, 'x', videoHeight);
+      
+      // Get calibration using helper function (checks props, then internal state)
+      const calibrationData = getCalibrationValues();
+      let cameraConstant: number | null = null;
+      
+      if (calibrationData.focalLength35mm) {
+        cameraConstant = 36.0 / calibrationData.focalLength35mm;
+        console.log('[LiveAR E.5] Using focal length from', calibrationData.source + ':', calibrationData.focalLength35mm, '→ constant:', cameraConstant);
+      } else if (calibrationData.fovRatio) {
+        cameraConstant = calibrationData.fovRatio;
+        console.log('[LiveAR E.5] Using FOV ratio from', calibrationData.source + ':', calibrationData.fovRatio);
+      }
+      
+      if (cameraConstant) {
+        const distMM = dist * 1000;
+        const horizontalPixels = Math.max(videoWidth, videoHeight);
+        const sf = (distMM * cameraConstant) / horizontalPixels;
+        
+        console.log('[LiveAR E.5] Scale factor calculated:', sf);
+        setScaleFactor(sf);
+        
+        // PHASE 2: NOW transition to TWO_FLOW_CHOICE (video is ready!)
+        console.log('[LiveAR E.5] ✅ Video ready, transitioning to TWO_FLOW_CHOICE');
+        setState('TWO_FLOW_CHOICE');
+        setInstruction('Choose how you want to proceed');
+        console.log('[LiveAR E.5] ✅ Camera ready with scale factor');
+      } else {
+        // PHASE 3: Improved error handling - use default calibration instead of failing
+        console.warn('[LiveAR E.5] ⚠️ No calibration available, using default values');
+        const defaultFocalLength = 28; // Conservative smartphone default
+        cameraConstant = 36.0 / defaultFocalLength;
+        
+        const distMM = dist * 1000;
+        const horizontalPixels = Math.max(videoWidth, videoHeight);
+        const sf = (distMM * cameraConstant) / horizontalPixels;
+        
+        setScaleFactor(sf);
+        
+        // PHASE 2: Transition to TWO_FLOW_CHOICE even with default calibration
+        setState('TWO_FLOW_CHOICE');
+        setInstruction('Choose how you want to proceed');
+        console.log('[LiveAR E.5] ⚠️ Using default calibration - Scale factor:', sf);
+        console.log('[LiveAR E.5] 💡 Manual calibration recommended for better accuracy');
       }
     } catch (err: any) {
       console.error('[LiveAR E.5] ❌ Camera transition error:', err);
       setError(err.message || 'Failed to access camera');
       setState('ERROR');
+      // PHASE 4: Clean up camera state on error
+      cameraStateRef.current = 'none';
     }
   }, [getCalibrationValues]); // Updated dependency
 
@@ -747,6 +777,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       // Track AR session state (COPY FROM PHOTO AR)
       renderer.xr.addEventListener('sessionstart', () => {
         console.log('[LiveAR E.4] AR session started');
+        
+        // PHASE 4: Set camera state to AR mode (XR uses its own camera)
+        console.log('[LiveAR Phase 4] AR camera active (WebXR session)');
+        cameraStateRef.current = 'ar-xr';
+        
         setArSessionActive(true);
         setState('AR_ACTIVE');
         arStateRef.current = 'SCANNING';
@@ -764,11 +799,15 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         setArSessionActive(false);
         isInitializingRef.current = false;
         
+        // PHASE 4: Release AR camera
+        console.log('[LiveAR Phase 4] Releasing AR camera (XR session ended)');
+        cameraStateRef.current = 'none';
+        
         // PHASE E.5: Don't call transitionToCamera here! Just set state.
         // Let useEffect handle camera initialization when DOM is ready
         if (distanceRef.current !== null) {
           console.log('[LiveAR E.5] ✅ Distance confirmed, transitioning to CAMERA_INITIALIZING state');
-          setState('CAMERA_INITIALIZING'); // useEffect will handle camera init
+          setState('CAMERA_INITIALIZING'); // useEffect will handle camera init (which will request photo-stream camera)
         } else {
           // User cancelled AR
           console.log('[LiveAR E.5] User cancelled AR, returning to choice screen');
@@ -949,7 +988,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     setInstruction('Initializing camera...');
 
     try {
-      // Start camera stream immediately (THIS WAS MISSING!)
+      // PHASE 4: Set camera state to photo-stream
+      cameraStateRef.current = 'photo-stream';
+
+      // Start camera stream immediately
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -959,6 +1001,47 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       });
 
       streamRef.current = stream;
+
+      // PHASE 3: Auto-calibrate from stream for manual path too (Tier 2)
+      let needsCalibration = true;
+      const currentCalibration = getCalibrationValues();
+      
+      if (currentCalibration.fovRatio && currentCalibration.fovRatio > 0) {
+        console.log('[Manual Path] ✅ Calibration already available from:', currentCalibration.source);
+        needsCalibration = false;
+      }
+
+      if (needsCalibration) {
+        console.log('[Manual Path Tier 2] 🔧 Attempting auto-calibration from camera stream...');
+        try {
+          const streamCalibration = await extractCameraIntrinsicsFromStream(stream);
+          
+          if (streamCalibration && (streamCalibration.focalLength35mm || streamCalibration.fovHorizontal)) {
+            // Merge with defaults to create complete calibration object
+            const fullCalibration: CameraCalibration = {
+              focalLength35mm: null,
+              fovHorizontal: null,
+              fovVertical: null,
+              sensorWidth: null,
+              sensorHeight: null,
+              imageWidth: 1920,
+              imageHeight: 1080,
+              calibrationMethod: 'none',
+              deviceId: '',
+              timestamp: Date.now(),
+              ...streamCalibration
+            };
+            
+            setCameraCalibration(fullCalibration);
+            saveCalibration(fullCalibration);
+            console.log('[Manual Path Tier 2] ✅ Auto-calibrated from stream - Method:', fullCalibration.calibrationMethod);
+          } else {
+            console.warn('[Manual Path Tier 2] ⚠️ Stream calibration failed, will use defaults');
+          }
+        } catch (calibrationError) {
+          console.warn('[Manual Path Tier 2] ⚠️ Auto-calibration error:', calibrationError);
+        }
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -970,8 +1053,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       console.error('[LiveAR E.4] ❌ Camera access error:', err);
       setError('Camera access denied. Please allow camera permission.');
       setState('ERROR');
+      // PHASE 4: Clean up camera state on error
+      cameraStateRef.current = 'none';
     }
-  }, []);
+  }, [getCalibrationValues]);
 
   // --- PHASE E.4: AR BUTTON HANDLERS (Copy Photo AR Pattern) ---
   const handleArConfirm = useCallback(() => {
@@ -1109,8 +1194,42 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     const videoWidth = videoRef.current.videoWidth;
     const videoHeight = videoRef.current.videoHeight;
 
-    const sf = calculateScaleFactor(dist, videoWidth, videoHeight);
-    if (!sf) return; // Error already set
+    // PHASE 3: Apply calibration to manual path (same as AR path)
+    console.log('[Manual Path] Calculating scale factor with calibration');
+    console.log('[Manual Path] Video dimensions:', videoWidth, 'x', videoHeight);
+    
+    // Get calibration using helper function (checks props, then internal state)
+    const calibrationData = getCalibrationValues();
+    let cameraConstant: number | null = null;
+    
+    if (calibrationData.focalLength35mm) {
+      cameraConstant = 36.0 / calibrationData.focalLength35mm;
+      console.log('[Manual Path] Using focal length from', calibrationData.source + ':', calibrationData.focalLength35mm, '→ constant:', cameraConstant);
+    } else if (calibrationData.fovRatio) {
+      cameraConstant = calibrationData.fovRatio;
+      console.log('[Manual Path] Using FOV ratio from', calibrationData.source + ':', calibrationData.fovRatio);
+    }
+    
+    let sf: number;
+    if (cameraConstant) {
+      const distMM = dist * 1000;
+      const horizontalPixels = Math.max(videoWidth, videoHeight);
+      sf = (distMM * cameraConstant) / horizontalPixels;
+      
+      console.log('[Manual Path] Scale factor calculated:', sf);
+    } else {
+      // PHASE 3: Use default calibration (same as AR path)
+      console.warn('[Manual Path] ⚠️ No calibration available, using default values');
+      const defaultFocalLength = 28; // Conservative smartphone default
+      cameraConstant = 36.0 / defaultFocalLength;
+      
+      const distMM = dist * 1000;
+      const horizontalPixels = Math.max(videoWidth, videoHeight);
+      sf = (distMM * cameraConstant) / horizontalPixels;
+      
+      console.log('[Manual Path] ⚠️ Using default calibration - Scale factor:', sf);
+      console.log('[Manual Path] 💡 Manual calibration recommended for better accuracy');
+    }
 
     distanceRef.current = dist; // Store in ref
     setUiDistance(dist); // Update UI
@@ -1120,7 +1239,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     // PHASE B: Go to two-flow choice instead of camera ready
     setState('TWO_FLOW_CHOICE');
     setInstruction('Choose how you want to proceed');
-  }, [manualDistanceInput, calculateScaleFactor]);
+  }, [manualDistanceInput, getCalibrationValues]);
 
   // --- HANDLE TAP ON VIDEO (Multi-Point Selection) ---
   const handleVideoTap = useCallback(
@@ -1645,15 +1764,42 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // --- RENDER SECTION ---
 
   // PHASE E.3 REBUILD: Pre-flight check screen
+  // PHASE 1: Pre-Flight Check - Show permissions modal before user choice
   if (state === 'PRE_FLIGHT_CHECK') {
     return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
-        <div className="text-center text-white max-w-md px-6">
-          <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
-          <p className="text-xl font-bold mb-2">Checking Device Capabilities</p>
-          <p className="text-sm text-gray-400">Detecting AR support...</p>
-        </div>
-      </div>
+      <LiveARPreFlightCheck
+        onComplete={(result) => {
+          console.log('[Pre-Flight] Complete:', result);
+          
+          // Store permission results
+          setPermissionsGranted({
+            camera: result.cameraGranted,
+            location: result.locationGranted,
+            ar: result.arAvailable,
+            motion: result.motionGranted,
+          });
+          
+          // Store calibration if loaded
+          if (result.calibration) {
+            setCameraCalibration(result.calibration);
+          }
+          
+          // Update AR availability based on pre-flight check
+          setIsArAvailable(result.arAvailable);
+          setIsCheckingAr(false);
+          
+          // Mark pre-flight as complete
+          setPreFlightComplete(true);
+          
+          // Transition to user choice
+          setState('USER_CHOICE');
+        }}
+        onCancel={() => {
+          console.log('[Pre-Flight] User cancelled');
+          onCancel();
+        }}
+        existingCalibration={cameraCalibration}
+      />
     );
   }
 
@@ -2020,13 +2166,41 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   }
 
   // PHASE E.5: Camera Initializing State (prevents blank screen after AR confirm)
+  // PHASE 5: Enhanced CAMERA_INITIALIZING state with better feedback
   if (state === 'CAMERA_INITIALIZING') {
     return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
         <div className="text-center text-white max-w-md px-6">
-          <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
-          <p className="text-xl font-bold mb-2">Preparing Camera</p>
-          <p className="text-sm text-gray-400">Setting up your camera for tree photography...</p>
+          <div className="relative mb-8">
+            <Loader2 className="w-20 h-20 animate-spin mx-auto text-green-500" />
+            <Camera className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+          </div>
+          
+          <h2 className="text-2xl font-bold mb-3">Preparing Camera</h2>
+          <p className="text-gray-400 mb-4">Setting up your camera for tree photography...</p>
+          
+          {/* PHASE 5: Show calibration status */}
+          {cameraCalibration && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+              <p className="text-sm text-green-300 flex items-center justify-center gap-2">
+                <Check className="w-4 h-4" />
+                <span>Camera calibrated using {cameraCalibration.method}</span>
+              </p>
+            </div>
+          )}
+          
+          {/* PHASE 5: Show distance */}
+          {uiDistance && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-sm text-blue-300">
+                Distance: <strong>{uiDistance.toFixed(2)}m</strong>
+              </p>
+            </div>
+          )}
+          
+          <p className="text-xs text-gray-500 mt-4 animate-pulse">
+            Waiting for video stream to be ready...
+          </p>
         </div>
       </div>
     );
@@ -2590,8 +2764,22 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
               </button>
 
               {/* Info */}
-              <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg p-3">
-                <p className="text-xs text-gray-400 text-center">Distance: {uiDistance?.toFixed(2)}m</p>
+              <div className="mt-4 space-y-2">
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3">
+                  <p className="text-xs text-gray-400 text-center">
+                    Distance: <strong className="text-white">{uiDistance?.toFixed(2)}m</strong>
+                  </p>
+                </div>
+                
+                {/* PHASE 5: Show calibration status */}
+                {cameraCalibration && (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2">
+                    <p className="text-xs text-green-300 text-center flex items-center justify-center gap-1">
+                      <Check className="w-3 h-3" />
+                      <span>Camera calibrated ({cameraCalibration.method})</span>
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
