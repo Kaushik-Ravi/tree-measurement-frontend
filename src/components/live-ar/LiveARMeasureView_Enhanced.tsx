@@ -593,8 +593,26 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         uiDistance,
         videoPlaying: videoRef.current?.readyState,
         videoElement: videoRef.current ? 'exists' : 'missing',
+        videoSrcObject: videoRef.current?.srcObject ? 'attached' : 'none',
+        streamActive: streamRef.current?.active,
         timestamp: new Date().toISOString()
       });
+      
+      // Check if video element is actually visible
+      if (videoRef.current) {
+        const rect = videoRef.current.getBoundingClientRect();
+        const computed = window.getComputedStyle(videoRef.current);
+        console.log('[TWO_FLOW_CHOICE] 📹 Video element visibility:', {
+          width: rect.width,
+          height: rect.height,
+          top: rect.top,
+          left: rect.left,
+          opacity: computed.opacity,
+          visibility: computed.visibility,
+          display: computed.display,
+          zIndex: computed.zIndex
+        });
+      }
     }
   }, [state, uiDistance]);
 
@@ -2207,6 +2225,8 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // PRODUCTION-GRADE: Persistent Video + Overlay Pattern
   // Video element NEVER unmounts - overlays control what user sees
   // This prevents readyState reset and stream disconnection
+  console.log('[LiveAR RENDER] State:', state, '| Video ref:', !!videoRef.current, '| Stream:', !!streamRef.current);
+  
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* PERSISTENT VIDEO ELEMENT - Always rendered, never unmounts */}
@@ -2681,8 +2701,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
         {/* PHASE B: Two-Flow Choice Screen (appears AFTER distance, BEFORE SAM) */}
         {state === 'TWO_FLOW_CHOICE' && (
-          <div className="absolute inset-0 flex items-end p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white">
-            <div className="w-full max-w-md mx-auto">
+          <div className="absolute inset-0 flex items-end p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white z-20">
+            {console.log('[TWO_FLOW_CHOICE OVERLAY] Rendering overlay UI')}
+            <div className="w-full max-w-md mx-auto"
               {/* PHASE E.1: Back button */}
               <button
                 onClick={handleBack}

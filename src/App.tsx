@@ -896,10 +896,14 @@ function App() {
     );
   };
 
-  const renderSessionView = () => (
-    <>
-      {/* --- START: LIVE AR MODE --- */}
-      {isLiveARModeActive && (
+  const renderSessionView = () => {
+    // 🎯 EXCLUSIVE RENDERING PATTERN (Google Meet/Zoom/Instagram)
+    // When in modal modes (Live AR, AR Ruler), render ONLY that component
+    // This prevents UI overlap bugs
+
+    // PRIORITY 1: Live AR Mode (Full-Screen Exclusive)
+    if (isLiveARModeActive) {
+      return (
         <LiveARMeasureView
           fovRatio={fovRatio}
           focalLength={focalLength}
@@ -957,10 +961,12 @@ function App() {
             setInstructionText("Live AR measurement cancelled.");
           }}
         />
-      )}
-      {/* --- END: LIVE AR MODE --- */}
+      );
+    }
 
-      {isArModeActive && (
+    // PRIORITY 2: AR Ruler Mode (Full-Screen Exclusive)
+    if (isArModeActive) {
+      return (
         <ARMeasureView
           onDistanceMeasured={(measuredDistance) => {
             setDistance(measuredDistance.toFixed(2));
@@ -971,16 +977,20 @@ function App() {
             setIsArModeActive(false);
           }}
         />
-      )}
+      );
+    }
 
-      {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
-        <PermissionsCheckModal 
-          locationStatus={prereqStatus.location}
-          compassStatus={prereqStatus.compass}
-          onRequestPermissions={handleRequestPermissions}
-          onConfirm={handlePermissionsConfirmed}
-        />
-      )}
+    // PRIORITY 3: Photo-Based Workflow (Default Session View)
+    return (
+      <>
+        {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
+          <PermissionsCheckModal 
+            locationStatus={prereqStatus.location}
+            compassStatus={prereqStatus.compass}
+            onRequestPermissions={handleRequestPermissions}
+            onConfirm={handlePermissionsConfirmed}
+          />
+        )}
 
       <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
           {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-content-subtle"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
@@ -1146,8 +1156,9 @@ function App() {
           </div>
         </div>
       )}
-    </>
-  );
+      </>
+    );
+  };
 
   return (
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">

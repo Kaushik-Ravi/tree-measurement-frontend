@@ -154,7 +154,7 @@ export function LiveARPreFlightCheck({
           const { loadSavedCalibration } = await import('../../utils/cameraCalibration');
           const savedCalibration = loadSavedCalibration();
           if (savedCalibration) {
-            console.log('[Pre-Flight] ✅ Loaded saved calibration:', savedCalibration.method);
+            console.log('[Pre-Flight] ✅ Loaded saved calibration:', savedCalibration.calibrationMethod);
             newResults.calibration = savedCalibration;
           } else {
             console.log('[Pre-Flight] ⚠️ No saved calibration found');
