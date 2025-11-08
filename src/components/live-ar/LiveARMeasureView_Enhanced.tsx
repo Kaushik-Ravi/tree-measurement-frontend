@@ -384,22 +384,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     return { focalLength35mm: null, fovRatio: null, source: 'none' };
   }, [focalLength, fovRatio, cameraCalibration]);
 
-  // --- PHASE B: TRANSITION AFTER AR DISTANCE → TWO_FLOW_CHOICE ---
-  // PHASE 1-3 FIXES:
-  // - Uses getCalibrationValues() helper to check props first, then internal state
-  // - Implements Tier 2 auto-calibration from camera stream if needed
-  // - Falls back to default calibration (28mm) instead of throwing error
-  // - Improved error handling with ERROR state UI instead of immediate unmount
+  // --- PRODUCTION-GRADE: EVENT-DRIVEN CAMERA TRANSITION ---
+  // No polling, no timeouts - pure event-driven architecture
+  // Inspired by WebRTC best practices (Google Meet, Zoom pattern)
   const transitionToCamera = useCallback(async (dist: number) => {
-    console.log('[LiveAR E.5] 🎥 Starting camera transition, distance:', dist.toFixed(2), 'm');
+    console.log('[LiveAR] � Camera transition START - distance:', dist.toFixed(2), 'm');
     
     try {
-      // Store distance first
+      // Step 1: Store distance
       distanceRef.current = dist;
       setUiDistance(dist);
       
-      // Request camera for photo capture
-      console.log('[LiveAR E.5] Requesting camera access...');
+      // Step 2: Request camera stream
+      console.log('[LiveAR] 📹 Requesting getUserMedia...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
@@ -409,28 +406,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         audio: false,
       });
 
-      console.log('[LiveAR E.5] ✅ Camera access granted');
+      console.log('[LiveAR] ✅ Stream acquired');
       streamRef.current = stream;
-
-      // PHASE 2 & 4: Set camera state to photo-stream
       cameraStateRef.current = 'photo-stream';
 
-      // PHASE 2: Auto-calibrate from camera stream (Tier 2) if needed
-      let needsCalibration = true;
+      // Step 3: Auto-calibrate if needed (Tier 2)
       const currentCalibration = getCalibrationValues();
       
-      if (currentCalibration.fovRatio && currentCalibration.fovRatio > 0) {
-        console.log('[LiveAR E.5] ✅ Calibration already available from:', currentCalibration.source);
-        needsCalibration = false;
-      }
-
-      if (needsCalibration) {
-        console.log('[LiveAR Tier 2] 🔧 Attempting auto-calibration from camera stream...');
+      if (!(currentCalibration.fovRatio && currentCalibration.fovRatio > 0)) {
+        console.log('[LiveAR] 🔧 Attempting stream calibration...');
         try {
           const streamCalibration = await extractCameraIntrinsicsFromStream(stream);
           
           if (streamCalibration && (streamCalibration.focalLength35mm || streamCalibration.fovHorizontal)) {
-            // Merge with defaults to create complete calibration object
             const fullCalibration: CameraCalibration = {
               focalLength35mm: null,
               fovHorizontal: null,
@@ -447,164 +435,148 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             
             setCameraCalibration(fullCalibration);
             saveCalibration(fullCalibration);
-            console.log('[LiveAR Tier 2] ✅ Auto-calibrated from stream - Method:', fullCalibration.calibrationMethod);
-          } else {
-            console.warn('[LiveAR Tier 2] ⚠️ Stream calibration failed, using defaults');
+            console.log('[LiveAR] ✅ Calibrated:', fullCalibration.calibrationMethod);
           }
         } catch (calibrationError) {
-          console.warn('[LiveAR Tier 2] ⚠️ Auto-calibration error:', calibrationError);
+          console.warn('[LiveAR] ⚠️ Calibration failed:', calibrationError);
         }
+      } else {
+        console.log('[LiveAR] ✅ Using existing calibration:', currentCalibration.source);
       }
 
-      // PHASE 2 FIX: Stay in CAMERA_INITIALIZING until video is ready
-      // This prevents the dark screen race condition
-      console.log('[LiveAR E.5] Preparing video element for stream...');
+      // Step 4: EVENT-DRIVEN video setup (no polling!)
+      console.log('[LiveAR] 🎥 Attaching stream to video element...');
       
-      // CRITICAL FIX: Wait for React to attach the videoRef with polling
-      // The video element is now rendered in CAMERA_INITIALIZING state
-      const MAX_WAIT_TIME = 3000; // 3 seconds max
-      const POLL_INTERVAL = 100; // Check every 100ms
-      let elapsedTime = 0;
-      
-      while (!videoRef.current && elapsedTime < MAX_WAIT_TIME) {
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-        elapsedTime += POLL_INTERVAL;
-        if (elapsedTime % 500 === 0) { // Log every 500ms
-          console.log('[LiveAR E.5] Waiting for video ref... (elapsed:', elapsedTime, 'ms)');
-        }
-      }
-
-      // Final check
+      // Video element should exist immediately since it's always rendered
       if (!videoRef.current) {
-        throw new Error('Video element ref not attached after ' + MAX_WAIT_TIME + 'ms');
+        throw new Error('Video element ref is null (should never happen)');
       }
 
-      console.log('[LiveAR E.5] ✅ Video element ref attached (took ' + elapsedTime + 'ms)');
-      console.log('[LiveAR E.5] Attaching stream to video element...');
-      videoRef.current.srcObject = stream;
+      const video = videoRef.current;
       
-      // PHASE 2 CRITICAL FIX: Wait for video to be ready before transitioning
-      // Use canplay event to ensure video has loaded enough data
-      const videoReady = new Promise<void>((resolve, reject) => {
-        const video = videoRef.current!;
+      // Step 5: Set up event-driven promise for video readiness
+      const videoReadyPromise = new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Video load timeout after 5 seconds'));
-        }, 5000);
+          cleanup();
+          reject(new Error('Video ready timeout (10s)'));
+        }, 10000);
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', handleMetadata);
+          video.removeEventListener('canplay', handleCanPlay);
+          video.removeEventListener('playing', handlePlaying);
+          video.removeEventListener('error', handleError);
+        };
+
+        const handleMetadata = () => {
+          console.log('[LiveAR] ✅ loadedmetadata -', video.videoWidth, 'x', video.videoHeight);
+          // Don't resolve yet - wait for canplay or playing
+        };
 
         const handleCanPlay = () => {
-          console.log('[LiveAR E.5] ✅ Video canplay event - readyState:', video.readyState);
-          clearTimeout(timeout);
-          video.removeEventListener('canplay', handleCanPlay);
-          video.removeEventListener('error', handleError);
+          console.log('[LiveAR] ✅ canplay - readyState:', video.readyState);
+          // Don't resolve yet - wait for playing event for certainty
+        };
+
+        const handlePlaying = () => {
+          console.log('[LiveAR] ✅ playing - readyState:', video.readyState);
+          cleanup();
           resolve();
         };
 
         const handleError = (e: Event) => {
-          console.error('[LiveAR E.5] ❌ Video error event:', e);
-          clearTimeout(timeout);
-          video.removeEventListener('canplay', handleCanPlay);
-          video.removeEventListener('error', handleError);
-          reject(new Error('Video failed to load'));
+          console.error('[LiveAR] ❌ Video error:', e);
+          cleanup();
+          reject(new Error('Video playback error'));
         };
 
-        // Check if already ready
-        if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
-          console.log('[LiveAR E.5] ✅ Video already ready - readyState:', video.readyState);
-          clearTimeout(timeout);
+        // Listen for events
+        video.addEventListener('loadedmetadata', handleMetadata);
+        video.addEventListener('canplay', handleCanPlay);
+        video.addEventListener('playing', handlePlaying);
+        video.addEventListener('error', handleError);
+
+        // Check if video already has metadata/is playing
+        if (video.readyState >= 3 && !video.paused) { // HAVE_FUTURE_DATA and playing
+          console.log('[LiveAR] ✅ Video already playing - readyState:', video.readyState);
+          cleanup();
           resolve();
-        } else {
-          video.addEventListener('canplay', handleCanPlay);
-          video.addEventListener('error', handleError);
         }
       });
 
-      // Start playing
-      await videoRef.current.play();
+      // Attach stream
+      video.srcObject = stream;
       
-      // Wait for video to be ready
-      await videoReady;
-      console.log('[LiveAR E.5] ✅ Video playing and ready');
-      console.log('[LiveAR E.5] 📹 Video element check:', {
-        exists: !!videoRef.current,
-        srcObject: !!videoRef.current.srcObject,
-        readyState: videoRef.current.readyState,
-        paused: videoRef.current.paused,
-        currentTime: videoRef.current.currentTime,
-        videoWidth: videoRef.current.videoWidth,
-        videoHeight: videoRef.current.videoHeight,
-      });
+      // Trigger playback
+      console.log('[LiveAR] ▶️  Calling video.play()...');
+      await video.play();
+      
+      // Wait for video to be truly ready
+      await videoReadyPromise;
 
-      // Calculate scale factor inline
-      const videoWidth = videoRef.current.videoWidth;
-      const videoHeight = videoRef.current.videoHeight;
-      console.log('[LiveAR E.5] Video dimensions:', videoWidth, 'x', videoHeight);
+      // Step 6: Calculate scale factor (video is guaranteed ready now)
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+      console.log('[LiveAR] 📐 Video dimensions:', videoWidth, 'x', videoHeight);
       
-      // Get calibration using helper function (checks props, then internal state)
       const calibrationData = getCalibrationValues();
-      let cameraConstant: number | null = null;
+      let cameraConstant: number;
       
       if (calibrationData.focalLength35mm) {
         cameraConstant = 36.0 / calibrationData.focalLength35mm;
-        console.log('[LiveAR E.5] Using focal length from', calibrationData.source + ':', calibrationData.focalLength35mm, '→ constant:', cameraConstant);
+        console.log('[LiveAR] 📏 Focal length:', calibrationData.focalLength35mm, 'mm');
       } else if (calibrationData.fovRatio) {
         cameraConstant = calibrationData.fovRatio;
-        console.log('[LiveAR E.5] Using FOV ratio from', calibrationData.source + ':', calibrationData.fovRatio);
+        console.log('[LiveAR] 📏 FOV ratio:', calibrationData.fovRatio);
+      } else {
+        cameraConstant = 36.0 / 28; // Default 28mm
+        console.warn('[LiveAR] ⚠️ Using default 28mm calibration');
       }
       
-      if (cameraConstant) {
-        const distMM = dist * 1000;
-        const horizontalPixels = Math.max(videoWidth, videoHeight);
-        const sf = (distMM * cameraConstant) / horizontalPixels;
-        
-        console.log('[LiveAR E.5] Scale factor calculated:', sf);
-        setScaleFactor(sf);
-        
-        // PHASE 2: NOW transition to TWO_FLOW_CHOICE (video is ready!)
-        console.log('[LiveAR E.5] ✅ Video ready, transitioning to TWO_FLOW_CHOICE');
-        setState('TWO_FLOW_CHOICE');
-        setInstruction('Choose how you want to proceed');
-        console.log('[LiveAR E.5] ✅ Camera ready with scale factor');
-      } else {
-        // PHASE 3: Improved error handling - use default calibration instead of failing
-        console.warn('[LiveAR E.5] ⚠️ No calibration available, using default values');
-        const defaultFocalLength = 28; // Conservative smartphone default
-        cameraConstant = 36.0 / defaultFocalLength;
-        
-        const distMM = dist * 1000;
-        const horizontalPixels = Math.max(videoWidth, videoHeight);
-        const sf = (distMM * cameraConstant) / horizontalPixels;
-        
-        setScaleFactor(sf);
-        
-        // PHASE 2: Transition to TWO_FLOW_CHOICE even with default calibration
-        setState('TWO_FLOW_CHOICE');
-        setInstruction('Choose how you want to proceed');
-        console.log('[LiveAR E.5] ⚠️ Using default calibration - Scale factor:', sf);
-        console.log('[LiveAR E.5] 💡 Manual calibration recommended for better accuracy');
-      }
+      const distMM = dist * 1000;
+      const horizontalPixels = Math.max(videoWidth, videoHeight);
+      const sf = (distMM * cameraConstant) / horizontalPixels;
+      
+      console.log('[LiveAR] ✅ Scale factor:', sf);
+      setScaleFactor(sf);
+      
+      // Step 7: Final verification
+      console.log('[LiveAR] 🔍 Final state:', {
+        streamActive: stream.active,
+        videoSrcObject: !!video.srcObject,
+        videoPaused: video.paused,
+        videoReadyState: video.readyState,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
+      
+      // Step 8: Transition (video persists, just showing different overlay)
+      console.log('[LiveAR] 🎯 Transitioning to TWO_FLOW_CHOICE');
+      setState('TWO_FLOW_CHOICE');
+      setInstruction('Choose how you want to proceed');
+      console.log('[LiveAR] ✅ Camera transition COMPLETE');
+
     } catch (err: any) {
-      console.error('[LiveAR E.5] ❌ Camera transition error:', err);
-      setError(err.message || 'Failed to access camera');
+      console.error('[LiveAR] ❌ Camera transition FAILED:', err);
+      setError(err.message || 'Failed to initialize camera');
       setState('ERROR');
-      // PHASE 4: Clean up camera state on error
       cameraStateRef.current = 'none';
     }
-  }, [getCalibrationValues]); // Updated dependency
+  }, [getCalibrationValues]);
 
-  // --- PHASE E.5: CAMERA INITIALIZATION AFTER AR (Fix blank screen bug) ---
-  // NOTE: This useEffect must come AFTER transitionToCamera definition to avoid hoisting errors
+  // --- CAMERA INITIALIZATION TRIGGER ---
+  // Event-driven: Triggered when state becomes CAMERA_INITIALIZING
   useEffect(() => {
     if (state === 'CAMERA_INITIALIZING' && distanceRef.current !== null) {
-      console.log('[LiveAR E.5] 🎥 CAMERA_INITIALIZING state - starting camera init...');
+      console.log('[LiveAR] 🎬 CAMERA_INITIALIZING state - triggering transition');
       
       const initCamera = async () => {
         try {
           await transitionToCamera(distanceRef.current!);
-          console.log('[LiveAR E.5] ✅ Camera initialized successfully');
         } catch (err: any) {
-          console.error('[LiveAR E.5] ❌ Camera init failed:', err);
-          // PHASE 3: Don't auto-return to USER_CHOICE, let ERROR state render
-          setError(err.message || 'Failed to start camera. Please try again.');
+          console.error('[LiveAR] ❌ Init failed:', err);
+          setError(err.message || 'Camera initialization failed');
           setState('ERROR');
         }
       };
@@ -2177,60 +2149,6 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     );
   }
 
-  // PHASE E.5: Camera Initializing State (prevents blank screen after AR confirm)
-  // PHASE 5: Enhanced CAMERA_INITIALIZING state with better feedback
-  // CRITICAL FIX: Video element MUST be rendered to allow videoRef.current to be set
-  if (state === 'CAMERA_INITIALIZING') {
-    return (
-      <div className="fixed inset-0 bg-black z-50">
-        {/* Hidden video element - MUST be rendered for ref to work */}
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="absolute inset-0 w-full h-full object-cover opacity-0"
-        />
-        
-        {/* Loading overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
-          <div className="text-center text-white max-w-md px-6">
-            <div className="relative mb-8">
-              <Loader2 className="w-20 h-20 animate-spin mx-auto text-green-500" />
-              <Camera className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
-            </div>
-            
-            <h2 className="text-2xl font-bold mb-3">Preparing Camera</h2>
-            <p className="text-gray-400 mb-4">Setting up your camera for tree photography...</p>
-            
-            {/* PHASE 5: Show calibration status */}
-            {cameraCalibration && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
-                <p className="text-sm text-green-300 flex items-center justify-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>Camera calibrated using {cameraCalibration.calibrationMethod}</span>
-                </p>
-              </div>
-            )}
-            
-            {/* PHASE 5: Show distance */}
-            {uiDistance && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                <p className="text-sm text-blue-300">
-                  Distance: <strong>{uiDistance.toFixed(2)}m</strong>
-                </p>
-              </div>
-            )}
-            
-            <p className="text-xs text-gray-500 mt-4 animate-pulse">
-              Waiting for video stream to be ready...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // PHASE 3: ERROR State - Proper error handling with recovery options
   if (state === 'ERROR') {
     return (
@@ -2286,10 +2204,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     );
   }
 
-  // Camera Capture UI
+  // PRODUCTION-GRADE: Persistent Video + Overlay Pattern
+  // Video element NEVER unmounts - overlays control what user sees
+  // This prevents readyState reset and stream disconnection
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Camera feed */}
+      {/* PERSISTENT VIDEO ELEMENT - Always rendered, never unmounts */}
       <div
         className="relative flex-1 overflow-hidden"
         onClick={(state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? handleVideoTap : undefined}
@@ -2301,7 +2221,48 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           playsInline
           muted
           className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            // Hide video during CAMERA_INITIALIZING to show loading screen
+            opacity: state === 'CAMERA_INITIALIZING' ? 0 : 1,
+            transition: 'opacity 0.3s ease-in-out'
+          }}
         />
+        
+        {/* CAMERA_INITIALIZING Overlay */}
+        {state === 'CAMERA_INITIALIZING' && (
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
+            <div className="text-center text-white max-w-md px-6">
+              <div className="relative mb-8">
+                <Loader2 className="w-20 h-20 animate-spin mx-auto text-green-500" />
+                <Camera className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+              </div>
+              
+              <h2 className="text-2xl font-bold mb-3">Preparing Camera</h2>
+              <p className="text-gray-400 mb-4">Setting up your camera for tree photography...</p>
+              
+              {cameraCalibration && (
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-300 flex items-center justify-center gap-2">
+                    <Check className="w-4 h-4" />
+                    <span>Camera calibrated using {cameraCalibration.calibrationMethod}</span>
+                  </p>
+                </div>
+              )}
+              
+              {uiDistance && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-sm text-blue-300">
+                    Distance: <strong>{uiDistance.toFixed(2)}m</strong>
+                  </p>
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-500 mt-4 animate-pulse">
+                Initializing video stream...
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* PHASE D.2: Frozen frame overlay during point selection (prevents camera shake) */}
         {freezeFrameImage && state === 'POINT_SELECTION' && (
