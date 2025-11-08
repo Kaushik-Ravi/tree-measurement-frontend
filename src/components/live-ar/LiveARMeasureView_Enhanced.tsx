@@ -130,7 +130,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const [showPlaceButton, setShowPlaceButton] = useState(false);
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
-  const [arSessionActive, setArSessionActive] = useState(false);
+  // Legacy state - kept for setter compatibility
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_arSessionActive, setArSessionActive] = useState(false);
   
   const [manualDistanceInput, setManualDistanceInput] = useState('');
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
@@ -154,7 +156,9 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // PHASE E.4: AR capability check (removed xrSession state - ARButton handles it)
   const [isArAvailable, setIsArAvailable] = useState<boolean>(false);
-  const [isCheckingAr, setIsCheckingAr] = useState<boolean>(true);
+  // Legacy state - kept for setter compatibility
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_isCheckingAr, setIsCheckingAr] = useState<boolean>(true);
 
   // Phase 5: Two-flow + Additional Details
   const [additionalDetails, setAdditionalDetails] = useState<{
@@ -166,9 +170,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   // Phase 6: Camera Calibration
   const [cameraCalibration, setCameraCalibration] = useState<CameraCalibration | null>(null);
 
-  // PHASE 1: Pre-Flight Check Results
-  const [preFlightComplete, setPreFlightComplete] = useState(false);
-  const [permissionsGranted, setPermissionsGranted] = useState({
+  // PHASE 1: Pre-Flight Check Results (legacy state - kept for setter compatibility)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_preFlightComplete, setPreFlightComplete] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_permissionsGranted, setPermissionsGranted] = useState({
     camera: false,
     location: false,
     ar: false,
@@ -2702,8 +2708,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         {/* PHASE B: Two-Flow Choice Screen (appears AFTER distance, BEFORE SAM) */}
         {state === 'TWO_FLOW_CHOICE' && (
           <div className="absolute inset-0 flex items-end p-6 bg-gradient-to-t from-black/95 via-black/70 to-transparent text-white z-20">
-            {console.log('[TWO_FLOW_CHOICE OVERLAY] Rendering overlay UI')}
-            <div className="w-full max-w-md mx-auto"
+            <div className="w-full max-w-md mx-auto">
               {/* PHASE E.1: Back button */}
               <button
                 onClick={handleBack}

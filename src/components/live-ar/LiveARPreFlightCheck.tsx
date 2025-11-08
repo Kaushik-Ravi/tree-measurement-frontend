@@ -291,7 +291,7 @@ export function LiveARPreFlightCheck({
                   {results.calibration && (
                     <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      Calibration loaded: {results.calibration.method}
+                      Calibration loaded: {results.calibration.calibrationMethod}
                     </p>
                   )}
                 </div>
@@ -453,7 +453,7 @@ export function LiveARPreFlightCheck({
                 <div>
                   <p className="text-sm text-green-300 font-medium">Camera Calibrated</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Method: <strong>{results.calibration.method}</strong>
+                    Method: <strong>{results.calibration.calibrationMethod}</strong>
                     {results.calibration.focalLength35mm && ` • ${results.calibration.focalLength35mm}mm`}
                     {results.calibration.fovHorizontal && ` • ${results.calibration.fovHorizontal}° FOV`}
                   </p>
