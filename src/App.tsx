@@ -516,8 +516,44 @@ function App() {
       } else if (error.code === 3) { 
         // TIMEOUT - Took too long to get location
         setPrereqStatus(prev => ({ ...prev, location: 'TIMEOUT' }));
-        setInstructionText("Location request timed out. Please check your GPS signal and try again.");
-        setErrorMessage("Could not get your location within 10 seconds. Make sure you're in an area with good GPS signal.");
+        setInstructionText("Location request timed out. Retrying automatically...");
+        setErrorMessage("Could not get your location within 10 seconds. Retrying with a longer timeout...");
+        
+        // AUTO-RETRY: Try again with extended timeout and lower accuracy requirement
+        setTimeout(async () => {
+          try {
+            const retryPosition = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                {
+                  enableHighAccuracy: false, // Lower accuracy for faster response
+                  timeout: 20000,            // Extended 20 second timeout
+                  maximumAge: 120000         // Accept cached location up to 2 minutes old
+                }
+              );
+            });
+            
+            // ✅ RETRY SUCCESS
+            const userLoc = { lat: retryPosition.coords.latitude, lng: retryPosition.coords.longitude };
+            setUserGeoLocation(userLoc);
+            setCurrentLocation(userLoc);
+            setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+            setInstructionText("Location access granted after retry!");
+            setErrorMessage('');
+          } catch (retryError: any) {
+            // ❌ RETRY FAILED - Show manual retry option
+            if (retryError.code === 3) {
+              setPrereqStatus(prev => ({ ...prev, location: 'TIMEOUT' }));
+              setInstructionText("Location still timing out. Please check your GPS signal or try manual entry.");
+              setErrorMessage("Unable to get location. Make sure you're outdoors with clear sky view, or use manual coordinate entry.");
+            } else {
+              // Handle other errors from retry
+              setPrereqStatus(prev => ({ ...prev, location: 'ERROR' }));
+              setInstructionText("Could not get location after retry. Please try again manually.");
+            }
+          }
+        }, 2000); // Wait 2 seconds before retry
       } else {
         // Unknown error
         setPrereqStatus(prev => ({ ...prev, location: 'ERROR' }));
