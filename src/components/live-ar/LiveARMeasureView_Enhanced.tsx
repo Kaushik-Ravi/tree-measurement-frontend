@@ -2234,10 +2234,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   console.log('[LiveAR RENDER] State:', state, '| Video ref:', !!videoRef.current, '| Stream:', !!streamRef.current);
   
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+    <div className="fixed inset-0 w-full h-full bg-black z-50 flex flex-col">
       {/* PERSISTENT VIDEO ELEMENT - Always rendered, never unmounts */}
       <div
-        className="relative flex-1 overflow-hidden"
+        className="relative flex-1 w-full overflow-hidden"
         onClick={(state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? handleVideoTap : undefined}
         style={{ cursor: (state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? 'crosshair' : 'default' }}
       >
