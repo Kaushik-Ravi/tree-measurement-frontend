@@ -460,14 +460,26 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       // This prevents the dark screen race condition
       console.log('[LiveAR E.5] Preparing video element for stream...');
       
-      // Wait for React to render the video element (still in CAMERA_INITIALIZING state)
-      await new Promise(resolve => setTimeout(resolve, 50));
-
-      // Attach stream to video element
-      if (!videoRef.current) {
-        throw new Error('Video element not available');
+      // CRITICAL FIX: Wait for React to attach the videoRef with polling
+      // The video element is now rendered in CAMERA_INITIALIZING state
+      const MAX_WAIT_TIME = 3000; // 3 seconds max
+      const POLL_INTERVAL = 100; // Check every 100ms
+      let elapsedTime = 0;
+      
+      while (!videoRef.current && elapsedTime < MAX_WAIT_TIME) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        elapsedTime += POLL_INTERVAL;
+        if (elapsedTime % 500 === 0) { // Log every 500ms
+          console.log('[LiveAR E.5] Waiting for video ref... (elapsed:', elapsedTime, 'ms)');
+        }
       }
 
+      // Final check
+      if (!videoRef.current) {
+        throw new Error('Video element ref not attached after ' + MAX_WAIT_TIME + 'ms');
+      }
+
+      console.log('[LiveAR E.5] ✅ Video element ref attached (took ' + elapsedTime + 'ms)');
       console.log('[LiveAR E.5] Attaching stream to video element...');
       videoRef.current.srcObject = stream;
       
@@ -2167,40 +2179,53 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
   // PHASE E.5: Camera Initializing State (prevents blank screen after AR confirm)
   // PHASE 5: Enhanced CAMERA_INITIALIZING state with better feedback
+  // CRITICAL FIX: Video element MUST be rendered to allow videoRef.current to be set
   if (state === 'CAMERA_INITIALIZING') {
     return (
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center z-50">
-        <div className="text-center text-white max-w-md px-6">
-          <div className="relative mb-8">
-            <Loader2 className="w-20 h-20 animate-spin mx-auto text-green-500" />
-            <Camera className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+      <div className="fixed inset-0 bg-black z-50">
+        {/* Hidden video element - MUST be rendered for ref to work */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover opacity-0"
+        />
+        
+        {/* Loading overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center">
+          <div className="text-center text-white max-w-md px-6">
+            <div className="relative mb-8">
+              <Loader2 className="w-20 h-20 animate-spin mx-auto text-green-500" />
+              <Camera className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white" />
+            </div>
+            
+            <h2 className="text-2xl font-bold mb-3">Preparing Camera</h2>
+            <p className="text-gray-400 mb-4">Setting up your camera for tree photography...</p>
+            
+            {/* PHASE 5: Show calibration status */}
+            {cameraCalibration && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
+                <p className="text-sm text-green-300 flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4" />
+                  <span>Camera calibrated using {cameraCalibration.calibrationMethod}</span>
+                </p>
+              </div>
+            )}
+            
+            {/* PHASE 5: Show distance */}
+            {uiDistance && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <p className="text-sm text-blue-300">
+                  Distance: <strong>{uiDistance.toFixed(2)}m</strong>
+                </p>
+              </div>
+            )}
+            
+            <p className="text-xs text-gray-500 mt-4 animate-pulse">
+              Waiting for video stream to be ready...
+            </p>
           </div>
-          
-          <h2 className="text-2xl font-bold mb-3">Preparing Camera</h2>
-          <p className="text-gray-400 mb-4">Setting up your camera for tree photography...</p>
-          
-          {/* PHASE 5: Show calibration status */}
-          {cameraCalibration && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 mb-4">
-              <p className="text-sm text-green-300 flex items-center justify-center gap-2">
-                <Check className="w-4 h-4" />
-                <span>Camera calibrated using {cameraCalibration.method}</span>
-              </p>
-            </div>
-          )}
-          
-          {/* PHASE 5: Show distance */}
-          {uiDistance && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-              <p className="text-sm text-blue-300">
-                Distance: <strong>{uiDistance.toFixed(2)}m</strong>
-              </p>
-            </div>
-          )}
-          
-          <p className="text-xs text-gray-500 mt-4 animate-pulse">
-            Waiting for video stream to be ready...
-          </p>
         </div>
       </div>
     );
@@ -2776,7 +2801,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2">
                     <p className="text-xs text-green-300 text-center flex items-center justify-center gap-1">
                       <Check className="w-3 h-3" />
-                      <span>Camera calibrated ({cameraCalibration.method})</span>
+                      <span>Camera calibrated ({cameraCalibration.calibrationMethod})</span>
                     </p>
                   </div>
                 )}
