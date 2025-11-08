@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Save, Trash2, Plus, Sparkles, MapPin, X, LogIn, LogOut, Loader2, Edit, Navigation, ShieldCheck, AlertTriangle, ImageIcon, CheckCircle, XCircle, ListTree, GitMerge, Users, BarChart2, ArrowLeft, Info, Check, Sun, Moon, Camera, Move } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, X, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -251,7 +251,7 @@ function App() {
   }, [prereqStatus.compass, currentView, isArModeActive, isLiveARModeActive]);
 
   const handleReturnToHub = () => {
-    softReset(currentView);
+    softReset();
   };
   
   useEffect(() => {
@@ -655,7 +655,7 @@ function App() {
       
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
-      softReset('SESSION');
+      softReset();
 
     } catch (error: any) {
       setErrorMessage(`Failed to save result: ${error.message}`);
@@ -691,7 +691,7 @@ function App() {
       
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
-      softReset('SESSION');
+      softReset();
 
     } catch (error: any) {
       setErrorMessage(`Submission failed: ${error.message}`);
@@ -765,7 +765,7 @@ function App() {
         ...additionalData,
       };
       await submitCommunityAnalysis(claimedTree.id, payload, session.access_token);
-      softReset('COMMUNITY_GROVE');
+      softReset();
     } catch(e: any) {
       setErrorMessage(e.message);
       setAppStatus('ANALYSIS_COMPLETE');
@@ -773,7 +773,7 @@ function App() {
   };
 
 
-  const softReset = (originView: AppView | 'SESSION') => {
+  const softReset = () => {
     setCurrentView('HUB');
     setAppStatus('IDLE');
     setInstructionText( "Session complete! Ready to map another tree.");
@@ -1175,33 +1175,21 @@ function App() {
               <div className="max-w-4xl mx-auto text-center py-8 md:py-16">
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-content-default">Map the Planet's Trees</h1>
                 <p className="mt-4 max-w-2xl mx-auto text-lg text-content-subtle">
-                  Turn your photos into valuable data. Measure, identify, and contribute to a global tree inventory with precision tools.
+                  Snap a photo, get instant measurements. Identify species, calculate carbon impact, and contribute to a global tree database.
                 </p>
                 
-                {/* --- PRIMARY ACTION: LIVE AR MODE (when feature enabled) --- */}
-                {FeatureFlags.LIVE_AR_MODE && (
-                  <button 
-                    onClick={() => {
-                      setCurrentView('SESSION');
-                      setIsLiveARModeActive(true);
-                      setAppStatus('IDLE');
-                      setInstructionText("Starting Live AR measurement...");
-                    }} 
-                    className="mt-8 px-8 py-4 bg-gradient-to-r from-brand-primary to-brand-secondary text-white rounded-lg font-bold text-lg hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-brand-primary/30 flex items-center justify-center gap-3 mx-auto"
-                  >
-                    <Camera size={24} />
-                    Live AR Measurement (Beta)
-                  </button>
-                )}
-                
-                {/* --- SECONDARY ACTION: PHOTO-BASED FLOW --- */}
+                {/* PRIMARY ACTION: Photo-Based Tree Measurement */}
                 <button 
                   onClick={handleStartSession} 
-                  className={`${FeatureFlags.LIVE_AR_MODE ? 'mt-4' : 'mt-8'} px-8 py-4 ${FeatureFlags.LIVE_AR_MODE ? 'bg-background-default border-2 border-stroke-default text-content-default hover:bg-background-subtle' : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover shadow-lg shadow-brand-primary/20'} rounded-lg font-bold text-lg transition-transform active:scale-95 flex items-center justify-center gap-3 mx-auto`}
+                  className="mt-8 px-8 py-4 bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover shadow-lg shadow-brand-primary/20 rounded-lg font-bold text-lg transition-transform active:scale-95 flex items-center justify-center gap-3 mx-auto"
                 >
-                  {FeatureFlags.LIVE_AR_MODE && <ImageIcon size={20} />}
-                  {FeatureFlags.LIVE_AR_MODE ? 'Photo-Based Measurement' : 'Start Mapping a Tree'}
+                  <Camera size={24} />
+                  Measure a Tree Now
                 </button>
+                
+                <p className="mt-3 text-sm text-content-subtle">
+                  📸 Take a photo → 📏 AI measures it → 🌳 Identify species → 💾 Save to database
+                </p>
               </div>
 
               <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">

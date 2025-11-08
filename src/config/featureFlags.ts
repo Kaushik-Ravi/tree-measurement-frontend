@@ -22,11 +22,10 @@ export const FeatureFlags = {
    * 
    * When disabled, users will only see the existing photo upload workflow.
    * 
-   * Default: false (manual activation required)
+   * STATUS: HIDDEN (In development - code preserved for future release)
    * Enable via: localStorage.setItem('ENABLE_LIVE_AR', 'true')
    */
-  LIVE_AR_MODE: import.meta.env.VITE_ENABLE_LIVE_AR === 'true' || 
-                localStorage.getItem('ENABLE_LIVE_AR') === 'true',
+  LIVE_AR_MODE: false, // Temporarily disabled - all code preserved for future development
 
   /**
    * Debug Mode
