@@ -2,7 +2,19 @@
 import { useState } from 'react';
 import { MapPin, Compass, CheckCircle2, XCircle, Loader2, ShieldQuestion, AlertCircle, Smartphone, Chrome, Apple } from 'lucide-react';
 
-type SensorStatus = 'PENDING' | 'GRANTED' | 'DENIED' | 'BLOCKED';
+// Enhanced permission states for robust error handling
+type SensorStatus = 
+  | 'CHECKING'          // Initial validation in progress
+  | 'PENDING'           // Ready to request (never asked)
+  | 'REQUESTING'        // Permission dialog currently shown to user
+  | 'GRANTED'           // Permission approved
+  | 'DENIED'            // User clicked "Block" or "Don't Allow" this session
+  | 'UNAVAILABLE'       // GPS hardware disabled or unavailable
+  | 'TIMEOUT'           // Location request timed out
+  | 'ERROR'             // Unknown error occurred
+  | 'HTTPS_REQUIRED'    // Page not secure (http://)
+  | 'NOT_REQUIRED'      // Feature not needed (e.g., compass on Android)
+  | 'NOT_SUPPORTED';    // Browser doesn't support feature
 
 interface PermissionsCheckModalProps {
   locationStatus: SensorStatus;
@@ -16,11 +28,21 @@ const StatusIcon = ({ status }: { status: SensorStatus }) => {
     case 'GRANTED':
       return <CheckCircle2 className="w-5 h-5 text-status-success" />;
     case 'DENIED':
-    case 'BLOCKED':
+    case 'UNAVAILABLE':
+    case 'ERROR':
+    case 'HTTPS_REQUIRED':
+    case 'NOT_SUPPORTED':
       return <XCircle className="w-5 h-5 text-status-error" />;
+    case 'TIMEOUT':
+      return <AlertCircle className="w-5 h-5 text-status-warning" />;
+    case 'CHECKING':
+    case 'REQUESTING':
+      return <Loader2 className="w-5 h-5 text-content-subtle animate-spin" />;
+    case 'NOT_REQUIRED':
+      return <CheckCircle2 className="w-5 h-5 text-content-subtle opacity-50" />;
     case 'PENDING':
     default:
-      return <Loader2 className="w-5 h-5 text-content-subtle animate-spin" />;
+      return <AlertCircle className="w-5 h-5 text-content-subtle" />;
   }
 };
 
@@ -46,9 +68,8 @@ export function PermissionsCheckModal({
   const [showCompassHelp, setShowCompassHelp] = useState(false);
   const deviceInfo = getDeviceInfo();
   
-  const allRequested = locationStatus !== 'PENDING' || compassStatus !== 'PENDING';
   const canContinue = locationStatus === 'GRANTED';
-  const locationBlocked = locationStatus === 'DENIED' || locationStatus === 'BLOCKED';
+  const locationNeedsHelp = locationStatus === 'DENIED' || locationStatus === 'UNAVAILABLE' || locationStatus === 'TIMEOUT' || locationStatus === 'ERROR' || locationStatus === 'HTTPS_REQUIRED';
 
   // --- START: SURGICAL REPLACEMENT (ENHANCED UX) ---
   return (
@@ -80,13 +101,38 @@ export function PermissionsCheckModal({
                   <p className="text-xs text-content-subtle mt-1">
                     <strong>Required</strong> - Automatically tags the tree's GPS coordinates for mapping.
                   </p>
+                  {/* Status message based on current state */}
+                  {locationStatus === 'CHECKING' && (
+                    <p className="text-xs text-brand-primary mt-1 font-medium">🔍 Checking location access...</p>
+                  )}
+                  {locationStatus === 'REQUESTING' && (
+                    <p className="text-xs text-brand-primary mt-1 font-medium animate-pulse">⏳ Please respond to the browser prompt...</p>
+                  )}
+                  {locationStatus === 'GRANTED' && (
+                    <p className="text-xs text-status-success mt-1 font-medium">✓ Location access granted</p>
+                  )}
+                  {locationStatus === 'DENIED' && (
+                    <p className="text-xs text-status-error mt-1 font-medium">✗ Access denied - See instructions below</p>
+                  )}
+                  {locationStatus === 'UNAVAILABLE' && (
+                    <p className="text-xs text-status-warning mt-1 font-medium">⚠ GPS is turned off in device settings</p>
+                  )}
+                  {locationStatus === 'TIMEOUT' && (
+                    <p className="text-xs text-status-warning mt-1 font-medium">⏱ Location request timed out</p>
+                  )}
+                  {locationStatus === 'HTTPS_REQUIRED' && (
+                    <p className="text-xs text-status-error mt-1 font-medium">🔒 HTTPS connection required</p>
+                  )}
+                  {locationStatus === 'NOT_SUPPORTED' && (
+                    <p className="text-xs text-status-error mt-1 font-medium">✗ Browser doesn't support location</p>
+                  )}
                 </div>
                 <div className="flex-shrink-0 pt-1">
                   <StatusIcon status={locationStatus} />
                 </div>
               </div>
               
-              {locationBlocked && (
+              {locationNeedsHelp && (
                 <div className="mt-3 pt-3 border-t border-stroke-default">
                   <button 
                     onClick={() => setShowLocationHelp(!showLocationHelp)}
@@ -148,6 +194,19 @@ export function PermissionsCheckModal({
                       )}
                     </div>
                   )}
+                  
+                  {/* Try Again Button - Shows after help instructions */}
+                  {showLocationHelp && (
+                    <button 
+                      onClick={onRequestPermissions}
+                      className="mt-3 w-full px-4 py-2 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Try Again
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -197,20 +256,46 @@ export function PermissionsCheckModal({
         </main>
         
         <footer className="sticky bottom-0 flex flex-col sm:flex-row justify-end gap-3 p-4 border-t border-stroke-default bg-background-default">
-          {!allRequested && (
+          {/* Show Grant Permissions button only if permissions haven't been requested yet */}
+          {(locationStatus === 'PENDING' || locationStatus === 'CHECKING') && (
             <button
               onClick={onRequestPermissions}
-              className="w-full sm:w-auto px-6 py-2.5 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors"
+              disabled={locationStatus === 'CHECKING'}
+              className="w-full sm:w-auto px-6 py-2.5 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Grant Permissions
+              {locationStatus === 'CHECKING' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking...
+                </>
+              ) : (
+                <>
+                  <ShieldQuestion className="w-4 h-4" />
+                  Grant Permissions
+                </>
+              )}
             </button>
           )}
+          
+          {/* Continue button - enabled only when location is granted */}
           <button
             onClick={onConfirm}
             disabled={!canContinue}
-            className="w-full sm:w-auto px-6 py-2.5 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed transition-colors"
+            className="w-full sm:w-auto px-6 py-2.5 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            {canContinue ? 'Continue' : 'Awaiting Location Permission'}
+            {canContinue ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                Continue
+              </>
+            ) : locationStatus === 'REQUESTING' ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Awaiting Permission...
+              </>
+            ) : (
+              'Awaiting Location Permission'
+            )}
           </button>
         </footer>
       </div>

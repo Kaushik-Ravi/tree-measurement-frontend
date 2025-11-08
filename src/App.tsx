@@ -56,7 +56,21 @@ type AppStatus =
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 type LocationData = { lat: number; lng: number } | null;
-type SensorStatus = 'PENDING' | 'GRANTED' | 'DENIED';
+
+// Enhanced permission states for robust error handling
+type SensorStatus = 
+  | 'CHECKING'          // Initial validation in progress
+  | 'PENDING'           // Ready to request (never asked)
+  | 'REQUESTING'        // Permission dialog currently shown to user
+  | 'GRANTED'           // Permission approved
+  | 'DENIED'            // User clicked "Block" or "Don't Allow" this session
+  | 'UNAVAILABLE'       // GPS hardware disabled or unavailable
+  | 'TIMEOUT'           // Location request timed out
+  | 'ERROR'             // Unknown error occurred
+  | 'HTTPS_REQUIRED'    // Page not secure (http://)
+  | 'NOT_REQUIRED'      // Feature not needed (e.g., compass on Android)
+  | 'NOT_SUPPORTED';    // Browser doesn't support feature
+
 type PrerequisiteStatus = {
   location: SensorStatus;
   compass: SensorStatus;
@@ -379,65 +393,169 @@ function App() {
   const handleStartSession = () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
-    setInstructionText("Please grant the requested permissions to proceed.");
+    setInstructionText("Checking device permissions...");
     setIsPanelOpen(true);
-    // --- START: SURGICAL ADDITION (Permission Re-validation) ---
-    // Always reset to PENDING to force permission re-check
-    setPrereqStatus({ location: 'PENDING', compass: 'PENDING' });
     
-    // Immediately check if permissions are already granted (from previous session)
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          // Location already granted
-          const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
-          setUserGeoLocation(userLoc);
-          setCurrentLocation(userLoc);
-          setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
-        },
-        (error) => {
-          // Location denied or blocked
-          if (error.code === 1) {
-            setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
-          }
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
+    // Reset to CHECKING state for fresh session validation
+    setPrereqStatus({ location: 'CHECKING', compass: 'CHECKING' });
+    
+    // Perform pre-check before showing permission modal
+    checkPermissionsBeforeModal();
+  };
+
+  const checkPermissionsBeforeModal = async () => {
+    // 1. Check if Geolocation API exists (browser support)
+    if (!('geolocation' in navigator)) {
+      setPrereqStatus({ location: 'NOT_SUPPORTED', compass: 'NOT_SUPPORTED' });
+      setErrorMessage('Your browser does not support location services. Please use a modern browser like Chrome, Safari, or Firefox.');
+      setInstructionText('Browser compatibility issue detected.');
+      return;
     }
-    // --- END: SURGICAL ADDITION ---
+
+    // 2. Check if page is served over HTTPS (required for geolocation)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      setPrereqStatus({ location: 'HTTPS_REQUIRED', compass: 'HTTPS_REQUIRED' });
+      setErrorMessage('Location access requires a secure HTTPS connection.');
+      setInstructionText('Please access this site using https://');
+      return;
+    }
+
+    // 3. Attempt silent permission check (validates if already granted from browser)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        // ✅ Permission already granted - set location immediately
+        const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setUserGeoLocation(userLoc);
+        setCurrentLocation(userLoc);
+        setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+        setInstructionText('Location access granted. Please grant compass permission (iOS only).');
+        
+        // Check compass status
+        checkCompassStatus();
+      },
+      (error) => {
+        // Permission not yet granted or denied - determine state
+        if (error.code === 1) {
+          // PERMISSION_DENIED - User previously blocked
+          setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
+          setInstructionText('Location access was denied. Please follow the instructions below to enable it.');
+        } else if (error.code === 2) {
+          // POSITION_UNAVAILABLE - GPS disabled
+          setPrereqStatus(prev => ({ ...prev, location: 'UNAVAILABLE' }));
+          setInstructionText('GPS is unavailable. Please enable location services in your device settings.');
+        } else if (error.code === 3) {
+          // TIMEOUT
+          setPrereqStatus(prev => ({ ...prev, location: 'TIMEOUT' }));
+          setInstructionText('Location request timed out. Please check your GPS signal.');
+        } else {
+          // Unknown error
+          setPrereqStatus(prev => ({ ...prev, location: 'PENDING' }));
+          setInstructionText('Ready to request location permission. Tap "Grant Permissions" below.');
+        }
+        
+        // Check compass status
+        checkCompassStatus();
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 5000,        // Quick 5-second check
+        maximumAge: 60000     // Accept cached location up to 1 minute old (session-level)
+      }
+    );
+  };
+
+  const checkCompassStatus = () => {
+    // @ts-ignore - Check if DeviceOrientationEvent permission is required (iOS 13+)
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      setPrereqStatus(prev => ({ ...prev, compass: 'PENDING' }));
+    } else {
+      // Non-iOS or older iOS: Compass not required
+      setPrereqStatus(prev => ({ ...prev, compass: 'NOT_REQUIRED' }));
+    }
   };
 
   const handleRequestPermissions = async () => {
+    // Set REQUESTING state to show loading indicator
+    setPrereqStatus(prev => ({ ...prev, location: 'REQUESTING' }));
+    setInstructionText("Waiting for your response to the location permission prompt...");
+    
+    // 1. LOCATION: Trigger native Geolocation API prompt
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true, timeout: 10000, maximumAge: 0
-        });
+        navigator.geolocation.getCurrentPosition(
+          resolve, 
+          reject, 
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,      // 10 second timeout
+            maximumAge: 0        // Force fresh location (no cache)
+          }
+        );
       });
+      
+      // ✅ SUCCESS: Permission granted + coordinates received
       const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
       setUserGeoLocation(userLoc);
       setCurrentLocation(userLoc);
       setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
-    } catch (error) {
-      setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
+      setInstructionText("Location access granted! Now requesting compass permission (iOS only)...");
+      
+    } catch (error: any) {
+      // ❌ FAILED: Determine exact failure reason using GeolocationPositionError codes
+      console.error('Geolocation error:', error);
+      
+      if (error.code === 1) { 
+        // PERMISSION_DENIED - User clicked "Block" or "Don't Allow"
+        setPrereqStatus(prev => ({ ...prev, location: 'DENIED' }));
+        setInstructionText("Location access denied. Please follow the instructions below to enable it.");
+      } else if (error.code === 2) { 
+        // POSITION_UNAVAILABLE - GPS hardware issue or location services off
+        setPrereqStatus(prev => ({ ...prev, location: 'UNAVAILABLE' }));
+        setInstructionText("GPS is unavailable. Please enable location services in your device settings.");
+        setErrorMessage("Your device's location services are turned off. Enable them in system settings to continue.");
+      } else if (error.code === 3) { 
+        // TIMEOUT - Took too long to get location
+        setPrereqStatus(prev => ({ ...prev, location: 'TIMEOUT' }));
+        setInstructionText("Location request timed out. Please check your GPS signal and try again.");
+        setErrorMessage("Could not get your location within 10 seconds. Make sure you're in an area with good GPS signal.");
+      } else {
+        // Unknown error
+        setPrereqStatus(prev => ({ ...prev, location: 'ERROR' }));
+        setInstructionText("An unexpected error occurred. Please try again.");
+        setErrorMessage(`Location error: ${error.message || 'Unknown error'}`);
+      }
     }
-  
+
+    // 2. COMPASS (iOS only): Trigger DeviceOrientationEvent permission
     // @ts-ignore
-    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
       try {
         // @ts-ignore
         const permissionState = await DeviceOrientationEvent.requestPermission();
+        
         if (permissionState === 'granted') {
           setPrereqStatus(prev => ({ ...prev, compass: 'GRANTED' }));
+          setInstructionText("All permissions granted! You can now continue.");
+          setErrorMessage(''); // Clear any error messages
         } else {
           setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
+          setInstructionText("Compass access denied. This may affect location accuracy.");
         }
       } catch (err) {
-        console.error("Compass permission request error:", err);
+        console.error('Compass permission error:', err);
         setPrereqStatus(prev => ({ ...prev, compass: 'DENIED' }));
+        setInstructionText("Could not request compass permission. This may affect location accuracy.");
       }
     } else {
-      console.log("DeviceOrientationEvent.requestPermission not found. Assuming permission or non-iOS device.");
+      // Non-iOS device - compass permission not required
+      console.log('DeviceOrientationEvent.requestPermission not available (non-iOS device or older iOS version)');
+      setPrereqStatus(prev => ({ ...prev, compass: 'NOT_REQUIRED' }));
+      
+      // If location was granted, user can continue
+      if (prereqStatus.location === 'GRANTED') {
+        setInstructionText("Location access granted! You can now continue.");
+        setErrorMessage('');
+      }
     }
   };
   
