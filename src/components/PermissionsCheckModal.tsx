@@ -234,42 +234,87 @@ export function PermissionsCheckModal({
                 </div>
               </div>
               
-              {/* COMPASS DENIED - Show setup instructions */}
-              {compassStatus === 'DENIED' && deviceInfo.isIOS && (
+              {/* COMPASS SETUP INSTRUCTIONS - Always show for mobile devices */}
+              {deviceInfo.isMobile && compassStatus !== 'GRANTED' && compassStatus !== 'NOT_REQUIRED' && (
                 <div className="mt-3 pt-3 border-t border-stroke-default">
                   <button 
                     onClick={() => setShowCompassHelp(!showCompassHelp)}
                     className="flex items-center gap-2 text-sm text-brand-primary hover:underline font-medium"
                   >
                     <AlertCircle className="w-4 h-4" />
-                    {showCompassHelp ? 'Hide' : 'Show'} setup instructions
+                    {showCompassHelp ? 'Hide' : 'Show'} how to enable
                   </button>
                   
                   {showCompassHelp && (
-                    <div className="mt-3 p-3 bg-background-default rounded-lg text-xs space-y-2 text-content-subtle">
-                      <p className="font-semibold text-content-default flex items-center gap-2">
-                        <Apple className="w-4 h-4" />
-                        To enable Motion & Orientation on iPhone/iPad:
-                      </p>
+                    <div className="mt-3 p-3 bg-background-default rounded-lg text-xs space-y-3 text-content-subtle">
+                      {/* iOS Instructions */}
+                      {deviceInfo.isIOS && (
+                        <div className="space-y-2">
+                          <p className="font-semibold text-content-default flex items-center gap-2">
+                            <Apple className="w-4 h-4" />
+                            iPhone/iPad - Motion & Orientation Access:
+                          </p>
+                          
+                          <div className="space-y-1">
+                            <p className="font-medium text-status-warning">Method 1: iOS Settings (Recommended)</p>
+                            <ol className="list-decimal list-inside space-y-1 ml-2">
+                              <li>Open iPhone <strong>Settings</strong> app (⚙️)</li>
+                              <li>Scroll down → Tap <strong>{deviceInfo.isSafari ? 'Safari' : 'Chrome'}</strong></li>
+                              <li>Find <strong>"Motion & Orientation Access"</strong></li>
+                              <li>Toggle it <strong>ON</strong> (turn green)</li>
+                              <li>Return here and refresh/tap "Grant Permissions"</li>
+                            </ol>
+                          </div>
+                          
+                          <div className="mt-2 p-2 bg-status-info/10 border border-status-info/20 rounded">
+                            <p className="text-xs text-status-info">
+                              <strong>Note:</strong> This is optional but highly recommended for accurate tree positioning.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       
-                      <ol className="list-decimal list-inside space-y-1 ml-2">
-                        <li>Open iPhone <strong>Settings</strong> app (⚙️)</li>
-                        <li>Scroll down → Tap <strong>{deviceInfo.isSafari ? 'Safari' : 'Chrome'}</strong></li>
-                        <li>Scroll to <strong>"Motion & Orientation Access"</strong></li>
-                        <li>Toggle it <strong>ON</strong> (turn green)</li>
-                        <li><strong>Return here</strong> and tap "Try Again" below</li>
-                      </ol>
-                      
-                      <div className="mt-3 p-2 bg-status-info/10 border border-status-info/20 rounded">
-                        <p className="text-xs text-status-info">
-                          <strong>Note:</strong> This is optional but highly recommended for accurate tree positioning. If you skip this, we'll use basic GPS coordinates only.
-                        </p>
-                      </div>
+                      {/* Android Instructions */}
+                      {deviceInfo.isAndroid && (
+                        <div className="space-y-2">
+                          <p className="font-semibold text-content-default flex items-center gap-2">
+                            <Smartphone className="w-4 h-4" />
+                            Android - Motion Sensors Access:
+                          </p>
+                          
+                          <div className="space-y-1">
+                            <p className="font-medium text-status-success">Method 1: In-Browser (Quick)</p>
+                            <ol className="list-decimal list-inside space-y-1 ml-2">
+                              <li>Tap the <strong>⋮ (3 dots)</strong> menu in the top-right corner</li>
+                              <li>Tap <strong>"Settings"</strong> or <strong>"Site settings"</strong></li>
+                              <li>Scroll to <strong>"Motion sensors"</strong></li>
+                              <li>Select <strong>"Allow"</strong></li>
+                              <li>Go back and refresh this page</li>
+                            </ol>
+                          </div>
+                          
+                          <div className="space-y-1 mt-2">
+                            <p className="font-medium text-status-success">Method 2: Chrome Settings</p>
+                            <ol className="list-decimal list-inside space-y-1 ml-2">
+                              <li>Tap <strong>🔒 lock icon</strong> or <strong>ⓘ info icon</strong> in address bar</li>
+                              <li>Tap <strong>"Permissions"</strong></li>
+                              <li>Find <strong>"Motion sensors"</strong> → Set to <strong>"Allow"</strong></li>
+                              <li>Refresh the page</li>
+                            </ol>
+                          </div>
+                          
+                          <div className="mt-2 p-2 bg-status-info/10 border border-status-info/20 rounded">
+                            <p className="text-xs text-status-info">
+                              <strong>Note:</strong> Motion sensors help calculate precise tree coordinates from your position.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                   
                   {/* Try Again Button for Compass */}
-                  {showCompassHelp && (
+                  {showCompassHelp && compassStatus === 'DENIED' && (
                     <button 
                       onClick={onRequestPermissions}
                       className="mt-3 w-full px-4 py-2 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors flex items-center justify-center gap-2"
