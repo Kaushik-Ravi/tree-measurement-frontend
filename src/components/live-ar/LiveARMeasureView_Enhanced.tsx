@@ -604,19 +604,52 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
         timestamp: new Date().toISOString()
       });
       
-      // Check if video element is actually visible
+      // Check if video element is actually visible AFTER browser layout pass
       if (videoRef.current) {
-        const rect = videoRef.current.getBoundingClientRect();
-        const computed = window.getComputedStyle(videoRef.current);
-        console.log('[TWO_FLOW_CHOICE] 📹 Video element visibility:', {
-          width: rect.width,
-          height: rect.height,
-          top: rect.top,
-          left: rect.left,
-          opacity: computed.opacity,
-          visibility: computed.visibility,
-          display: computed.display,
-          zIndex: computed.zIndex
+        // Immediate check
+        const rectImmediate = videoRef.current.getBoundingClientRect();
+        const computedImmediate = window.getComputedStyle(videoRef.current);
+        console.log('[TWO_FLOW_CHOICE] 📹 Video IMMEDIATE check:', {
+          width: rectImmediate.width,
+          height: rectImmediate.height,
+          top: rectImmediate.top,
+          left: rectImmediate.left,
+          opacity: computedImmediate.opacity,
+          visibility: computedImmediate.visibility,
+          display: computedImmediate.display,
+          position: computedImmediate.position,
+          zIndex: computedImmediate.zIndex
+        });
+
+        // Check AFTER browser layout completes
+        requestAnimationFrame(() => {
+          if (videoRef.current) {
+            const rect = videoRef.current.getBoundingClientRect();
+            const computed = window.getComputedStyle(videoRef.current);
+            const parent = videoRef.current.parentElement;
+            const parentRect = parent?.getBoundingClientRect();
+            
+            console.log('[TWO_FLOW_CHOICE] 📹 Video AFTER LAYOUT:', {
+              video: {
+                width: rect.width,
+                height: rect.height,
+                top: rect.top,
+                left: rect.left,
+                opacity: computed.opacity,
+                position: computed.position
+              },
+              parent: {
+                width: parentRect?.width || 0,
+                height: parentRect?.height || 0,
+                display: parent ? window.getComputedStyle(parent).display : 'unknown'
+              },
+              videoElement: {
+                videoWidth: videoRef.current.videoWidth,
+                videoHeight: videoRef.current.videoHeight,
+                readyState: videoRef.current.readyState
+              }
+            });
+          }
         });
       }
     }
@@ -2234,20 +2267,42 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   console.log('[LiveAR RENDER] State:', state, '| Video ref:', !!videoRef.current, '| Stream:', !!streamRef.current);
   
   return (
-    <div className="fixed inset-0 w-full h-full bg-black z-50 flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black z-50"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw', 
+        height: '100vh',
+        overflow: 'hidden'
+      }}
+    >
       {/* PERSISTENT VIDEO ELEMENT - Always rendered, never unmounts */}
       <div
-        className="relative flex-1 w-full overflow-hidden"
+        className="absolute inset-0"
         onClick={(state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? handleVideoTap : undefined}
-        style={{ cursor: (state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? 'crosshair' : 'default' }}
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          cursor: (state === 'CAMERA_READY' || state === 'POINT_SELECTION') ? 'crosshair' : 'default'
+        }}
       >
         <video
           ref={videoRef}
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 w-full h-full object-cover"
           style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
             // Hide video during CAMERA_INITIALIZING to show loading screen
             opacity: state === 'CAMERA_INITIALIZING' ? 0 : 1,
             transition: 'opacity 0.3s ease-in-out'
