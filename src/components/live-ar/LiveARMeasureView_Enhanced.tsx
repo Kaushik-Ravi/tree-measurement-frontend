@@ -571,6 +571,19 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
     }
   }, [state, transitionToCamera]);
 
+  // Diagnostic logging for TWO_FLOW_CHOICE state
+  useEffect(() => {
+    if (state === 'TWO_FLOW_CHOICE') {
+      console.log('[TWO_FLOW_CHOICE] 🎯 State activated - overlay should render', {
+        state,
+        uiDistance,
+        videoPlaying: videoRef.current?.readyState,
+        videoElement: videoRef.current ? 'exists' : 'missing',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [state, uiDistance]);
+
   // --- PHASE E.4: USER-TRIGGERED AR INITIALIZATION (Copy Photo AR ARButton Pattern) ---
   // This function is called ONLY when user taps "Use AR" button
   // Uses Three.js ARButton (battle-tested, handles session lifecycle automatically)
@@ -1761,53 +1774,6 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           </div>
         </div>
       </>
-    );
-  }
-
-  if (state === 'ERROR') {
-    return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center z-50 p-6">
-        <div className="max-w-md bg-red-500/10 border border-red-500 rounded-lg p-6 text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Something Went Wrong</h2>
-          <p className="text-red-200 mb-2">{error}</p>
-          
-          {/* Helpful suggestions based on error type */}
-          {error?.toLowerCase().includes('camera') && (
-            <p className="text-sm text-gray-400 mb-4">
-              💡 Make sure camera permissions are enabled in your browser settings
-            </p>
-          )}
-          {error?.toLowerCase().includes('network') && (
-            <p className="text-sm text-gray-400 mb-4">
-              💡 Check your internet connection and try again
-            </p>
-          )}
-          {!error?.toLowerCase().includes('camera') && !error?.toLowerCase().includes('network') && (
-            <p className="text-sm text-gray-400 mb-4">
-              💡 Try closing and reopening the measurement tool
-            </p>
-          )}
-          
-          <div className="flex gap-2">
-            <button
-              onClick={onCancel}
-              className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-            >
-              Close
-            </button>
-            <button
-              onClick={() => {
-                setError(null);
-                setState('USER_CHOICE');
-              }}
-              className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all font-semibold"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
     );
   }
 
