@@ -1868,9 +1868,9 @@ function App() {
                                 <label className="font-medium text-content-default whitespace-nowrap">Diameter at Breast Height</label>
                                 <div className="relative group">
                                   <Info className="w-4 h-4 text-content-subtle cursor-pointer flex-shrink-0" />
-                                  <div className="absolute left-0 bottom-full mb-2 w-64 bg-background-default text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default shadow-lg z-10">
+                                  <div className="absolute right-0 bottom-full mb-2 w-64 bg-background-default text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default shadow-lg z-10">
                                     Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
-                                    <div className="absolute top-full left-4 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-default"></div>
+                                    <div className="absolute top-full right-4 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-default"></div>
                                   </div>
                                 </div>
                               </div>
