@@ -1,7 +1,7 @@
 // src/components/CommunityGroveView.tsx
-import React from 'react';
+import { useState } from 'react';
 import { PendingTree } from '../apiService';
-import { MapPin, Users, GitMerge, Loader2, ListTree, ArrowLeft } from 'lucide-react';
+import { MapPin, Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock } from 'lucide-react';
 
 interface CommunityGroveViewProps {
   pendingTrees: PendingTree[];
@@ -11,34 +11,95 @@ interface CommunityGroveViewProps {
 }
 
 // --- START: SURGICAL REPLACEMENT (THEMING & STYLING) ---
-const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: string) => void; }) => (
-    <div className="bg-background-default border border-stroke-default rounded-lg shadow-sm overflow-hidden flex flex-col">
-        <div className="relative">
-            <img src={tree.image_url} alt={tree.file_name} className="w-full h-40 object-cover bg-background-inset" />
-            <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-sm">
-                <Users size={12} />
-                <span>{tree.analysis_count}</span>
+const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: string) => void; }) => {
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+
+    // Calculate time since upload
+    const getTimeAgo = (uploadedAt: string) => {
+        const now = new Date();
+        const uploaded = new Date(uploadedAt);
+        const diffMs = now.getTime() - uploaded.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+        return uploaded.toLocaleDateString();
+    };
+
+    return (
+        <div className="bg-background-default border border-stroke-default rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+            <div className="relative bg-background-inset h-40">
+                {/* Loading Spinner */}
+                {!imageLoaded && !imageError && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
+                    </div>
+                )}
+                
+                {/* Image */}
+                <img 
+                    src={tree.image_url} 
+                    alt={tree.file_name}
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    onLoad={() => setImageLoaded(true)}
+                    onError={() => {
+                        setImageError(true);
+                        setImageLoaded(true);
+                    }}
+                />
+
+                {/* Error State */}
+                {imageError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background-inset">
+                        <p className="text-xs text-content-subtle">Image unavailable</p>
+                    </div>
+                )}
+                
+                {/* Analysis Count Badge */}
+                <div className="absolute top-2 right-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-sm">
+                    <Users size={12} />
+                    <span>{tree.analysis_count}</span>
+                </div>
+            </div>
+            
+            <div className="p-3 flex-grow flex flex-col space-y-2">
+                {/* Location - more compact */}
+                <div className="flex items-center gap-1.5 text-xs text-content-subtle">
+                    <MapPin size={12} className="flex-shrink-0" />
+                    <span className="truncate">{tree.latitude?.toFixed(4)}, {tree.longitude?.toFixed(4)}</span>
+                </div>
+                
+                {/* Time Since Upload */}
+                {tree.created_at && (
+                    <div className="flex items-center gap-1.5 text-xs text-content-subtle">
+                        <Clock size={12} className="flex-shrink-0" />
+                        <span>{getTimeAgo(tree.created_at)}</span>
+                    </div>
+                )}
+                
+                {/* File Name - truncated */}
+                <p className="text-xs text-content-subtle/70 truncate" title={tree.file_name}>
+                    {tree.file_name}
+                </p>
+                
+                <div className="flex-grow" />
+                
+                {/* Analyze Button */}
+                <button
+                    onClick={() => onClaimTree(tree.id)}
+                    className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors text-sm"
+                >
+                    <GitMerge size={16} />
+                    Analyze
+                </button>
             </div>
         </div>
-        <div className="p-3 flex-grow flex flex-col">
-            <div className="flex items-center gap-1.5 text-xs text-content-subtle">
-                <MapPin size={12} />
-                <span>{tree.latitude?.toFixed(3)}, {tree.longitude?.toFixed(3)}</span>
-            </div>
-            <p className="text-xs text-content-subtle/70 mt-1">
-                ID: {tree.id.substring(0, 8)}...
-            </p>
-            <div className="flex-grow" />
-            <button
-                onClick={() => onClaimTree(tree.id)}
-                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors text-sm"
-            >
-                <GitMerge size={16} />
-                Analyze
-            </button>
-        </div>
-    </div>
-);
+    );
+};
 
 export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBack }: CommunityGroveViewProps) {
     return (
