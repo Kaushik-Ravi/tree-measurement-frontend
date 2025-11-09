@@ -1,9 +1,12 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, X, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, X, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, Sparkles } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
+// --- START: PREMIUM AR INTEGRATION ---
+import { PremiumARDistance } from './components/ar-distance';
+// --- END: PREMIUM AR INTEGRATION ---
 // --- START: LIVE AR INTEGRATION ---
 import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_Enhanced';
 import { FeatureFlags } from './config/featureFlags';
@@ -183,7 +186,8 @@ function App() {
   
   // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
-  const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // NEW: Live AR mode
+  const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // Live AR mode
+  const [isPremiumARActive, setIsPremiumARActive] = useState(false); // NEW: Premium AR mode (ARKit/ARCore)
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
 
   useEffect(() => {
@@ -1052,10 +1056,31 @@ function App() {
 
   const renderSessionView = () => {
     // 🎯 EXCLUSIVE RENDERING PATTERN (Google Meet/Zoom/Instagram)
-    // When in modal modes (Live AR, AR Ruler), render ONLY that component
+    // When in modal modes (Live AR, AR Ruler, Premium AR), render ONLY that component
     // This prevents UI overlap bugs
 
-    // PRIORITY 1: Live AR Mode (Full-Screen Exclusive)
+    // PRIORITY 1: Premium AR Mode (Full-Screen Exclusive - HIGHEST ACCURACY)
+    if (isPremiumARActive) {
+      return (
+        <PremiumARDistance
+          onDistanceMeasured={(distance, method, accuracy) => {
+            console.log('[App] Premium AR distance measured:', { distance, method, accuracy });
+            setDistance(distance.toFixed(2));
+            setIsPremiumARActive(false);
+            handleDistanceEntered();
+            
+            // Log accuracy for analytics
+            console.log(`[Premium AR] Method: ${method}, Accuracy: ±${(accuracy * 100).toFixed(0)}cm`);
+          }}
+          onCancel={() => {
+            setIsPremiumARActive(false);
+            setInstructionText("Measurement cancelled. Please enter distance manually or try AR again.");
+          }}
+        />
+      );
+    }
+
+    // PRIORITY 2: Live AR Mode (Full-Screen Exclusive)
     if (isLiveARModeActive) {
       return (
         <LiveARMeasureView
@@ -1118,7 +1143,7 @@ function App() {
       );
     }
 
-    // PRIORITY 2: AR Ruler Mode (Full-Screen Exclusive)
+    // PRIORITY 3: AR Ruler Mode (Full-Screen Exclusive - WebXR Fallback)
     if (isArModeActive) {
       return (
         <ARMeasureView
@@ -1134,7 +1159,7 @@ function App() {
       );
     }
 
-    // PRIORITY 3: Photo-Based Workflow (Default Session View)
+    // PRIORITY 4: Photo-Based Workflow (Default Session View)
     return (
       <>
         {appStatus === 'SESSION_AWAITING_PERMISSIONS' && (
@@ -1191,6 +1216,28 @@ function App() {
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
+                {/* --- START: PREMIUM AR DISTANCE (HIGHEST ACCURACY) --- */}
+                <button 
+                  onClick={() => setIsPremiumARActive(true)} 
+                  className="w-full mb-4 flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity shadow-lg"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span>Premium AR Distance</span>
+                      <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-semibold">±2-5cm</span>
+                    </div>
+                    <p className="text-xs opacity-90">ARKit (iOS) / ARCore (Android)</p>
+                  </div>
+                </button>
+
+                <div className="relative my-4 flex items-center">
+                  <div className="flex-grow border-t border-stroke-default"></div>
+                  <span className="flex-shrink mx-4 text-content-subtle text-sm">OR</span>
+                  <div className="flex-grow border-t border-stroke-default"></div>
+                </div>
+                {/* --- END: PREMIUM AR DISTANCE --- */}
+
                 {/* --- START: LIVE AR MODE BUTTON --- */}
                 {FeatureFlags.LIVE_AR_MODE && (
                   <>
