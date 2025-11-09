@@ -362,6 +362,12 @@ function App() {
           setOriginalImageSrc(objectURL);
           setResultImageSrc(objectURL);
           
+          console.log('[Photo Calibration] ✅ IMAGE SOURCES SET:', {
+            originalImageSrc: objectURL.substring(0, 50) + '...',
+            resultImageSrc: objectURL.substring(0, 50) + '...',
+            timestamp: new Date().toISOString()
+          });
+          
           if (typeof focalLengthValue === 'number') {
             // Tier 1 SUCCESS - Use EXIF data
             setFocalLength(focalLengthValue);
@@ -554,13 +560,32 @@ function App() {
   }, [appStatus, focalLength, fovRatio]);
 
   useEffect(() => {
-    if (isLocationPickerActive) return;
+    if (isLocationPickerActive) {
+      console.log('[CANVAS RENDER] ⏭️ Skipped - location picker active');
+      return;
+    }
+    
     const canvas = canvasRef.current;
+    
+    console.log('[CANVAS RENDER] 🎨 Attempting to render canvas...', {
+      hasCanvas: !!canvas,
+      resultImageSrc: resultImageSrc ? 'SET (' + resultImageSrc.substring(0, 30) + '...)' : 'EMPTY',
+      originalImageSrc: originalImageSrc ? 'SET (' + originalImageSrc.substring(0, 30) + '...)' : 'EMPTY',
+      willUseSource: resultImageSrc ? 'resultImageSrc' : (originalImageSrc ? 'originalImageSrc (fallback)' : 'NONE')
+    });
     
     // FALLBACK FIX: Use originalImageSrc if resultImageSrc is not available
     // This handles cases where image display is lost (e.g., returning from calibration)
     const imageSource = resultImageSrc || originalImageSrc;
-    if (!canvas || !imageSource) return;
+    if (!canvas || !imageSource) {
+      console.log('[CANVAS RENDER] ❌ Cannot render - missing:', {
+        canvas: !!canvas,
+        imageSource: !!imageSource
+      });
+      return;
+    }
+    
+    console.log('[CANVAS RENDER] ✅ Rendering with source:', imageSource.substring(0, 50) + '...');
     
     const ctx = canvas.getContext('2d'); if (!ctx) return;
     const img = new Image(); img.src = imageSource;
@@ -585,16 +610,29 @@ function App() {
   // CRITICAL FIX: Restore image sources after returning from AR mode
   // When AR Ruler is used, the photo view unmounts. When returning, we need to restore the image.
   useEffect(() => {
+    console.log('[AR RETURN FIX] Checking if image restoration needed...', {
+      isArModeActive,
+      isLiveARModeActive,
+      hasCurrentMeasurementFile: !!currentMeasurementFile,
+      currentMeasurementFileName: currentMeasurementFile?.name,
+      hasOriginalImageSrc: !!originalImageSrc,
+      currentView
+    });
+    
     // Only restore if:
     // 1. Not in AR mode anymore
     // 2. We have a measurement file (photo was uploaded)
     // 3. Image sources are missing
     // 4. Not in calibration view
     if (!isArModeActive && !isLiveARModeActive && currentMeasurementFile && !originalImageSrc && currentView === 'SESSION') {
-      console.log('[AR Return Fix] Restoring image sources after AR measurement');
+      console.log('[AR RETURN FIX] ⚠️ RESTORING IMAGE SOURCES - originalImageSrc was missing!');
       const objURL = URL.createObjectURL(currentMeasurementFile);
+      console.log('[AR RETURN FIX] Created new object URL:', objURL.substring(0, 50) + '...');
       setOriginalImageSrc(objURL);
       setResultImageSrc(objURL);
+      console.log('[AR RETURN FIX] ✅ Image sources restored');
+    } else {
+      console.log('[AR RETURN FIX] ℹ️ No restoration needed');
     }
   }, [isArModeActive, isLiveARModeActive, currentMeasurementFile, originalImageSrc, currentView]);
   
@@ -815,6 +853,7 @@ function App() {
     const file = event.target.files?.[0]; 
     if (!file) return;
 
+    console.log('[IMAGE UPLOAD] 📸 Photo uploaded:', file.name);
     setCapturedHeading(deviceHeading); 
 
     setAppStatus('SESSION_PROCESSING_PHOTO');
@@ -831,6 +870,7 @@ function App() {
     setDbhGuideRect(null);
     setPendingTreeFile(null);
     setImageDimensions(null);
+    console.log('[IMAGE UPLOAD] ✅ File set, waiting for processing useEffect...');
   };
   
   const handleDeleteResult = async (idToDelete: string) => {
@@ -1345,6 +1385,11 @@ function App() {
       fovRatio: fovRatio,
       hasCalibration: !!(focalLength || fovRatio)
     });
+    console.log('[Distance Entry] 🖼️ Image sources status:', {
+      originalImageSrc: originalImageSrc ? 'SET (' + originalImageSrc.substring(0, 30) + '...)' : 'EMPTY',
+      resultImageSrc: resultImageSrc ? 'SET (' + resultImageSrc.substring(0, 30) + '...)' : 'EMPTY',
+      currentMeasurementFile: currentMeasurementFile?.name || 'NONE'
+    });
     console.log('[Distance Entry] Proceeding to analysis choice...');
     
     setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE');
@@ -1448,14 +1493,22 @@ function App() {
 
     // PRIORITY 3: AR Ruler Mode (Full-Screen Exclusive - WebXR Fallback)
     if (isArModeActive) {
+      console.log('[AR MODE] 🎯 AR Mode is ACTIVE - rendering ARMeasureView');
       return (
         <ARMeasureView
           onDistanceMeasured={(measuredDistance) => {
+            console.log('[AR MODE] ✅ Distance measured:', measuredDistance, 'meters');
+            console.log('[AR MODE] 🖼️ Image sources BEFORE handleDistanceEntered:', {
+              originalImageSrc: originalImageSrc ? 'SET' : 'EMPTY',
+              resultImageSrc: resultImageSrc ? 'SET' : 'EMPTY',
+              currentMeasurementFile: currentMeasurementFile?.name || 'NONE'
+            });
             setDistance(measuredDistance.toFixed(2));
             setIsArModeActive(false);
             handleDistanceEntered();
           }}
           onCancel={() => {
+            console.log('[AR MODE] ❌ AR measurement cancelled');
             setIsArModeActive(false);
           }}
         />
