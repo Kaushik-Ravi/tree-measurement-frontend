@@ -451,3 +451,18 @@ canvas {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
+/* Ensure Leaflet map doesn't interfere with modals */
+.leaflet-container {
+  z-index: 1;
+}
+
+.leaflet-pane {
+  z-index: auto;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1000;
+}
+
+

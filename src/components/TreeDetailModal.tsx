@@ -26,13 +26,22 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
       }
     };
     
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+    // Prevent body scroll when modal is open
+    if (tree) {
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    
+    return () => {
+      document.body.style.overflow = 'unset';
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose, tree]);
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+      style={{ zIndex: 9999 }}
       onClick={handleBackdropClick}
     >
       <div 
@@ -113,34 +122,100 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
             </div>
           )}
 
-          {/* Additional Details */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            {tree.distance_m && (
-              <div>
-                <p className="font-semibold text-content-default">Distance</p>
-                <p className="text-content-subtle">{tree.distance_m.toFixed(2)} m</p>
-              </div>
-            )}
-            {tree.condition && (
-              <div>
-                <p className="font-semibold text-content-default">Condition</p>
-                <p className="text-content-subtle">{tree.condition}</p>
-              </div>
-            )}
-            {tree.ownership && (
-              <div>
-                <p className="font-semibold text-content-default">Ownership</p>
-                <p className="text-content-subtle">{tree.ownership}</p>
-              </div>
-            )}
+          {/* Wood Density */}
+          {tree.wood_density && (
             <div>
-              <p className="font-semibold text-content-default flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                Recorded
-              </p>
-              <p className="text-content-subtle">
-                {new Date(tree.created_at).toLocaleDateString()}
-              </p>
+              <h3 className="text-sm font-semibold text-content-default mb-2">Wood Density</h3>
+              <div className="bg-background-subtle p-3 rounded-lg border border-stroke-subtle">
+                <p className="text-sm text-content-default">
+                  <span className="font-semibold">{tree.wood_density.value?.toFixed(3) ?? '--'}</span> {tree.wood_density.unit}
+                </p>
+                {tree.wood_density.sourceSpecies && (
+                  <p className="text-xs text-content-subtle mt-1">Source: {tree.wood_density.sourceSpecies}</p>
+                )}
+                {tree.wood_density.sourceRegion && (
+                  <p className="text-xs text-content-subtle">Region: {tree.wood_density.sourceRegion}</p>
+                )}
+                {tree.wood_density.matchScore !== undefined && (
+                  <p className="text-xs text-content-subtle">Match Score: {(tree.wood_density.matchScore * 100).toFixed(1)}%</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Additional Details Grid */}
+          <div>
+            <h3 className="text-sm font-semibold text-content-default uppercase tracking-wide mb-3">
+              Additional Information
+            </h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              {tree.distance_m !== undefined && tree.distance_m !== null && (
+                <div>
+                  <p className="font-semibold text-content-default">Distance</p>
+                  <p className="text-content-subtle">{tree.distance_m.toFixed(2)} m</p>
+                </div>
+              )}
+              {tree.scale_factor !== undefined && tree.scale_factor !== null && (
+                <div>
+                  <p className="font-semibold text-content-default">Scale Factor</p>
+                  <p className="text-content-subtle font-mono">{tree.scale_factor.toFixed(4)}</p>
+                </div>
+              )}
+              {tree.device_heading !== undefined && tree.device_heading !== null && (
+                <div>
+                  <p className="font-semibold text-content-default">Device Heading</p>
+                  <p className="text-content-subtle">{tree.device_heading.toFixed(1)}°</p>
+                </div>
+              )}
+              {tree.condition && (
+                <div>
+                  <p className="font-semibold text-content-default">Condition</p>
+                  <p className="text-content-subtle capitalize">{tree.condition}</p>
+                </div>
+              )}
+              {tree.ownership && (
+                <div>
+                  <p className="font-semibold text-content-default">Ownership</p>
+                  <p className="text-content-subtle capitalize">{tree.ownership}</p>
+                </div>
+              )}
+              {tree.status && (
+                <div>
+                  <p className="font-semibold text-content-default">Status</p>
+                  <p className={`font-medium ${
+                    tree.status === 'COMPLETE' 
+                      ? 'text-status-success'
+                      : tree.status === 'VERIFIED'
+                      ? 'text-brand-secondary'
+                      : tree.status === 'PENDING_ANALYSIS'
+                      ? 'text-brand-accent'
+                      : 'text-content-subtle'
+                  }`}>
+                    {tree.status}
+                  </p>
+                </div>
+              )}
+              <div>
+                <p className="font-semibold text-content-default flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  Recorded
+                </p>
+                <p className="text-content-subtle">
+                  {new Date(tree.created_at).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+              {tree.file_name && (
+                <div>
+                  <p className="font-semibold text-content-default">File Name</p>
+                  <p className="text-content-subtle text-xs truncate">{tree.file_name}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -157,7 +232,7 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
                 rel="noopener noreferrer"
                 className="text-brand-secondary hover:underline flex items-center gap-1 text-sm"
               >
-                {tree.latitude.toFixed(4)}, {tree.longitude.toFixed(4)}
+                {tree.latitude.toFixed(6)}, {tree.longitude.toFixed(6)}
               </a>
             </div>
           )}
@@ -166,7 +241,7 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
           {tree.remarks && (
             <div>
               <p className="font-semibold text-content-default mb-2">Remarks</p>
-              <p className="text-content-subtle text-sm whitespace-pre-wrap break-words bg-background-subtle p-3 rounded-lg">
+              <p className="text-content-subtle text-sm whitespace-pre-wrap break-words bg-background-subtle p-3 rounded-lg border border-stroke-subtle">
                 {tree.remarks}
               </p>
             </div>
