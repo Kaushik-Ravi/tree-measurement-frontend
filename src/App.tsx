@@ -605,7 +605,7 @@ function App() {
       if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
       refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
     };
-  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
+  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive]);
   
   // CRITICAL FIX: Restore image sources after returning from AR mode
   // When AR Ruler is used, the photo view unmounts. When returning, we need to restore the image.
