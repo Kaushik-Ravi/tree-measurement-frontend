@@ -921,13 +921,14 @@ function App() {
           height: response.metrics.height_m,
           canopy: response.metrics.canopy_m,
           dbh: response.metrics.dbh_cm,
-          scaleFactor: response.scale_factor
+          scaleFactor: response.scale_factor,
+          performance: response.performance
         });
         
         setMaskGenerated(true);
         setScaleFactor(response.scale_factor); 
-        setDbhLine(response.dbh_line_coords); 
-        setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
+        setDbhLine(response.dbh_line_coords);
+        setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`);
         handleMeasurementSuccess(response.metrics);
     } catch (error: any) { 
         console.error('[SAM Measurement] ❌ Segmentation failed:', error);
@@ -1044,7 +1045,27 @@ function App() {
       } 
   };
 
-  const handleApplyRefinements = async () => { if (refinePoints.length === 0 || !currentMeasurementFile) return; try { setAppStatus('ANALYSIS_PROCESSING'); setIsPanelOpen(true); setInstructionText(`Re-running segmentation...`); const response = await samRefineWithPoints(currentMeasurementFile, refinePoints, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setDbhLine(response.dbh_line_coords); setRefinePoints([]); setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
+  const handleApplyRefinements = async () => {
+    if (refinePoints.length === 0 || !currentMeasurementFile) return;
+    
+    try {
+      setAppStatus('ANALYSIS_PROCESSING');
+      setIsPanelOpen(true);
+      setInstructionText(`Re-running segmentation...`);
+      
+      const response = await samRefineWithPoints(currentMeasurementFile, refinePoints, scaleFactor!);
+      
+      if (response.status !== 'success') throw new Error(response.message);
+      
+      setDbhLine(response.dbh_line_coords);
+      setRefinePoints([]);
+      setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`);
+      handleMeasurementSuccess(response.metrics);
+    } catch(error: any) {
+      setAppStatus('ERROR');
+      setErrorMessage(error.message);
+    }
+  };
   const handleCalculateManual = async () => { try { setAppStatus('ANALYSIS_PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
   
   const handleSaveResult = async () => {
@@ -1621,8 +1642,26 @@ function App() {
             {maskGenerated && <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-brand-secondary hover:underline">View Masked Image</button>}
             </div> 
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stroke-subtle"> 
-              {maskGenerated && <button onClick={() => { setIsLocationPickerActive(false); setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); setIsPanelOpen(false); setInstructionText("Click points to fix the tree's outline."); setShowInstructionToast(true); }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
-            <button onClick={() => { if (currentMeasurementFile && scaleFactor) { setIsLocationPickerActive(false); setResultImageSrc(originalImageSrc); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); } }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
+              {maskGenerated && <button onClick={() => { 
+                setIsLocationPickerActive(false); 
+                setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); 
+                setIsPanelOpen(false); 
+                setInstructionText("Click points to fix the tree's outline."); 
+                setShowInstructionToast(true); 
+              }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
+            <button onClick={() => { 
+              if (currentMeasurementFile && scaleFactor) { 
+                setIsLocationPickerActive(false); 
+                setResultImageSrc(originalImageSrc); 
+                setCurrentMetrics(null); 
+                setDbhLine(null); 
+                setRefinePoints([]); 
+                setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); 
+                setIsPanelOpen(false); 
+                setInstructionText("Manual Mode: Click the exact base of the tree trunk."); 
+                setShowInstructionToast(true); 
+              } 
+            }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
             <div className="space-y-4 border-t border-stroke-subtle pt-4"> 
               <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
               <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
