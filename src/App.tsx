@@ -18,7 +18,6 @@ import {
 import { CalibrationView } from './components/CalibrationView';
 import { ResultsTable } from './components/ResultsTable';
 import { SpeciesIdentifier } from './components/SpeciesIdentifier';
-import { CO2ResultCard } from './components/CO2ResultCard';
 import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDetailsForm';
 import { LocationPicker } from './components/LocationPicker';
 import { InstructionToast } from './components/InstructionToast';
@@ -1862,16 +1861,23 @@ function App() {
                           <label className="font-medium text-content-default">Canopy:</label>
                           <span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span>
                         </div>
-                        <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
-                          <div className="flex items-center gap-2 relative group min-w-0">
-                            <label className="font-medium text-content-default truncate">Diameter at Breast Height (DBH):</label>
-                            <Info className="w-4 h-4 text-content-subtle cursor-pointer flex-shrink-0" />
-                            <div className="absolute bottom-full mb-2 w-60 bg-background-default text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default shadow-lg z-10">
-                              Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-default"></div>
+                        <div className="flex justify-between items-start p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                          <div className="flex items-start gap-2 flex-1">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <label className="font-medium text-content-default whitespace-nowrap">Diameter at Breast Height</label>
+                                <div className="relative group">
+                                  <Info className="w-4 h-4 text-content-subtle cursor-pointer flex-shrink-0" />
+                                  <div className="absolute left-0 bottom-full mb-2 w-64 bg-background-default text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default shadow-lg z-10">
+                                    Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
+                                    <div className="absolute top-full left-4 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-default"></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-xs text-content-subtle">(DBH)</span>
                             </div>
                           </div>
-                          <span className="font-mono text-lg text-content-default">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
+                          <span className="font-mono text-lg text-content-default ml-2">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
                         </div>
                       </div>
                       {maskGenerated && (
@@ -1937,16 +1943,17 @@ function App() {
                     <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.species ? 'rotate-180' : ''}`} />
                   </button>
                   {expandedSections.species && (
-                    <div className="px-4 pb-4 space-y-3">
+                    <div className="px-4 pb-4">
                       <SpeciesIdentifier 
                         onIdentificationComplete={setCurrentIdentification} 
                         onClear={() => setCurrentIdentification(null)} 
                         existingResult={currentIdentification} 
                         mainImageFile={currentMeasurementFile} 
                         mainImageSrc={originalImageSrc} 
-                        analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} 
+                        analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'}
+                        co2Value={currentCO2}
+                        isCO2Loading={isCO2Calculating}
                       />
-                      <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
                     </div>
                   )}
                 </div>
@@ -1998,7 +2005,7 @@ function App() {
                         ) : (
                           <div className="w-5 h-5 rounded-full border-2 border-stroke-default flex-shrink-0" />
                         )}
-                        <span className="font-semibold text-content-default">Additional Details</span>
+                        <span className="font-semibold text-content-default">Additional Details <span className="text-xs font-normal text-content-subtle">(Optional)</span></span>
                       </div>
                       <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.additionalDetails ? 'rotate-180' : ''}`} />
                     </button>

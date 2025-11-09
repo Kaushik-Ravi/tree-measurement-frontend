@@ -1,6 +1,4 @@
 // src/components/AdditionalDetailsForm.tsx
-import React from 'react';
-import { ChevronDown, Edit3 } from 'lucide-react';
 
 export interface AdditionalData {
   condition: string;
@@ -23,52 +21,43 @@ const ownershipOptions = [
 // --- START: SURGICAL REPLACEMENT (THEMING) ---
 export function AdditionalDetailsForm({ data, onUpdate }: AdditionalDetailsFormProps) {
   return (
-    <details className="group border border-stroke-default rounded-lg bg-background-default">
-      <summary className="flex items-center justify-between p-3 cursor-pointer list-none hover:bg-background-subtle rounded-t-lg">
-        <div className="flex items-center gap-2">
-            <Edit3 className="w-5 h-5 text-content-subtle" />
-            <span className="text-sm font-medium text-content-default">Additional Details (Optional)</span>
-        </div>
-        <ChevronDown className="w-5 h-5 text-content-subtle transition-transform duration-200 group-open:rotate-180" />
-      </summary>
-      <div className="p-4 border-t border-stroke-default space-y-4">
-        <div>
-          <label htmlFor="condition" className="block text-xs font-medium text-content-subtle mb-1">Condition</label>
-          <select
-            id="condition"
-            value={data.condition}
-            onChange={(e) => onUpdate('condition', e.target.value)}
-            className="w-full p-2 border border-stroke-default rounded-md text-sm bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
-          >
-            <option value="">Select condition...</option>
-            {conditionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="ownership" className="block text-xs font-medium text-content-subtle mb-1">Ownership</label>
-          <select
-            id="ownership"
-            value={data.ownership}
-            onChange={(e) => onUpdate('ownership', e.target.value)}
-            className="w-full p-2 border border-stroke-default rounded-md text-sm bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
-          >
-            <option value="">Select ownership...</option>
-            {ownershipOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="remarks" className="block text-xs font-medium text-content-subtle mb-1">Remarks</label>
-          <textarea
-            id="remarks"
-            value={data.remarks}
-            onChange={(e) => onUpdate('remarks', e.target.value)}
-            rows={3}
-            placeholder="e.g., Leaning towards east, evidence of fungal growth..."
-            className="w-full p-2 border border-stroke-default rounded-md text-sm resize-y bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
-          />
-        </div>
+    <div className="space-y-4">
+      <div>
+        <label htmlFor="condition" className="block text-xs font-medium text-content-subtle mb-1">Condition</label>
+        <select
+          id="condition"
+          value={data.condition}
+          onChange={(e) => onUpdate('condition', e.target.value)}
+          className="w-full p-2 border border-stroke-default rounded-md text-sm bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
+        >
+          <option value="">Select condition...</option>
+          {conditionOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
       </div>
-    </details>
+      <div>
+        <label htmlFor="ownership" className="block text-xs font-medium text-content-subtle mb-1">Ownership</label>
+        <select
+          id="ownership"
+          value={data.ownership}
+          onChange={(e) => onUpdate('ownership', e.target.value)}
+          className="w-full p-2 border border-stroke-default rounded-md text-sm bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
+        >
+          <option value="">Select ownership...</option>
+          {ownershipOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      </div>
+      <div>
+        <label htmlFor="remarks" className="block text-xs font-medium text-content-subtle mb-1">Remarks</label>
+        <textarea
+          id="remarks"
+          value={data.remarks}
+          onChange={(e) => onUpdate('remarks', e.target.value)}
+          rows={3}
+          placeholder="e.g., Leaning towards east, evidence of fungal growth..."
+          className="w-full p-2 border border-stroke-default rounded-md text-sm resize-y bg-background-default text-content-default focus:ring-2 focus:ring-brand-primary"
+        />
+      </div>
+    </div>
   );
 }
 // --- END: SURGICAL REPLACEMENT (THEMING) ---
