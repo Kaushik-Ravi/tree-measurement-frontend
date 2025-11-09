@@ -12,6 +12,12 @@ interface ARMeasureViewProps {
 type ARState = 'SCANNING' | 'READY_TO_PLACE_FIRST' | 'READY_TO_PLACE_SECOND' | 'COMPLETE';
 
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
+  console.log('📐 ========================================');
+  console.log('📐 WebXR AR Ruler Component Mounted');
+  console.log('📐 THIS USES OLD WEBXR (±15-30cm accuracy)');
+  console.log('📐 NOT ARKit or ARCore!');
+  console.log('📐 ========================================');
+  
   // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
   const arStateRef = useRef<ARState>('SCANNING');
   const distanceRef = useRef<number | null>(null);

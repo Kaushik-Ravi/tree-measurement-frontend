@@ -47,10 +47,17 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
   const arSessionActive = useRef(false);
 
   useEffect(() => {
+    console.log('🤖 ========================================');
+    console.log('🤖 Android ARCore Component Mounted');
+    console.log('🤖 THIS USES ARCORE - NOT WEBXR!');
+    console.log('🤖 ========================================');
+    console.log('🤖 User Agent:', navigator.userAgent);
+    console.log('🤖 Platform:', navigator.platform);
     checkARCoreSupport();
   }, []);
 
   const checkARCoreSupport = async () => {
+    console.log('🔍 [Android ARCore] Checking AR support...');
     // Check if device supports AR
     // Model-viewer will handle ARCore detection automatically
     
@@ -58,22 +65,27 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
     // Available on: Pixel 4+, Samsung S20+, OnePlus 8 Pro, etc.
     const hasDepth = detectDepthAPISupport();
     setHasDepthAPI(hasDepth);
+    console.log('🔍 [Android ARCore] Depth API Support:', hasDepth);
 
     // Check if model-viewer is loaded
     if (!('model-viewer' in window)) {
+      console.log('⚠️ [Android ARCore] Model-viewer not loaded, loading now...');
       const script = document.createElement('script');
       script.type = 'module';
       script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js';
       document.head.appendChild(script);
       
       script.onload = () => {
+        console.log('✅ [Android ARCore] Model-viewer loaded');
         setState('LOADING');
       };
       script.onerror = () => {
+        console.error('❌ [Android ARCore] Failed to load model-viewer');
         setErrorMessage('Failed to load AR system. Please refresh the page.');
         setState('ERROR');
       };
     } else {
+      console.log('✅ [Android ARCore] Model-viewer already loaded');
       setState('LOADING');
     }
   };

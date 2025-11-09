@@ -43,6 +43,13 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
   const arSessionActive = useRef(false);
 
   useEffect(() => {
+    console.log('📱 ========================================');
+    console.log('📱 iOS ARKit Component Mounted');
+    console.log('📱 THIS USES ARKIT - NOT WEBXR!');
+    console.log('📱 ========================================');
+    console.log('📱 User Agent:', navigator.userAgent);
+    console.log('📱 Platform:', navigator.platform);
+    
     // Check if model-viewer is supported
     if (!('model-viewer' in window)) {
       // Model-viewer script should be loaded via package.json
@@ -73,12 +80,16 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
   };
 
   const handleModelLoad = () => {
-    console.log('[iOS ARKit] 3D model loaded successfully');
+    console.log('✅ [iOS ARKit] 3D model loaded successfully');
+    console.log('✅ [iOS ARKit] AR is READY - Waiting for user to tap "View in AR"');
     setState('READY');
   };
 
   const handleARStatus = (event: any) => {
     const status = event.detail.status;
+    console.log('🎯 ========================================');
+    console.log('🎯 [iOS ARKit] AR STATUS CHANGED:', status);
+    console.log('🎯 ========================================');
     console.log('[iOS ARKit] AR Status:', status);
 
     if (status === 'session-started') {
