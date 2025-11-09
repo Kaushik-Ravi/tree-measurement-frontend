@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/model-viewer": "^3.3.0",
+    "@google/model-viewer": "3.5.0",
     "@supabase/supabase-js": "^2.75.0",
     "exifreader": "^4.31.0",
     "leaflet": "^1.9.4",
@@ -20,7 +20,7 @@
     "react-dom": "^18.3.1",
     "react-image-crop": "^11.0.5",
     "react-leaflet": "^4.2.1",
-    "three": "^0.163.0"
+    "three": "0.163.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.12.0",

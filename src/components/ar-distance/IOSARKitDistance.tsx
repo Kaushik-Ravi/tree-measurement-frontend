@@ -42,32 +42,39 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
   const modelViewerRef = useRef<any>(null);
   const arSessionActive = useRef(false);
 
-  useEffect(() => {
-    console.log('📱 ========================================');
-    console.log('📱 iOS ARKit Component Mounted');
-    console.log('📱 THIS USES ARKIT - NOT WEBXR!');
-    console.log('📱 ========================================');
-    console.log('📱 User Agent:', navigator.userAgent);
-    console.log('📱 Platform:', navigator.platform);
-    
-    // Check if model-viewer is supported
-    if (!('model-viewer' in window)) {
-      // Model-viewer script should be loaded via package.json
-      // If not, dynamically load it
-      const script = document.createElement('script');
-      script.type = 'module';
-      script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js';
-      document.head.appendChild(script);
-      
-      script.onload = () => setState('READY');
-      script.onerror = () => {
-        setErrorMessage('Failed to load AR system. Please refresh.');
+    useEffect(() => {
+      // Guarded loading: avoid injecting model-viewer if it's already registered
+      // or already available via package import. This prevents duplicate
+      // Three.js instances and CustomElementRegistry define errors.
+      try {
+        const isRegistered = !!(window && (window as any).customElements && (window as any).customElements.get('model-viewer'));
+
+        if (isRegistered || 'model-viewer' in window) {
+          console.log('✅ [iOS ARKit] model-viewer already available - skipping dynamic load');
+          setState('READY');
+          return;
+        }
+
+        // Only inject fallback script when model-viewer is not registered
+        console.log('⚠️ [iOS ARKit] model-viewer not present - injecting fallback script');
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js';
+        // small guard: don't inject if another script tag for model-viewer exists
+        const alreadyScript = Array.from(document.getElementsByTagName('script')).some(s => s.getAttribute('src')?.includes('model-viewer'));
+        if (!alreadyScript) document.head.appendChild(script);
+
+        script.onload = () => setState('READY');
+        script.onerror = () => {
+          setErrorMessage('Failed to load AR system. Please refresh.');
+          setState('ERROR');
+        };
+      } catch (err) {
+        console.error('❌ [iOS ARKit] Error while checking/injecting model-viewer', err);
+        setErrorMessage('Failed to initialize AR system.');
         setState('ERROR');
-      };
-    } else {
-      setState('READY');
-    }
-  }, []);
+      }
+    }, []);
 
   const handleARSessionStart = () => {
     const modelViewer = modelViewerRef.current;
@@ -190,9 +197,9 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
       {/* Model Viewer (Hidden until AR activated) */}
       <model-viewer
         ref={modelViewerRef}
-        src="/models/distance-marker.glb" // We'll create this simple marker model
+        src="/models/distance-marker.glb"
         ar
-        ar-modes="quick-look scene-viewer webxr" // iOS Quick Look first, then fallbacks
+        ar-modes="quick-look scene-viewer webxr"
         ar-scale="fixed"
         camera-controls
         shadow-intensity="1"
@@ -208,97 +215,7 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
         onLoad={handleModelLoad}
         // @ts-ignore - model-viewer custom events
         onArStatus={handleARStatus}
-      >
-        {/* AR Button (triggers native AR) */}
-        <button
-          slot="ar-button"
-          style={{ display: 'none' }} // We control activation programmatically
-        >
-          Activate AR
-        </button>
-      </model-viewer>
-
-      {/* UI Overlays based on state */}
-      {state === 'LOADING' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background-default">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 text-brand-primary animate-spin mx-auto mb-4" />
-            <p className="text-content-default font-medium">Loading AR System...</p>
-            <p className="text-content-subtle text-sm mt-2">Preparing ARKit integration</p>
-          </div>
-        </div>
-      )}
-
-      {state === 'READY' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-primary/10 to-brand-secondary/10 p-6">
-          <div className="max-w-md w-full bg-background-default rounded-2xl shadow-2xl p-8">
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 rounded-full bg-brand-primary/20 flex items-center justify-center mx-auto mb-4">
-                <Target className="w-10 h-10 text-brand-primary" />
-              </div>
-              <h3 className="text-2xl font-bold text-content-default mb-2">
-                Premium AR Distance
-              </h3>
-              <p className="text-content-subtle">
-                Using native ARKit for maximum accuracy
-              </p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="flex items-start gap-3 p-3 bg-background-subtle rounded-lg">
-                <div className="w-6 h-6 rounded-full bg-status-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-status-success text-xs font-bold">1</span>
-                </div>
-                <div>
-                  <p className="text-content-default font-medium text-sm">Point at Tree Base</p>
-                  <p className="text-content-subtle text-xs mt-0.5">
-                    Aim your camera at the base of the tree trunk
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-background-subtle rounded-lg">
-                <div className="w-6 h-6 rounded-full bg-status-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-status-success text-xs font-bold">2</span>
-                </div>
-                <div>
-                  <p className="text-content-default font-medium text-sm">Place Marker</p>
-                  <p className="text-content-subtle text-xs mt-0.5">
-                    Tap to place the measurement marker on the ground
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-background-subtle rounded-lg">
-                <div className="w-6 h-6 rounded-full bg-status-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-status-success text-xs font-bold">3</span>
-                </div>
-                <div>
-                  <p className="text-content-default font-medium text-sm">Get Distance</p>
-                  <p className="text-content-subtle text-xs mt-0.5">
-                    ARKit calculates precise distance automatically
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 bg-status-info/10 border border-status-info/20 rounded-lg mb-6">
-              <p className="text-xs text-status-info">
-                <strong>Accuracy:</strong> ±2-5cm on devices with LiDAR (iPhone 12 Pro+), 
-                ±5-10cm on other devices. This is 5-10x more accurate than manual measurement.
-              </p>
-            </div>
-
-            <button
-              onClick={handleARSessionStart}
-              className="w-full py-4 bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-bold rounded-xl hover:opacity-90 transition-opacity shadow-lg flex items-center justify-center gap-2"
-            >
-              <Camera className="w-5 h-5" />
-              Start AR Measurement
-            </button>
-          </div>
-        </div>
-      )}
+      />
 
       {state === 'AR_ACTIVE' && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6 pb-8">

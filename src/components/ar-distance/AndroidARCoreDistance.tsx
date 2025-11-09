@@ -67,26 +67,40 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
     setHasDepthAPI(hasDepth);
     console.log('🔍 [Android ARCore] Depth API Support:', hasDepth);
 
-    // Check if model-viewer is loaded
-    if (!('model-viewer' in window)) {
-      console.log('⚠️ [Android ARCore] Model-viewer not loaded, loading now...');
-      const script = document.createElement('script');
-      script.type = 'module';
-      script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js';
-      document.head.appendChild(script);
-      
-      script.onload = () => {
-        console.log('✅ [Android ARCore] Model-viewer loaded');
+    // Check if model-viewer is loaded (guard to avoid double registration)
+    try {
+      const isRegistered = !!(window && (window as any).customElements && (window as any).customElements.get('model-viewer'));
+      if (isRegistered || 'model-viewer' in window) {
+        console.log('✅ [Android ARCore] model-viewer already available - skipping dynamic load');
         setState('LOADING');
-      };
-      script.onerror = () => {
-        console.error('❌ [Android ARCore] Failed to load model-viewer');
-        setErrorMessage('Failed to load AR system. Please refresh the page.');
-        setState('ERROR');
-      };
-    } else {
-      console.log('✅ [Android ARCore] Model-viewer already loaded');
-      setState('LOADING');
+        return;
+      }
+
+      console.log('⚠️ [Android ARCore] model-viewer not present - injecting fallback script');
+      const alreadyScript = Array.from(document.getElementsByTagName('script')).some(s => s.getAttribute('src')?.includes('model-viewer'));
+      if (!alreadyScript) {
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js';
+        document.head.appendChild(script);
+
+        script.onload = () => {
+          console.log('✅ [Android ARCore] Model-viewer loaded');
+          setState('LOADING');
+        };
+        script.onerror = () => {
+          console.error('❌ [Android ARCore] Failed to load model-viewer');
+          setErrorMessage('Failed to load AR system. Please refresh the page.');
+          setState('ERROR');
+        };
+      } else {
+        console.log('⚠️ [Android ARCore] model-viewer script tag already present, waiting for load');
+        setState('LOADING');
+      }
+    } catch (err) {
+      console.error('❌ [Android ARCore] Error checking/injecting model-viewer', err);
+      setErrorMessage('Failed to initialize AR system.');
+      setState('ERROR');
     }
   };
 
