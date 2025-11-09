@@ -325,10 +325,14 @@ function App() {
     triggerCO2Calculation();
   }, [currentMetrics, currentIdentification]);
 
+  // --- PHASE: 3-TIER CALIBRATION INTEGRATION FOR PHOTO METHOD ---
   useEffect(() => {
     if (appStatus !== 'SESSION_PROCESSING_PHOTO' || !currentMeasurementFile) return;
+    
     const processImage = async () => {
+      console.log('[Photo Calibration] 🎯 Starting 3-tier calibration workflow');
       setInstructionText("Analyzing image metadata...");
+      
       try {
         const tempImage = new Image();
         const objectURL = URL.createObjectURL(currentMeasurementFile);
@@ -336,6 +340,10 @@ function App() {
 
         tempImage.onload = async () => {
           setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
+          console.log('[Photo Calibration] Image dimensions:', tempImage.naturalWidth, 'x', tempImage.naturalHeight);
+          
+          // --- TIER 1: EXIF EXTRACTION (Best Accuracy) ---
+          console.log('[Photo Calibration Tier 1] 📸 Attempting EXIF extraction...');
           const tags = await ExifReader.load(currentMeasurementFile);
           
           let focalLengthValue: number | null = null;
@@ -345,31 +353,208 @@ function App() {
           
           if (typeof focalLengthIn35mm === 'number') {
             focalLengthValue = focalLengthIn35mm;
+            console.log('[Photo Calibration Tier 1] ✅ SUCCESS - FocalLengthIn35mmFilm:', focalLengthValue, 'mm');
           } else if (typeof rawFocalLength === 'number' && typeof scaleFactor35 === 'number') {
             focalLengthValue = rawFocalLength * scaleFactor35;
+            console.log('[Photo Calibration Tier 1] ✅ SUCCESS - Calculated from raw focal length:', focalLengthValue, 'mm');
+          } else {
+            console.log('[Photo Calibration Tier 1] ⚠️ FAILED - No EXIF focal length data found');
+            console.log('[Photo Calibration Tier 1] Available tags:', Object.keys(tags).join(', '));
           }
 
           setOriginalImageSrc(objectURL);
           setResultImageSrc(objectURL);
           
           if (typeof focalLengthValue === 'number') {
-            setFocalLength(focalLengthValue); 
+            // Tier 1 SUCCESS - Use EXIF data
+            setFocalLength(focalLengthValue);
+            console.log('[Photo Calibration] 🎉 Tier 1 calibration complete - focal length:', focalLengthValue, 'mm');
+            console.log('[Photo Calibration] Proceeding to distance entry...');
             setAppStatus('SESSION_AWAITING_DISTANCE'); 
             setInstructionText("Great! Now, please enter the distance to the tree's base.");
           } else {
-            setPendingTreeFile(currentMeasurementFile);
-            if (fovRatio) { 
+            // Tier 1 FAILED - Check for existing calibration or proceed to manual
+            console.log('[Photo Calibration] ⚠️ Tier 1 failed, checking for saved calibration...');
+            
+            // Import calibration utilities dynamically
+            const { loadSavedCalibration } = await import('./utils/cameraCalibration');
+            const savedCalibration = loadSavedCalibration();
+            
+            if (savedCalibration && (savedCalibration.focalLength35mm || savedCalibration.fovHorizontal)) {
+              // Saved calibration found
+              console.log('[Photo Calibration] ✅ Found saved calibration:', savedCalibration.calibrationMethod);
+              console.log('[Photo Calibration] Data:', {
+                focalLength35mm: savedCalibration.focalLength35mm,
+                fovHorizontal: savedCalibration.fovHorizontal,
+                timestamp: new Date(savedCalibration.timestamp).toLocaleString()
+              });
+              
+              // Set focal length from saved calibration
+              if (savedCalibration.focalLength35mm) {
+                setFocalLength(savedCalibration.focalLength35mm);
+                console.log('[Photo Calibration] Using saved focal length:', savedCalibration.focalLength35mm, 'mm');
+              } else if (savedCalibration.fovHorizontal) {
+                // Calculate fovRatio from saved FOV
+                const fovRadians = (savedCalibration.fovHorizontal * Math.PI) / 180;
+                const calculatedFovRatio = Math.tan(fovRadians / 2);
+                setFovRatio(calculatedFovRatio);
+                console.log('[Photo Calibration] Using saved FOV ratio:', calculatedFovRatio);
+              }
+              
+              setPendingTreeFile(currentMeasurementFile);
               setAppStatus('SESSION_AWAITING_CALIBRATION_CHOICE');
-              setInstructionText("No camera data found. Use your saved calibration or create a new one."); 
-            } else { 
+              setInstructionText("No camera data in photo. Use your saved calibration or create a new one.");
+            } else {
+              // No saved calibration - go to manual calibration
+              console.log('[Photo Calibration] ⚠️ No saved calibration found');
+              console.log('[Photo Calibration] Tier 2 will be attempted during distance entry (if camera stream available)');
+              console.log('[Photo Calibration] Redirecting to manual calibration view...');
+              
+              setPendingTreeFile(currentMeasurementFile);
               setCurrentView('CALIBRATION');
+              setInstructionText("No camera calibration found. Please calibrate your camera for accurate measurements.");
             }
           }
         };
-      } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); if (currentMeasurementFile) { const objURL = URL.createObjectURL(currentMeasurementFile); setOriginalImageSrc(objURL); setResultImageSrc(objURL); } }
+      } catch (error: any) {
+        console.error('[Photo Calibration] ❌ ERROR during image processing:', error);
+        setAppStatus('ERROR'); 
+        setErrorMessage(error.message); 
+        if (currentMeasurementFile) { 
+          const objURL = URL.createObjectURL(currentMeasurementFile); 
+          setOriginalImageSrc(objURL); 
+          setResultImageSrc(objURL); 
+        }
+      }
     };
+    
     processImage();
   }, [currentMeasurementFile, appStatus, fovRatio]);
+
+  // --- TIER 2 CALIBRATION: AUTO-CALIBRATE FROM CAMERA STREAM (Photo Method Integration) ---
+  useEffect(() => {
+    // Only attempt Tier 2 if we're waiting for distance and don't have calibration yet
+    if (appStatus !== 'SESSION_AWAITING_DISTANCE') return;
+    if (focalLength || fovRatio) {
+      console.log('[Photo Calibration Tier 2] ⏭️ SKIPPED - Calibration already available');
+      return;
+    }
+    
+    let isMounted = true;
+    let stream: MediaStream | null = null;
+    
+    const attemptTier2Calibration = async () => {
+      console.log('[Photo Calibration Tier 2] 🎥 Attempting camera stream calibration...');
+      
+      try {
+        // Request camera access (for calibration purposes)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        });
+        
+        if (!isMounted) {
+          console.log('[Photo Calibration Tier 2] Component unmounted, aborting');
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+        
+        console.log('[Photo Calibration Tier 2] 📹 Camera stream acquired, extracting calibration...');
+        
+        // Import calibration utility
+        const { extractCameraIntrinsicsFromStream, saveCalibration } = await import('./utils/cameraCalibration');
+        const streamCalibration = await extractCameraIntrinsicsFromStream(stream);
+        
+        // Stop stream immediately after extraction
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        
+        if (!isMounted) return;
+        
+        if (streamCalibration && (streamCalibration.focalLength35mm || streamCalibration.fovHorizontal)) {
+          console.log('[Photo Calibration Tier 2] ✅ SUCCESS - Method:', streamCalibration.calibrationMethod);
+          console.log('[Photo Calibration Tier 2] Data:', {
+            focalLength35mm: streamCalibration.focalLength35mm,
+            fovHorizontal: streamCalibration.fovHorizontal
+          });
+          
+          // Create complete calibration object
+          const fullCalibration = {
+            focalLength35mm: null,
+            fovHorizontal: null,
+            fovVertical: null,
+            sensorWidth: null,
+            sensorHeight: null,
+            imageWidth: 1920,
+            imageHeight: 1080,
+            calibrationMethod: 'none' as const,
+            deviceId: '',
+            timestamp: Date.now(),
+            ...streamCalibration
+          };
+          
+          // Save to localStorage for future use
+          saveCalibration(fullCalibration);
+          console.log('[Photo Calibration Tier 2] 💾 Saved to localStorage for future sessions');
+          
+          // Apply to current session
+          if (fullCalibration.focalLength35mm) {
+            setFocalLength(fullCalibration.focalLength35mm);
+            console.log('[Photo Calibration Tier 2] 🎯 Applied focal length:', fullCalibration.focalLength35mm, 'mm');
+          } else if (fullCalibration.fovHorizontal) {
+            const fovRadians = (fullCalibration.fovHorizontal * Math.PI) / 180;
+            const calculatedFovRatio = Math.tan(fovRadians / 2);
+            setFovRatio(calculatedFovRatio);
+            console.log('[Photo Calibration Tier 2] 🎯 Applied FOV ratio:', calculatedFovRatio);
+          }
+          
+          setInstructionText("Camera auto-calibrated! Enter distance to continue.");
+        } else {
+          console.log('[Photo Calibration Tier 2] ⚠️ FAILED - Insufficient data from camera stream');
+          console.log('[Photo Calibration Tier 2] User will need to use manual calibration (Tier 3) if needed');
+        }
+      } catch (error: any) {
+        if (!isMounted) return;
+        
+        console.log('[Photo Calibration Tier 2] ⚠️ FAILED - Error:', error.message);
+        
+        if (error.name === 'NotAllowedError') {
+          console.log('[Photo Calibration Tier 2] Camera permission denied - user can still enter distance manually');
+        } else if (error.name === 'NotFoundError') {
+          console.log('[Photo Calibration Tier 2] No camera found - user can still enter distance manually');
+        } else {
+          console.error('[Photo Calibration Tier 2] Unexpected error:', error);
+        }
+        
+        // Non-fatal - user can still enter distance manually
+        // Manual calibration (Tier 3) remains available via calibration button
+      } finally {
+        // Ensure stream is stopped
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+    };
+    
+    // Attempt Tier 2 calibration after a short delay (allow UI to settle)
+    const timeout = setTimeout(() => {
+      if (isMounted) {
+        attemptTier2Calibration();
+      }
+    }, 500);
+    
+    // Cleanup on unmount
+    return () => {
+      isMounted = false;
+      clearTimeout(timeout);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [appStatus, focalLength, fovRatio]);
 
   useEffect(() => {
     if (isLocationPickerActive) return;
@@ -696,6 +881,15 @@ function App() {
 
   const handleConfirmInitialClick = async () => {
     if (!transientPoint || !scaleFactor || !session?.access_token) return;
+    
+    console.log('[SAM Measurement] 🎯 Starting automatic tree segmentation...');
+    console.log('[SAM Measurement] Input parameters:', {
+      clickPoint: transientPoint,
+      scaleFactor: scaleFactor,
+      distance: parseFloat(distance),
+      view: currentView
+    });
+    
     setIsPanelOpen(true); 
     setInstructionText("Running automatic segmentation..."); 
     setAppStatus('ANALYSIS_PROCESSING'); 
@@ -703,20 +897,44 @@ function App() {
     try {
         let response;
         if (currentView === 'SESSION' && currentMeasurementFile) {
+            console.log('[SAM Measurement] Mode: Photo upload');
+            console.log('[SAM Measurement] Sending to backend:', {
+              file: currentMeasurementFile.name,
+              distance: parseFloat(distance),
+              scaleFactor: scaleFactor,
+              clickPoint: transientPoint
+            });
             response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor, transientPoint);
         } else if (currentView === 'COMMUNITY_GROVE' && claimedTree) {
+            console.log('[SAM Measurement] Mode: Community Grove');
+            console.log('[SAM Measurement] Sending to backend:', {
+              imageUrl: claimedTree.image_url,
+              distance: claimedTree.distance_m,
+              scaleFactor: scaleFactor,
+              clickPoint: transientPoint
+            });
             response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, transientPoint, session.access_token);
         } else {
             throw new Error("Invalid state for auto-segmentation.");
         }
 
         if (response.status !== 'success') throw new Error(response.message);
+        
+        console.log('[SAM Measurement] ✅ Segmentation complete!');
+        console.log('[SAM Measurement] Results:', {
+          height: response.metrics.height_m,
+          canopy: response.metrics.canopy_m,
+          dbh: response.metrics.dbh_cm,
+          scaleFactor: response.scale_factor
+        });
+        
         setMaskGenerated(true);
         setScaleFactor(response.scale_factor); 
         setDbhLine(response.dbh_line_coords); 
         setResultImageSrc(`data:image/png;base64,${response.result_image_base64}`); 
         handleMeasurementSuccess(response.metrics);
     } catch (error: any) { 
+        console.error('[SAM Measurement] ❌ Segmentation failed:', error);
         setAppStatus('ERROR'); 
         setErrorMessage(error.message); 
     } finally { 
@@ -739,30 +957,82 @@ function App() {
   };
 
   const prepareMeasurementSession = (): number | null => {
+    console.log('[Scale Factor] 📐 Calculating scale factor for measurement session...');
+    
     const distForCalc = currentView === 'COMMUNITY_GROVE' ? claimedTree?.distance_m : parseFloat(distance);
     const dims = imageDimensions;
+    
+    console.log('[Scale Factor] Input data:', {
+      distance: distForCalc,
+      imageDimensions: dims,
+      view: currentView
+    });
+    
     if (!distForCalc || !dims) {
+        console.error('[Scale Factor] ❌ Missing required data:', {
+          distance: distForCalc,
+          dimensions: dims
+        });
         setErrorMessage("Missing distance or image dimensions.");
         return null;
     }
 
     let cameraConstant: number | null = null;
+    let calibrationSource: string = 'none';
 
+    // Priority 1: Focal length (from EXIF or Tier 2)
     if (focalLength) {
         cameraConstant = 36.0 / focalLength;
-    } else if (fovRatio) {
+        calibrationSource = 'focal_length_35mm';
+        console.log('[Scale Factor] ✅ Using focal length calibration');
+        console.log('[Scale Factor] Focal length:', focalLength, 'mm (35mm equivalent)');
+        console.log('[Scale Factor] Camera constant:', cameraConstant);
+    } 
+    // Priority 2: FOV ratio (from saved calibration or Tier 2)
+    else if (fovRatio) {
         cameraConstant = fovRatio;
-    } else if (currentView === 'COMMUNITY_GROVE' && claimedTree?.scale_factor && claimedTree?.distance_m) {
+        calibrationSource = 'fov_ratio';
+        console.log('[Scale Factor] ✅ Using FOV ratio calibration');
+        console.log('[Scale Factor] FOV ratio:', fovRatio);
+    } 
+    // Priority 3: Community Grove existing calibration
+    else if (currentView === 'COMMUNITY_GROVE' && claimedTree?.scale_factor && claimedTree?.distance_m) {
         const horizontalPixels = Math.max(dims.w, dims.h);
         cameraConstant = (claimedTree.scale_factor * horizontalPixels) / (claimedTree.distance_m * 1000);
-    } else {
+        calibrationSource = 'community_grove_reverse';
+        console.log('[Scale Factor] ✅ Using Community Grove calibration (reverse-calculated)');
+        console.log('[Scale Factor] Previous scale factor:', claimedTree.scale_factor);
+        console.log('[Scale Factor] Camera constant (calculated):', cameraConstant);
+    } 
+    // No calibration available
+    else {
+        console.error('[Scale Factor] ❌ No calibration available!');
+        console.log('[Scale Factor] Redirecting to manual calibration view...');
         setCurrentView('CALIBRATION');
         return null;
     }
 
+    // Calculate scale factor using the standard formula
     const distMM = distForCalc * 1000;
     const horizontalPixels = Math.max(dims.w, dims.h);
     const finalScaleFactor = (distMM * cameraConstant) / horizontalPixels;
+    
+    console.log('[Scale Factor] ✅ CALCULATION COMPLETE:');
+    console.log('[Scale Factor] =====================================');
+    console.log('[Scale Factor] Calibration source:', calibrationSource);
+    console.log('[Scale Factor] Distance (m):', distForCalc);
+    console.log('[Scale Factor] Distance (mm):', distMM);
+    console.log('[Scale Factor] Camera constant:', cameraConstant);
+    console.log('[Scale Factor] Horizontal pixels:', horizontalPixels);
+    console.log('[Scale Factor] Image dimensions:', dims.w, 'x', dims.h);
+    console.log('[Scale Factor] FINAL SCALE FACTOR:', finalScaleFactor, 'mm/pixel');
+    console.log('[Scale Factor] =====================================');
+    console.log('[Scale Factor] Expected measurements for reference:');
+    console.log('[Scale Factor]   - 10cm diameter ≈', (100 / finalScaleFactor).toFixed(0), 'pixels');
+    console.log('[Scale Factor]   - 30cm diameter ≈', (300 / finalScaleFactor).toFixed(0), 'pixels');
+    console.log('[Scale Factor]   - 50cm diameter ≈', (500 / finalScaleFactor).toFixed(0), 'pixels');
+    console.log('[Scale Factor] =====================================');
+    
     setScaleFactor(finalScaleFactor);
     return finalScaleFactor;
   };
@@ -1023,6 +1293,14 @@ function App() {
   };
 
   const handleDistanceEntered = () => {
+    console.log('[Distance Entry] 📏 User entered distance:', distance, 'meters');
+    console.log('[Distance Entry] Current calibration status:', {
+      focalLength: focalLength,
+      fovRatio: fovRatio,
+      hasCalibration: !!(focalLength || fovRatio)
+    });
+    console.log('[Distance Entry] Proceeding to analysis choice...');
+    
     setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE');
     setInstructionText("Choose how you want to proceed with the analysis.");
   }
