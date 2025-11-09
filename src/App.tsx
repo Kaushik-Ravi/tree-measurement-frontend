@@ -28,6 +28,7 @@ import { CommunityGroveView } from './components/CommunityGroveView';
 import { supabase } from './supabaseClient';
 import { LeaderboardView } from './components/LeaderboardView';
 import { PermissionsCheckModal } from './components/PermissionsCheckModal';
+import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
 
@@ -1684,6 +1685,19 @@ function App() {
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} /> )}
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
+      
+      {/* Interactive Quiz Modal for SAM Processing */}
+      {(appStatus === 'ANALYSIS_PROCESSING' || appStatus === 'SESSION_PROCESSING_PHOTO') && (
+        <ProcessingQuizModal
+          isOpen={true}
+          estimatedSeconds={50}
+          title={
+            appStatus === 'ANALYSIS_PROCESSING' 
+              ? 'Processing Tree Measurements' 
+              : 'Analyzing Photo'
+          }
+        />
+      )}
       
       {isSessionActive ? renderSessionView() : (
         <div className="w-full flex flex-col h-full">

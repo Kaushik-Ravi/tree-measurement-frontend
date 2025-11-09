@@ -42,6 +42,7 @@ import {
 } from '../../utils/cameraCalibration';
 import { useAuth } from '../../contexts/AuthContext';
 import { LiveARPreFlightCheck } from './LiveARPreFlightCheck';
+import { ProcessingQuizModal } from '../common/ProcessingQuizModal';
 
 interface LiveARMeasureViewProps {
   /** Callback when measurement is complete and saved to database */
@@ -2637,30 +2638,38 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
           </>
         )}
 
-        {(state === 'PROCESSING_SAM' || state === 'IDENTIFYING_SPECIES') && (
+        {/* SAM Processing - Interactive Quiz */}
+        {state === 'PROCESSING_SAM' && (
+          <ProcessingQuizModal
+            isOpen={true}
+            estimatedSeconds={55}
+            title="Analyzing Tree Structure"
+          />
+        )}
+
+        {/* Species Identification - Keep existing simple loader */}
+        {state === 'IDENTIFYING_SPECIES' && (
           <div className="absolute inset-0 flex items-center justify-center p-6 bg-gradient-to-t from-black/95 via-black/70 to-black/30 text-white">
             <div className="max-w-md mx-auto text-center">
               <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4 text-green-500" />
               <h2 className="text-2xl font-bold mb-2">
-                {state === 'PROCESSING_SAM' ? 'Analyzing Tree Structure...' : 'Identifying Species...'}
+                Identifying Species...
               </h2>
               <p className="text-gray-300 text-sm mb-3">
-                {state === 'PROCESSING_SAM' 
-                  ? 'Measuring dimensions and detecting tree features'
-                  : 'Searching our plant database for a match'}
+                Searching our plant database for a match
               </p>
               
               {/* Progress steps */}
               <div className="flex items-center justify-center gap-2 mt-4">
-                <div className={`w-3 h-3 rounded-full ${state === 'PROCESSING_SAM' ? 'bg-green-500 animate-pulse' : 'bg-green-500'}`}></div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 <div className="w-8 h-0.5 bg-green-500/30"></div>
-                <div className={`w-3 h-3 rounded-full ${state === 'IDENTIFYING_SPECIES' ? 'bg-green-500 animate-pulse' : state === 'PROCESSING_SAM' ? 'bg-gray-600' : 'bg-green-500'}`}></div>
+                <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
                 <div className="w-8 h-0.5 bg-green-500/30"></div>
                 <div className="w-3 h-3 rounded-full bg-gray-600"></div>
               </div>
               
               <p className="text-xs text-gray-500 mt-2">
-                {state === 'PROCESSING_SAM' ? 'This may take 10-20 seconds...' : 'Almost done...'}
+                Almost done...
               </p>
             </div>
           </div>
