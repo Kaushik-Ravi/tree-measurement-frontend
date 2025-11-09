@@ -20,6 +20,9 @@ import { ResultsTable } from './components/ResultsTable';
 import { SpeciesIdentifier } from './components/SpeciesIdentifier';
 import { AdditionalDetailsForm, AdditionalData } from './components/AdditionalDetailsForm';
 import { LocationPicker } from './components/LocationPicker';
+import { ViewToggle } from './components/ViewToggle';
+import { TreeMapView } from './components/TreeMapView';
+import { TreeDetailModal } from './components/TreeDetailModal';
 import { InstructionToast } from './components/InstructionToast';
 import { useAuth } from './contexts/AuthContext';
 import { EditResultModal } from './components/EditResultModal'; 
@@ -196,6 +199,11 @@ function App() {
   const [isArModeActive, setIsArModeActive] = useState(false);
   const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // Live AR mode
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
+  
+  // --- START: DUAL-VIEW STATE ---
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [selectedTreeForModal, setSelectedTreeForModal] = useState<TreeResult | null>(null);
+  // --- END: DUAL-VIEW STATE ---
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -2090,9 +2098,37 @@ function App() {
                       <p className="text-sm text-content-subtle mt-2">See how your contributions rank. Earn Sapling Points for each tree you map and analyze.</p>
                   </button>
               </div>
-              <div className="max-w-7xl mx-auto">
-                <ResultsTable results={allResults} onDeleteResult={handleDeleteResult} onEditResult={handleOpenEditModal} isLoading={isHistoryLoading} />
+              
+              {/* YOUR MAPPED TREES - DUAL VIEW */}
+              <div className="max-w-7xl mx-auto mt-12">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-content-default">Your Mapped Trees</h2>
+                  <ViewToggle viewMode={viewMode} onViewChange={setViewMode} />
+                </div>
+                
+                {viewMode === 'list' ? (
+                  <ResultsTable 
+                    results={allResults} 
+                    onDeleteResult={handleDeleteResult} 
+                    onEditResult={handleOpenEditModal} 
+                    isLoading={isHistoryLoading} 
+                  />
+                ) : (
+                  <TreeMapView 
+                    trees={allResults} 
+                    onTreeClick={setSelectedTreeForModal}
+                    theme={theme}
+                  />
+                )}
               </div>
+              
+              {/* TREE DETAIL MODAL */}
+              <TreeDetailModal 
+                tree={selectedTreeForModal}
+                onClose={() => setSelectedTreeForModal(null)}
+                onEdit={handleOpenEditModal}
+                onDelete={handleDeleteResult}
+              />
             </main>
         </div>
       )}
