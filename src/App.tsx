@@ -4,9 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, Sparkles, ImageIcon } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
-// --- START: PREMIUM AR INTEGRATION ---
-import { PremiumARDistance } from './components/ar-distance';
-// --- END: PREMIUM AR INTEGRATION ---
 // --- START: LIVE AR INTEGRATION ---
 import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_Enhanced';
 import { FeatureFlags } from './config/featureFlags';
@@ -187,7 +184,6 @@ function App() {
   // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
   const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // Live AR mode
-  const [isPremiumARActive, setIsPremiumARActive] = useState(false); // NEW: Premium AR mode (ARKit/ARCore)
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
 
   useEffect(() => {
@@ -1334,31 +1330,10 @@ function App() {
 
   const renderSessionView = () => {
     // 🎯 EXCLUSIVE RENDERING PATTERN (Google Meet/Zoom/Instagram)
-    // When in modal modes (Live AR, AR Ruler, Premium AR), render ONLY that component
+    // When in modal modes (Live AR, AR Ruler), render ONLY that component
     // This prevents UI overlap bugs
 
-    // PRIORITY 1: Premium AR Mode (Full-Screen Exclusive - HIGHEST ACCURACY)
-    if (isPremiumARActive) {
-      return (
-        <PremiumARDistance
-          onDistanceMeasured={(distance, method, accuracy) => {
-            console.log('[App] Premium AR distance measured:', { distance, method, accuracy });
-            setDistance(distance.toFixed(2));
-            setIsPremiumARActive(false);
-            handleDistanceEntered();
-            
-            // Log accuracy for analytics
-            console.log(`[Premium AR] Method: ${method}, Accuracy: ±${(accuracy * 100).toFixed(0)}cm`);
-          }}
-          onCancel={() => {
-            setIsPremiumARActive(false);
-            setInstructionText("Measurement cancelled. Please enter distance manually or try AR again.");
-          }}
-        />
-      );
-    }
-
-    // PRIORITY 2: Live AR Mode (Full-Screen Exclusive)
+    // PRIORITY 1: Live AR Mode (Full-Screen Exclusive)
     if (isLiveARModeActive) {
       return (
         <LiveARMeasureView
@@ -1497,28 +1472,6 @@ function App() {
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
-                {/* --- START: PREMIUM AR DISTANCE (HIGHEST ACCURACY) --- */}
-                <button 
-                  onClick={() => setIsPremiumARActive(true)} 
-                  className="w-full mb-4 flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:opacity-90 transition-opacity shadow-lg"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <div className="text-left">
-                    <div className="flex items-center gap-2">
-                      <span>Premium AR Distance</span>
-                      <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs font-semibold">±2-5cm</span>
-                    </div>
-                    <p className="text-xs opacity-90">ARKit (iOS) / ARCore (Android)</p>
-                  </div>
-                </button>
-
-                <div className="relative my-4 flex items-center">
-                  <div className="flex-grow border-t border-stroke-default"></div>
-                  <span className="flex-shrink mx-4 text-content-subtle text-sm">OR</span>
-                  <div className="flex-grow border-t border-stroke-default"></div>
-                </div>
-                {/* --- END: PREMIUM AR DISTANCE --- */}
-
                 {/* --- START: LIVE AR MODE BUTTON --- */}
                 {FeatureFlags.LIVE_AR_MODE && (
                   <>
@@ -1539,16 +1492,62 @@ function App() {
                 )}
                 {/* --- END: LIVE AR MODE BUTTON --- */}
 
-                {/* --- START: SURGICAL MODIFICATION --- */}
-                {/* The AR support check is removed. The button now cleanly activates the AR mode. */}
+                {/* --- START: AR RULER WITH PLATFORM DETECTION --- */}
                 <button 
                   onClick={() => setIsArModeActive(true)} 
-                  className="w-full mb-4 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
+                  className="w-full mb-2 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
                 >
                   <Move className="w-5 h-5" />
                   Measure with AR Ruler
                 </button>
-                {/* --- END: SURGICAL MODIFICATION --- */}
+                
+                {/* Platform-specific compatibility notes */}
+                {(() => {
+                  const ua = navigator.userAgent;
+                  const isIOS = /iPad|iPhone|iPod/.test(ua);
+                  const isAndroid = /Android/.test(ua);
+                  
+                  if (isIOS) {
+                    return (
+                      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <div className="flex gap-2 items-start">
+                          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-blue-700 dark:text-blue-300">
+                            <p className="font-semibold mb-1">iOS Detected</p>
+                            <p>WebXR is limited on iOS Safari. For best results:</p>
+                            <ol className="mt-1 ml-4 list-decimal space-y-0.5">
+                              <li>Open iPhone's built-in <strong>Measure</strong> app</li>
+                              <li>Place first marker at tree's base</li>
+                              <li>Place second marker at your feet</li>
+                              <li>Note the distance shown</li>
+                              <li>Return here and enter it manually below</li>
+                            </ol>
+                            <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                              Accuracy: ±1-2cm (LiDAR) / ±2-5cm (standard)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (isAndroid) {
+                    return (
+                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                        <div className="flex gap-2 items-start">
+                          <Check className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-green-700 dark:text-green-300">
+                            <p className="font-semibold mb-1">Android Chrome Detected</p>
+                            <p>AR Ruler uses WebXR for in-browser measurement.</p>
+                            <p className="mt-1 text-green-600 dark:text-green-400 font-medium">
+                              Accuracy: ±10-15cm • Auto-returns distance to app
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* --- END: AR RULER WITH PLATFORM DETECTION --- */}
 
                 <div className="relative my-4 flex items-center">
                     <div className="flex-grow border-t border-stroke-default"></div>
