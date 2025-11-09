@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, X, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, Sparkles } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, Sparkles, ImageIcon } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: PREMIUM AR INTEGRATION ---
@@ -1474,7 +1474,10 @@ function App() {
         <div id="control-panel" className={`bg-background-default border-r border-stroke-default flex flex-col transition-transform duration-300 ease-in-out md:translate-y-0 md:relative md:w-[35%] md:max-w-xl md:flex-shrink-0 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full'} max-md:fixed max-md:inset-0 max-md:z-20`} >
           <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default md:hidden">
               <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} /> 
-              <button onClick={() => setIsPanelOpen(false)} className="p-2 text-content-subtle hover:text-content-default"><X size={24} /></button>
+              <button onClick={() => setIsPanelOpen(false)} className="flex items-center gap-2 px-3 py-2 text-brand-secondary hover:bg-brand-secondary/10 rounded-lg font-medium text-sm">
+                <ImageIcon size={20} />
+                Show Image
+              </button>
           </div>
 
           <div className="flex-grow overflow-y-auto p-4 md:p-6">
@@ -1484,7 +1487,7 @@ function App() {
             </div>
 
             <button onClick={handleReturnToHub} className="flex items-center gap-1.5 text-sm font-medium text-brand-secondary hover:bg-brand-secondary/10 p-2 rounded-lg mb-4">
-              <ArrowLeft size={16}/> Back to Hub
+              <ArrowLeft size={16}/> Back to Homepage
             </button>
             
             <div className="p-4 rounded-lg mb-6 bg-background-subtle border border-stroke-subtle"><h3 className="font-bold text-content-default">Current Task</h3><div id="status-box" className="text-sm text-content-subtle"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-status-error font-medium mt-1">{errorMessage}</p>}</div>

@@ -53,7 +53,7 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                          </div>
                     </div>
                     <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-secondary hover:bg-brand-secondary/10 p-2 rounded-lg">
-                        <ArrowLeft size={16} /> Back to Hub
+                        <ArrowLeft size={16} /> Back to Homepage
                     </button>
                 </div>
             </header>
