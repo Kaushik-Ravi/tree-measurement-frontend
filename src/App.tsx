@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -248,6 +248,14 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>(null);
   const [pendingTrees, setPendingTrees] = useState<PendingTree[]>([]);
   const [claimedTree, setClaimedTree] = useState<TreeResult | null>(null);
+
+  // Collapsible sections state for results panel
+  const [expandedSections, setExpandedSections] = useState({
+    measurements: true,
+    species: false,
+    location: false,
+    additionalDetails: false
+  });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1351,7 +1359,12 @@ function App() {
     setIsPanelOpen(false);
     setClaimedTree(null);
     setMaskGenerated(false);
+    setExpandedSections({ measurements: true, species: false, location: false, additionalDetails: false });
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
   const handleManualPointCollection = async (point: Point) => { 
@@ -1824,53 +1837,207 @@ function App() {
             
             {appStatus === 'ANALYSIS_MANUAL_READY_TO_CALCULATE' && ( <div className="pt-6 mt-6 border-t border-stroke-subtle"> <button onClick={handleCalculateManual} disabled={isBusy} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-brand-accent text-white rounded-lg font-semibold hover:bg-brand-accent-hover disabled:bg-background-inset"> <Ruler className="w-5 h-5" /> Calculate Measurements </button> </div> )}
 
-            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && ( <div className="space-y-4"> <div> <h2 className="text-lg font-semibold text-content-default">Measurement Results</h2> <div className="space-y-2 mt-2"> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Height:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span></div> <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle"><label className="font-medium text-content-default">Canopy:</label><span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span></div> 
-            <div className="flex justify-between items-center p-3 bg-background-default rounded-lg border border-stroke-subtle">
-              <div className="flex items-center gap-2 relative group min-w-0">
-                <label className="font-medium text-content-default truncate">Diameter at Breast Height (DBH):</label>
-                <Info className="w-4 h-4 text-content-subtle cursor-pointer flex-shrink-0" />
-                <div className="absolute bottom-full mb-2 w-60 bg-background-subtle text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default">
-                  Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-subtle"></div>
+            {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && (
+              <div className="space-y-3">
+                {/* Measurements Section - Open by default, always has checkmark */}
+                <div className="border border-stroke-default rounded-lg overflow-hidden">
+                  <button 
+                    onClick={() => toggleSection('measurements')} 
+                    className="w-full flex items-center justify-between px-4 py-3 bg-background-default hover:bg-background-subtle transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      <span className="font-semibold text-content-default">Measurements</span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.measurements ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.measurements && (
+                    <div className="px-4 pb-4 space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                          <label className="font-medium text-content-default">Height:</label>
+                          <span className="font-mono text-lg text-content-default">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                          <label className="font-medium text-content-default">Canopy:</label>
+                          <span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                          <div className="flex items-center gap-2 relative group min-w-0">
+                            <label className="font-medium text-content-default truncate">Diameter at Breast Height (DBH):</label>
+                            <Info className="w-4 h-4 text-content-subtle cursor-pointer flex-shrink-0" />
+                            <div className="absolute bottom-full mb-2 w-60 bg-background-default text-content-default text-xs rounded-lg py-2 px-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-stroke-default shadow-lg z-10">
+                              Diameter at Breast Height (1.37m or 4.5ft), a standard forestry measurement.
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-background-default"></div>
+                            </div>
+                          </div>
+                          <span className="font-mono text-lg text-content-default">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
+                        </div>
+                      </div>
+                      {maskGenerated && (
+                        <button 
+                          onClick={() => setIsPanelOpen(false)} 
+                          className="w-full mt-2 text-sm text-brand-secondary hover:underline"
+                        >
+                          View Masked Image
+                        </button>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 pt-3">
+                        {maskGenerated && (
+                          <button 
+                            onClick={() => { 
+                              setIsLocationPickerActive(false); 
+                              setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); 
+                              setIsPanelOpen(false); 
+                              setInstructionText("Click points to fix the tree's outline."); 
+                              setShowInstructionToast(true); 
+                            }} 
+                            className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm"
+                          >
+                            Correct Outline
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => { 
+                            if (currentMeasurementFile && scaleFactor) { 
+                              setIsLocationPickerActive(false); 
+                              setResultImageSrc(originalImageSrc); 
+                              setCurrentMetrics(null); 
+                              setDbhLine(null); 
+                              setRefinePoints([]); 
+                              setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); 
+                              setIsPanelOpen(false); 
+                              setInstructionText("Manual Mode: Click the exact base of the tree trunk."); 
+                              setShowInstructionToast(true); 
+                            } 
+                          }} 
+                          className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm"
+                        >
+                          Restart in Manual
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Species Section - Checkmark when identified */}
+                <div className="border border-stroke-default rounded-lg overflow-hidden">
+                  <button 
+                    onClick={() => toggleSection('species')} 
+                    className="w-full flex items-center justify-between px-4 py-3 bg-background-default hover:bg-background-subtle transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {currentIdentification ? (
+                        <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-stroke-default flex-shrink-0" />
+                      )}
+                      <span className="font-semibold text-content-default">Species Identification</span>
+                    </div>
+                    <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.species ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedSections.species && (
+                    <div className="px-4 pb-4 space-y-3">
+                      <SpeciesIdentifier 
+                        onIdentificationComplete={setCurrentIdentification} 
+                        onClear={() => setCurrentIdentification(null)} 
+                        existingResult={currentIdentification} 
+                        mainImageFile={currentMeasurementFile} 
+                        mainImageSrc={originalImageSrc} 
+                        analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} 
+                      />
+                      <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Location Section - Checkmark when set */}
+                {currentView === 'SESSION' && (
+                  <div className="border border-stroke-default rounded-lg overflow-hidden">
+                    <button 
+                      onClick={() => toggleSection('location')} 
+                      className="w-full flex items-center justify-between px-4 py-3 bg-background-default hover:bg-background-subtle transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {currentLocation ? (
+                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-stroke-default flex-shrink-0" />
+                        )}
+                        <span className="font-semibold text-content-default">Location</span>
+                      </div>
+                      <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.location ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedSections.location && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <p className="text-sm text-content-subtle">
+                          Location and compass heading are used for precise tree mapping.
+                        </p>
+                        <button 
+                          onClick={() => setIsLocationPickerActive(true)} 
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-background-default border border-stroke-default text-content-default rounded-lg hover:bg-background-subtle"
+                        >
+                          <MapPin className="w-5 h-5 text-brand-secondary" />
+                          {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add/Edit Location'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Additional Details Section - Checkmark when any field filled */}
+                {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && (
+                  <div className="border border-stroke-default rounded-lg overflow-hidden">
+                    <button 
+                      onClick={() => toggleSection('additionalDetails')} 
+                      className="w-full flex items-center justify-between px-4 py-3 bg-background-default hover:bg-background-subtle transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {(additionalData.condition || additionalData.ownership || additionalData.remarks) ? (
+                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-stroke-default flex-shrink-0" />
+                        )}
+                        <span className="font-semibold text-content-default">Additional Details</span>
+                      </div>
+                      <ChevronDown className={`w-5 h-5 text-content-subtle transition-transform ${expandedSections.additionalDetails ? 'rotate-180' : ''}`} />
+                    </button>
+                    {expandedSections.additionalDetails && (
+                      <div className="px-4 pb-4">
+                        <AdditionalDetailsForm 
+                          data={additionalData} 
+                          onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Save/Submit Button */}
+                <div className="pt-2">
+                  {currentView === 'SESSION' && (
+                    <button 
+                      onClick={handleSaveResult} 
+                      disabled={!currentMetrics || !currentIdentification} 
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Save to History
+                    </button>
+                  )}
+                  {currentView === 'COMMUNITY_GROVE' && (
+                    <button 
+                      onClick={handleSubmitCommunityAnalysis} 
+                      disabled={!currentMetrics || !currentIdentification} 
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
+                    >
+                      <GitMerge className="w-5 h-5" />
+                      Submit Analysis
+                    </button>
+                  )}
                 </div>
               </div>
-              <span className="font-mono text-lg text-content-default">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
-            </div>
-            </div> 
-            {maskGenerated && <button onClick={() => setIsPanelOpen(false)} className="w-full mt-3 text-sm text-brand-secondary hover:underline">View Masked Image</button>}
-            </div> 
-            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-stroke-subtle"> 
-              {maskGenerated && <button onClick={() => { 
-                setIsLocationPickerActive(false); 
-                setAppStatus('ANALYSIS_AWAITING_REFINE_POINTS'); 
-                setIsPanelOpen(false); 
-                setInstructionText("Click points to fix the tree's outline."); 
-                setShowInstructionToast(true); 
-              }} className="px-4 py-2 bg-brand-secondary text-white rounded-lg hover:bg-brand-secondary-hover text-sm">Correct Outline</button>}
-            <button onClick={() => { 
-              if (currentMeasurementFile && scaleFactor) { 
-                setIsLocationPickerActive(false); 
-                setResultImageSrc(originalImageSrc); 
-                setCurrentMetrics(null); 
-                setDbhLine(null); 
-                setRefinePoints([]); 
-                setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); 
-                setIsPanelOpen(false); 
-                setInstructionText("Manual Mode: Click the exact base of the tree trunk."); 
-                setShowInstructionToast(true); 
-              } 
-            }} className="px-4 py-2 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover text-sm">Restart in Manual</button> </div>
-            <div className="space-y-4 border-t border-stroke-subtle pt-4"> 
-              <SpeciesIdentifier onIdentificationComplete={setCurrentIdentification} onClear={() => setCurrentIdentification(null)} existingResult={currentIdentification} mainImageFile={currentMeasurementFile} mainImageSrc={originalImageSrc} analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'} /> 
-              <CO2ResultCard co2Value={currentCO2} isLoading={isCO2Calculating} /> 
-              {currentView === 'SESSION' && <button onClick={() => setIsLocationPickerActive(true)} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-background-default border border-stroke-default text-content-default rounded-lg hover:bg-background-subtle"> <MapPin className="w-5 h-5 text-brand-secondary" /> {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add/Edit Location'} </button>}
-              {(currentView === 'SESSION' || currentView === 'COMMUNITY_GROVE') && <AdditionalDetailsForm data={additionalData} onUpdate={(field, value) => setAdditionalData(prev => ({ ...prev, [field]: value }))} />}
-            </div> 
-            <div className="pt-4 border-t border-stroke-subtle">
-              {currentView === 'SESSION' && <button onClick={handleSaveResult} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"><Plus className="w-5 h-5" />Save to History</button>} 
-              {currentView === 'COMMUNITY_GROVE' && <button onClick={handleSubmitCommunityAnalysis} disabled={!currentMetrics || !currentIdentification} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"><GitMerge className="w-5 h-5" />Submit Analysis</button>}
-            </div>
-            </div> )}
+            )}
           </div>
         </div>
       )}
