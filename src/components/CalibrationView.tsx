@@ -184,10 +184,11 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         />
         {points.length > 0 && !isPanelVisible && (
             <div 
-              className="fixed left-1/2 -translate-x-1/2 z-50"
+              className="fixed left-6 z-50"
               style={{
-                // CRITICAL FIX: Multi-layer mobile browser UI safety
+                // CRITICAL FIX: Multi-layer mobile browser UI safety + Left positioning
                 // Ensures undo button is always visible above mobile browser bottom navigation
+                // Left-aligned to match main app controls and avoid UI clustering
                 bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
               }}
             >

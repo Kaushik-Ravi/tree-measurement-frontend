@@ -102,12 +102,12 @@ interface FloatingInteractionControlsProps {
 const FloatingInteractionControls = ({ onUndo, onConfirm, showConfirm, undoDisabled, confirmDisabled }: FloatingInteractionControlsProps) => {
   return (
     <div 
-      className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
+      className="fixed left-6 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
       style={{
-        // CRITICAL FIX: Multi-layer mobile browser UI safety
+        // CRITICAL FIX: Multi-layer mobile browser UI safety + Left positioning to avoid "Show Panel" button
         // Layer 1: env(safe-area-inset-bottom) handles iOS notches & Android gesture bars
         // Layer 2: max(80px, ...) ensures clearance above mobile browser bottom nav (48-56px)
-        // Layer 3: Adaptive sizing - larger on mobile (80px), smaller on desktop (24px)
+        // Layer 3: Left-aligned (left-6) to avoid overlapping with "Show Panel" button on right
         bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
       }}
     >

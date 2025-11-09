@@ -302,10 +302,16 @@ canvas {
     Layer 2: max(80px, ...) - Clearance above browser bottom nav
     Layer 3: Responsive - 80px mobile, 24px desktop
   
+  Layout Strategy:
+    - LEFT side: Undo/Confirm controls (avoid overlap with "Show Panel" button)
+    - RIGHT side: Floating action button ("Show Panel")
+    - Distributed layout prevents UI clustering (Instagram Stories pattern)
+  
   Best Practices:
     - Always use 'fixed' not 'absolute' for viewport-level positioning
     - Use z-50 or higher to ensure controls are on top
     - Combine with backdrop-blur for visual separation
+    - Distribute controls across screen edges (left/right) to avoid overlap
   
   Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/env#safe-area-inset-bottom
 */
