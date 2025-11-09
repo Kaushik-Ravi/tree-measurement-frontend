@@ -1378,8 +1378,11 @@ function App() {
     }
   };
 
-  const handleDistanceEntered = () => {
-    console.log('[Distance Entry] 📏 User entered distance:', distance, 'meters');
+  const handleDistanceEntered = (measuredDistanceOverride?: number) => {
+    const actualDistance = measuredDistanceOverride?.toFixed(2) || distance;
+    console.log('[Distance Entry] 📏 User entered distance:', actualDistance, 'meters');
+    console.log('[Distance Entry] measuredDistanceOverride:', measuredDistanceOverride);
+    console.log('[Distance Entry] distance state:', distance);
     console.log('[Distance Entry] Current calibration status:', {
       focalLength: focalLength,
       fovRatio: fovRatio,
@@ -1391,6 +1394,11 @@ function App() {
       currentMeasurementFile: currentMeasurementFile?.name || 'NONE'
     });
     console.log('[Distance Entry] Proceeding to analysis choice...');
+    
+    // If we have an override distance from AR, set it in state
+    if (measuredDistanceOverride !== undefined) {
+      setDistance(actualDistance);
+    }
     
     setAppStatus('SESSION_AWAITING_ANALYSIS_CHOICE');
     setInstructionText("Choose how you want to proceed with the analysis.");
@@ -1503,9 +1511,9 @@ function App() {
               resultImageSrc: resultImageSrc ? 'SET' : 'EMPTY',
               currentMeasurementFile: currentMeasurementFile?.name || 'NONE'
             });
-            setDistance(measuredDistance.toFixed(2));
             setIsArModeActive(false);
-            handleDistanceEntered();
+            // CRITICAL FIX: Pass measured distance directly to avoid React state sync issues
+            handleDistanceEntered(measuredDistance);
           }}
           onCancel={() => {
             console.log('[AR MODE] ❌ AR measurement cancelled');
@@ -1677,7 +1685,7 @@ function App() {
                   <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" />
                 </div>
                 <ARLinks />
-                <button onClick={handleDistanceEntered} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
+                <button onClick={() => handleDistanceEntered()} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
                   Continue
                 </button>
               </div>
