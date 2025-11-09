@@ -1,9 +1,9 @@
-// Interactive Quiz Modal for SAM Processing Wait Time
-// Engages users with educational tree questions while AI analyzes their photo
-// Awards 0.5 SP per correct answer, integrated with existing gamification system
+// Interactive Quiz Inline Component for SAM Processing Wait Time
+// Integrates into existing photo measurement UI/UX
+// Awards 0.5 SP per correct answer, auto-dismisses when processing completes
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, Leaf, Check, Sparkles } from 'lucide-react';
+import { Sparkles, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { awardQuizPoints, formatSP } from '../../utils/spUtils';
 import { getRandomQuestions, type QuizQuestion } from '../../data/quizQuestions';
@@ -14,7 +14,7 @@ interface ProcessingQuizModalProps {
   title?: string;
 }
 
-type QuizState = 'QUESTION' | 'FEEDBACK' | 'COMPLETE';
+type QuizState = 'QUESTION' | 'FEEDBACK';
 
 export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
   isOpen,
@@ -26,7 +26,7 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
   // Progress tracking (simulated based on typical CPU timing)
   const [progress, setProgress] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [currentStep, setCurrentStep] = useState('Uploading image...');
+  const [currentStep, setCurrentStep] = useState('Preprocessing image...');
   const startTimeRef = useRef<number>(0);
   
   // Quiz state
@@ -42,7 +42,7 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
   useEffect(() => {
     if (isOpen && shuffledQuestions.length === 0) {
       startTimeRef.current = Date.now();
-      const shuffled = getRandomQuestions(8); // Show max 8 questions
+      const shuffled = getRandomQuestions(12); // Get all 12 questions, no limit
       setShuffledQuestions(shuffled);
     }
   }, [isOpen, shuffledQuestions.length]);
@@ -98,19 +98,20 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
       setTotalSPEarned(prev => prev + 0.5);
     }
     
-    // Auto-advance after 2.5 seconds
+    // Auto-advance after 2.5 seconds if more questions available
     setTimeout(() => {
       if (currentQuestionIndex < shuffledQuestions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
         setSelectedAnswer(null);
         setQuizState('QUESTION');
       } else {
-        setQuizState('COMPLETE');
+        // No more questions, just stay on last feedback
+        setSelectedAnswer(null);
       }
     }, 2500);
   }, [quizState, shuffledQuestions, currentQuestionIndex]);
   
-  // Award SP when modal closes or quiz completes
+  // Award SP when modal closes (processing complete)
   const awardPoints = useCallback(async () => {
     if (pointsAwarded || correctAnswers === 0 || !user) return;
     
@@ -129,14 +130,7 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
     }
   }, [correctAnswers, totalSPEarned, pointsAwarded, user]);
   
-  // Award points when quiz completes
-  useEffect(() => {
-    if (quizState === 'COMPLETE' && !pointsAwarded) {
-      awardPoints();
-    }
-  }, [quizState, pointsAwarded, awardPoints]);
-  
-  // Award points on unmount (if user navigates away)
+  // Award points on unmount (when processing completes and modal closes)
   useEffect(() => {
     return () => {
       if (!pointsAwarded && correctAnswers > 0 && user) {
@@ -149,20 +143,27 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // Award points before reset
+      if (!pointsAwarded && correctAnswers > 0 && user) {
+        awardPoints();
+      }
+      
       // Reset all state for next time
-      setProgress(0);
-      setElapsedSeconds(0);
-      setCurrentStep('Uploading image...');
-      setQuizState('QUESTION');
-      setCurrentQuestionIndex(0);
-      setShuffledQuestions([]);
-      setCorrectAnswers(0);
-      setTotalSPEarned(0);
-      setSelectedAnswer(null);
-      setPointsAwarded(false);
-      startTimeRef.current = 0;
+      setTimeout(() => {
+        setProgress(0);
+        setElapsedSeconds(0);
+        setCurrentStep('Preprocessing image...');
+        setQuizState('QUESTION');
+        setCurrentQuestionIndex(0);
+        setShuffledQuestions([]);
+        setCorrectAnswers(0);
+        setTotalSPEarned(0);
+        setSelectedAnswer(null);
+        setPointsAwarded(false);
+        startTimeRef.current = 0;
+      }, 100);
     }
-  }, [isOpen]);
+  }, [isOpen, awardPoints, correctAnswers, pointsAwarded, user]);
   
   if (!isOpen || shuffledQuestions.length === 0) return null;
   
@@ -170,75 +171,57 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
   const remainingSeconds = Math.max(0, estimatedSeconds - elapsedSeconds);
   const isCorrect = selectedAnswer === currentQuestion?.correctIndex;
   
+  // Inline component matching existing UI/UX
   return (
-    <div 
-      className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 sm:p-6 z-50"
-      role="dialog"
-      aria-labelledby="quiz-title"
-      aria-modal="true"
-    >
-      <div className="max-w-2xl w-full bg-gradient-to-b from-green-900/40 to-green-950/60 rounded-3xl p-6 sm:p-8 border border-green-700/30 shadow-2xl">
+    <div className="space-y-4">
+      {/* Progress Section - matches "Current Task" box styling */}
+      <div className="p-4 rounded-lg bg-background-subtle border border-stroke-subtle">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-content-default">{title}</h3>
+          <span className="text-xs text-content-subtle">⏳ ~{remainingSeconds}s</span>
+        </div>
         
-        {/* Header - Progress Section */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Leaf className="w-6 h-6 text-green-400 animate-pulse" aria-hidden="true" />
-              <h2 id="quiz-title" className="text-xl sm:text-2xl font-bold text-white">
-                {title}
-              </h2>
-            </div>
-            <p className="text-green-300 text-sm" aria-live="polite">
-              ⏳ ~{remainingSeconds}s
-            </p>
-          </div>
-          
-          {/* Progress Bar */}
-          <div className="mb-2" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
-            <div className="h-2 bg-green-950/50 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-1000 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 text-xs text-green-200" aria-live="polite">
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-            <span>{currentStep}</span>
+        {/* Progress Bar */}
+        <div className="mb-2">
+          <div className="h-2 bg-background-default rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-brand-primary transition-all duration-1000 ease-out"
+              style={{ width: `${progress}%` }}
+            />
           </div>
         </div>
         
-        {/* Divider */}
-        <div className="border-t border-green-700/30 mb-6" aria-hidden="true" />
-        
-        {/* Quiz Section */}
+        <p className="text-xs text-content-subtle">{currentStep}</p>
+      </div>
+      
+      {/* Quiz Section - matches existing card styling */}
+      <div className="p-4 rounded-lg bg-background-subtle border border-stroke-subtle">
         {quizState === 'QUESTION' && currentQuestion && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <p className="text-green-400 text-sm mb-2 flex items-center justify-center gap-2">
-                <Sparkles className="w-4 h-4" aria-hidden="true" />
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-brand-secondary mt-1 flex-shrink-0" />
+              <p className="text-sm text-brand-secondary font-medium">
                 While you wait, test your tree knowledge!
               </p>
-              <h3 className="text-lg sm:text-xl font-semibold text-white leading-relaxed">
-                {currentQuestion.question}
-              </h3>
             </div>
             
-            {/* Answer Options */}
-            <div className="space-y-3" role="group" aria-label="Quiz answers">
+            <h4 className="text-base font-semibold text-content-default leading-relaxed">
+              {currentQuestion.question}
+            </h4>
+            
+            {/* Answer Options - matching existing button styling */}
+            <div className="space-y-2">
               {currentQuestion.options.map((option, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleAnswerSelect(idx as 0 | 1)}
-                  className="w-full p-4 sm:p-5 bg-green-950/40 hover:bg-green-900/50 active:bg-green-900/70 border-2 border-green-700/40 hover:border-green-500 rounded-2xl transition-all duration-200 text-left group focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 focus:ring-offset-black"
-                  aria-label={`Option ${idx === 0 ? 'A' : 'B'}: ${option}`}
+                  className="w-full p-3 bg-background-default hover:bg-brand-primary/10 active:bg-brand-primary/20 border border-stroke-default hover:border-brand-primary rounded-lg transition-all text-left focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 flex-shrink-0 rounded-full bg-green-800/50 flex items-center justify-center text-white font-bold text-lg group-hover:bg-green-700 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex-shrink-0 rounded-full bg-brand-primary/20 flex items-center justify-center text-brand-primary font-bold text-sm">
                       {idx === 0 ? 'A' : 'B'}
                     </div>
-                    <p className="text-base sm:text-lg text-white font-medium flex-1">
+                    <p className="text-sm text-content-default font-medium flex-1">
                       {option}
                     </p>
                   </div>
@@ -250,37 +233,35 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
         
         {/* Feedback Section */}
         {quizState === 'FEEDBACK' && currentQuestion && selectedAnswer !== null && (
-          <div className="space-y-4 text-center">
+          <div className="space-y-3">
             <div 
-              className={`inline-flex items-center gap-2 px-6 py-3 rounded-full ${
-                isCorrect ? 'bg-green-500/20' : 'bg-blue-500/20'
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                isCorrect ? 'bg-status-success/20' : 'bg-brand-secondary/20'
               }`}
-              role="status"
-              aria-live="polite"
             >
               {isCorrect ? (
                 <>
-                  <Check className="w-6 h-6 text-green-400" aria-hidden="true" />
-                  <span className="text-xl font-bold text-green-400">Correct!</span>
+                  <Check className="w-5 h-5 text-status-success" />
+                  <span className="text-sm font-bold text-status-success">Correct!</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-6 h-6 text-blue-400" aria-hidden="true" />
-                  <span className="text-xl font-bold text-blue-400">Great try!</span>
+                  <Sparkles className="w-5 h-5 text-brand-secondary" />
+                  <span className="text-sm font-bold text-brand-secondary">Great try!</span>
                 </>
               )}
             </div>
             
-            <div className="bg-green-950/40 rounded-2xl p-6">
-              <p className="text-green-200 text-sm mb-2">🎓 Fun Fact:</p>
-              <p className="text-white text-base leading-relaxed">
+            <div className="p-3 bg-background-default rounded-lg border border-stroke-default">
+              <p className="text-xs text-content-subtle mb-1">🎓 Fun Fact:</p>
+              <p className="text-sm text-content-default leading-relaxed">
                 {currentQuestion.fact}
               </p>
             </div>
             
             {isCorrect && (
-              <div className="animate-bounce" aria-live="polite">
-                <p className="text-2xl font-bold text-green-400">
+              <div className="text-center">
+                <p className="text-lg font-bold text-brand-primary animate-bounce">
                   +0.5 SP ✨
                 </p>
               </div>
@@ -288,42 +269,18 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
           </div>
         )}
         
-        {/* Complete Section */}
-        {quizState === 'COMPLETE' && (
-          <div className="text-center space-y-4">
-            <div className="text-6xl" role="img" aria-label="Celebration">🎉</div>
-            <h3 className="text-2xl font-bold text-white">
-              Great job learning!
-            </h3>
-            <div className="bg-green-500/20 rounded-2xl p-6">
-              <p className="text-green-300 text-sm mb-1">You earned</p>
-              <p className="text-4xl font-bold text-green-400" aria-live="polite">
-                {formatSP(totalSPEarned)}
-              </p>
-              <p className="text-green-200 text-sm mt-2">
-                {correctAnswers} of {shuffledQuestions.length} questions correct
-              </p>
-            </div>
-            <p className="text-white/70 text-sm">
-              Analysis will complete shortly...
-            </p>
-          </div>
-        )}
-        
-        {/* Footer - SP Counter & Progress */}
-        <div className="mt-6 pt-6 border-t border-green-700/30">
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-green-400" aria-hidden="true" />
-              <span className="text-green-300">
-                SP Earned: <span className="font-bold text-green-400">{formatSP(totalSPEarned)}</span>
+        {/* Footer - SP Counter */}
+        <div className="mt-4 pt-3 border-t border-stroke-default">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
+              <span className="text-content-subtle">
+                SP Earned: <span className="font-bold text-brand-primary">{formatSP(totalSPEarned)}</span>
               </span>
             </div>
-            {quizState !== 'COMPLETE' && (
-              <span className="text-green-300" aria-live="polite">
-                Question {currentQuestionIndex + 1} of {shuffledQuestions.length}
-              </span>
-            )}
+            <span className="text-content-subtle">
+              Question {currentQuestionIndex + 1} of {shuffledQuestions.length}
+            </span>
           </div>
         </div>
       </div>

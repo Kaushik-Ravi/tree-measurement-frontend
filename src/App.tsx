@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, Sparkles, ImageIcon } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -1490,6 +1490,19 @@ function App() {
             <div className="p-4 rounded-lg mb-6 bg-background-subtle border border-stroke-subtle"><h3 className="font-bold text-content-default">Current Task</h3><div id="status-box" className="text-sm text-content-subtle"><p>{instructionText}</p></div>{errorMessage && <p className="text-sm text-status-error font-medium mt-1">{errorMessage}</p>}</div>
             {isBusy && ( <div className="mb-6"><div className="progress-bar-container"><div className="progress-bar-animated"></div></div>{ <p className="text-xs text-center text-content-subtle animate-pulse mt-1">{isHistoryLoading ? 'Loading history...' : appStatus === 'ANALYSIS_SAVING' ? 'Saving...' : isCO2Calculating ? 'Calculating CO₂...' : 'Processing...'}</p>}</div> )}
             
+            {/* Interactive Quiz - Shows during SAM processing */}
+            {(appStatus === 'ANALYSIS_PROCESSING' || appStatus === 'SESSION_PROCESSING_PHOTO') && (
+              <ProcessingQuizModal
+                isOpen={true}
+                estimatedSeconds={50}
+                title={
+                  appStatus === 'ANALYSIS_PROCESSING' 
+                    ? 'Processing Tree Measurements' 
+                    : 'Analyzing Photo'
+                }
+              />
+            )}
+            
             {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> </div> )}
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
@@ -1685,19 +1698,6 @@ function App() {
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} /> )}
       <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
-      
-      {/* Interactive Quiz Modal for SAM Processing */}
-      {(appStatus === 'ANALYSIS_PROCESSING' || appStatus === 'SESSION_PROCESSING_PHOTO') && (
-        <ProcessingQuizModal
-          isOpen={true}
-          estimatedSeconds={50}
-          title={
-            appStatus === 'ANALYSIS_PROCESSING' 
-              ? 'Processing Tree Measurements' 
-              : 'Analyzing Photo'
-          }
-        />
-      )}
       
       {isSessionActive ? renderSessionView() : (
         <div className="w-full flex flex-col h-full">
