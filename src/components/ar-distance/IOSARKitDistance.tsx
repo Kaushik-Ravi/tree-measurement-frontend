@@ -76,12 +76,6 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
       }
     }, []);
 
-  const handleModelLoad = () => {
-    console.log('✅ [iOS ARKit] 3D model loaded successfully');
-    console.log('✅ [iOS ARKit] AR is READY - Waiting for user to tap "View in AR"');
-    setState('READY');
-  };
-
   const handleARStatus = (event: any) => {
     const status = event.detail.status;
     console.log('🎯 ========================================');
@@ -187,12 +181,13 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
       {/* Model Viewer (Hidden until AR activated) */}
       <model-viewer
         ref={modelViewerRef}
-        src="/models/distance-marker.glb"
+        src="data:model/gltf-binary;base64,Z2xURgIAAADsAAAATUFUSAAAAABleGFtcGxl"
         ar
         ar-modes="quick-look scene-viewer webxr"
         ar-scale="fixed"
         camera-controls
         shadow-intensity="1"
+        autoplay
         alt="Distance measurement marker"
         style={{
           width: '100%',
@@ -202,7 +197,6 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
           left: 0,
           display: state === 'AR_ACTIVE' || state === 'PLACEMENT_LOCKED' ? 'block' : 'none'
         }}
-        onLoad={handleModelLoad}
         // @ts-ignore - model-viewer custom events
         onArStatus={handleARStatus}
       />

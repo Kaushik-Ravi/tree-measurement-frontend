@@ -72,7 +72,9 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
       const isRegistered = !!(window && (window as any).customElements && (window as any).customElements.get('model-viewer'));
       if (isRegistered || 'model-viewer' in window) {
         console.log('✅ [Android ARCore] model-viewer already available - skipping dynamic load');
-        setState('LOADING');
+        // Model-viewer is ready, skip to READY state (no model file needed)
+        console.log('✅ [Android ARCore] Skipping model load - going straight to READY');
+        setState('READY');
         return;
       }
 
@@ -86,7 +88,7 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
 
         script.onload = () => {
           console.log('✅ [Android ARCore] Model-viewer loaded');
-          setState('LOADING');
+          setState('READY');
         };
         script.onerror = () => {
           console.error('❌ [Android ARCore] Failed to load model-viewer');
@@ -95,7 +97,7 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
         };
       } else {
         console.log('⚠️ [Android ARCore] model-viewer script tag already present, waiting for load');
-        setState('LOADING');
+        setState('READY');
       }
     } catch (err) {
       console.error('❌ [Android ARCore] Error checking/injecting model-viewer', err);
@@ -124,15 +126,11 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
     const modelViewer = modelViewerRef.current;
     if (!modelViewer) return;
 
+    console.log('🚀 [Android ARCore] Activating AR session...');
     // Activate AR mode (triggers Scene Viewer on Android)
     modelViewer.activateAR();
     arSessionActive.current = true;
     setState('AR_ACTIVE');
-  };
-
-  const handleModelLoad = () => {
-    console.log('[Android ARCore] 3D model loaded successfully');
-    setState('READY');
   };
 
   const handleARStatus = (event: any) => {
@@ -231,16 +229,17 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
         </div>
       </header>
 
-      {/* Model Viewer */}
+      {/* Model Viewer - Using inline minimal GLB */}
       <model-viewer
         ref={modelViewerRef}
-        src="/models/distance-marker.glb"
+        src="data:model/gltf-binary;base64,Z2xURgIAAADsAAAAdAEAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAifSwic2NlbmUiOjAsInNjZW5lcyI6W3sibm9kZXMiOlswXX1dLCJub2RlcyI6W3sibWVzaCI6MH1dLCJtZXNoZXMiOlt7InByaW1pdGl2ZXMiOlt7ImF0dHJpYnV0ZXMiOnsiUE9TSVRJT04iOjB9LCJpbmRpY2VzIjoxfV19XSwiYWNjZXNzb3JzIjpbeyJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6NCwidHlwZSI6IlZFQzMiLCJtYXgiOlswLjEsMC4xLDAuMV0sIm1pbiI6Wy0wLjEsLTAuMSwtMC4xXX0seyJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6NiwidHlwZSI6IlNDQUxBUiJ9XX0="
         ar
-        ar-modes="scene-viewer webxr quick-look" // Scene Viewer (ARCore) first
+        ar-modes="scene-viewer webxr quick-look"
         ar-scale="fixed"
         camera-controls
         shadow-intensity="1"
         alt="Distance measurement marker"
+        autoplay
         style={{
           width: '100%',
           height: '100%',
@@ -249,7 +248,6 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
           left: 0,
           display: state === 'AR_ACTIVE' || state === 'PLACEMENT_LOCKED' ? 'block' : 'none'
         }}
-        onLoad={handleModelLoad}
         // @ts-ignore
         onArStatus={handleARStatus}
       >
