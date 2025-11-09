@@ -10,7 +10,7 @@ import { FeatureFlags } from './config/featureFlags';
 // --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
 import { 
-  samAutoSegment, samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
+  samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
   Point, Metrics, IdentificationResponse, TreeResult, UpdateTreeResultPayload, PendingTree, CommunityAnalysisPayload,
   getResults, saveResult, deleteResult, updateResult, uploadImage, quickCapture,
   getPendingTrees, claimTree, submitCommunityAnalysis, samAutoSegmentFromUrl
@@ -43,6 +43,8 @@ type AppStatus =
   'ANALYSIS_AWAITING_MODE_SELECTION' | 
   'ANALYSIS_AWAITING_INITIAL_CLICK' |
   'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' |
+  'ANALYSIS_AWAITING_CANOPY_POINTS' |
+  'ANALYSIS_AWAITING_CANOPY_CONFIRMATION' |
   'ANALYSIS_PROCESSING' |
   'ANALYSIS_SAVING' |
   'ANALYSIS_COMPLETE' |
@@ -226,6 +228,7 @@ function App() {
   const [resultImageSrc, setResultImageSrc] = useState<string>('');
   const [imageDimensions, setImageDimensions] = useState<{w: number, h: number} | null>(null);
   const [refinePoints, setRefinePoints] = useState<Point[]>([]);
+  const [initialPoints, setInitialPoints] = useState<Point[]>([]);  // Trunk + canopy points for SAM
   const [manualPoints, setManualPoints] = useState<Record<string, Point[]>>({ height: [], canopy: [], girth: [] });
   const [transientPoint, setTransientPoint] = useState<Point | null>(null);
   const [dbhLine, setDbhLine] = useState<{x1: number, y1: number, x2: number, y2: number} | null>(null);
@@ -612,9 +615,9 @@ function App() {
       const drawPoint = (p: Point, color: string) => { const sp = scaleCoords(p); ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke(); };
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
       if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
-      refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
+      initialPoints.forEach(p => drawPoint(p, '#10B981')); refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
     };
-  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive]);
+  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, initialPoints, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive]);
   
   // CRITICAL FIX: Restore image sources after returning from AR mode
   // When AR Ruler is used, the photo view unmounts. When returning, we need to restore the image.
@@ -935,11 +938,27 @@ function App() {
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
 
     if (appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK') {
+        // Step 1: Collect trunk click
         setTransientPoint(clickPoint);
         setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION');
-        setInstructionText("Confirm the point on the trunk, or undo to select again.");
+        setInstructionText("Confirm the trunk point, or undo to select again.");
         setIsPanelOpen(false);
         setShowInstructionToast(true);
+    } else if (appStatus === 'ANALYSIS_AWAITING_CANOPY_POINTS') {
+        // Step 2: Collect canopy points (help SAM understand tree boundaries)
+        const newInitialPoints = [...initialPoints, clickPoint];
+        setInitialPoints(newInitialPoints);
+        
+        if (newInitialPoints.length === 3) {  // 1 trunk + 2 canopy = 3 total
+            setAppStatus('ANALYSIS_AWAITING_CANOPY_CONFIRMATION');
+            setInstructionText("Review all points. Click OK to analyze, or undo to adjust.");
+            setIsPanelOpen(false);
+            setShowInstructionToast(true);
+        } else if (newInitialPoints.length === 2) {
+            // Just collected first canopy point, need one more
+            setInstructionText("Good! Now click another canopy point.");
+            setShowInstructionToast(true);
+        }
     } else if (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') { 
         setRefinePoints(prev => [...prev, clickPoint]);
     } else if (isManualMode(appStatus)) { 
@@ -948,47 +967,53 @@ function App() {
   };
 
   const handleConfirmInitialClick = async () => {
-    if (!transientPoint || !scaleFactor || !session?.access_token) return;
+    if (!transientPoint) return;
     
-    console.log('[SAM Measurement] 🎯 Starting automatic tree segmentation...');
+    // Add trunk point to initialPoints and move to canopy collection
+    setInitialPoints([transientPoint]);
+    setTransientPoint(null);
+    setAppStatus('ANALYSIS_AWAITING_CANOPY_POINTS');
+    setInstructionText("Great! Now click 2 canopy points of the tree.");
+    setIsPanelOpen(false);
+    setShowInstructionToast(true);
+  };
+
+  const handleConfirmAllInitialPoints = async () => {
+    if (initialPoints.length !== 3 || !scaleFactor || !session?.access_token) return;
+    
+    console.log('[SAM Measurement] 🎯 Starting automatic tree segmentation with multi-point input...');
     console.log('[SAM Measurement] Input parameters:', {
-      clickPoint: transientPoint,
+      trunkPoint: initialPoints[0],
+      canopyPoint1: initialPoints[1],
+      canopyPoint2: initialPoints[2],
+      totalPoints: initialPoints.length,
       scaleFactor: scaleFactor,
       distance: parseFloat(distance),
       view: currentView
     });
     
     setIsPanelOpen(true); 
-    setInstructionText("Running automatic segmentation..."); 
+    setInstructionText("Running automatic segmentation with your marked points..."); 
     setAppStatus('ANALYSIS_PROCESSING'); 
 
     try {
         let response;
+        // Use samRefineWithPoints which accepts multiple points for better accuracy
         if (currentView === 'SESSION' && currentMeasurementFile) {
-            console.log('[SAM Measurement] Mode: Photo upload');
-            console.log('[SAM Measurement] Sending to backend:', {
-              file: currentMeasurementFile.name,
-              distance: parseFloat(distance),
-              scaleFactor: scaleFactor,
-              clickPoint: transientPoint
-            });
-            response = await samAutoSegment(currentMeasurementFile, parseFloat(distance), scaleFactor, transientPoint);
+            console.log('[SAM Measurement] Mode: Photo upload with multi-point input');
+            response = await samRefineWithPoints(currentMeasurementFile, initialPoints, scaleFactor);
         } else if (currentView === 'COMMUNITY_GROVE' && claimedTree) {
-            console.log('[SAM Measurement] Mode: Community Grove');
-            console.log('[SAM Measurement] Sending to backend:', {
-              imageUrl: claimedTree.image_url,
-              distance: claimedTree.distance_m,
-              scaleFactor: scaleFactor,
-              clickPoint: transientPoint
-            });
-            response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, transientPoint, session.access_token);
+            console.log('[SAM Measurement] Mode: Community Grove with multi-point input');
+            // For community grove, we'll need to use the single-point API for now
+            // TODO: Backend should support multi-point for URL-based images
+            response = await samAutoSegmentFromUrl(claimedTree.image_url!, claimedTree.distance_m!, scaleFactor, initialPoints[0], session.access_token);
         } else {
             throw new Error("Invalid state for auto-segmentation.");
         }
 
         if (response.status !== 'success') throw new Error(response.message);
         
-        console.log('[SAM Measurement] ✅ Segmentation complete!');
+        console.log('[SAM Measurement] ✅ Segmentation complete with multi-point input!');
         console.log('[SAM Measurement] Results:', {
           height: response.metrics.height_m,
           canopy: response.metrics.canopy_m,
@@ -1007,7 +1032,7 @@ function App() {
         setAppStatus('ERROR'); 
         setErrorMessage(error.message); 
     } finally { 
-        setTransientPoint(null); 
+        setInitialPoints([]);
     }
   };
   
@@ -1313,6 +1338,7 @@ function App() {
     setCurrentLocation(userGeoLocation); 
     setIsLocationPickerActive(false);
     setRefinePoints([]);
+    setInitialPoints([]);
     setOriginalImageSrc('');
     setResultImageSrc('');
     setDbhLine(null);
@@ -1334,7 +1360,7 @@ function App() {
     if (appStatus === 'ANALYSIS_MANUAL_AWAITING_BASE_CLICK') {
       try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS'); showNextInstruction("STEP 1/3 (Height): Click highest and lowest points."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
-      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click widest points."); } return {...p, height: h}; }); 
+      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 canopy points."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
       setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
@@ -1351,6 +1377,30 @@ function App() {
         setShowInstructionToast(true);
         break;
       
+      case 'ANALYSIS_AWAITING_CANOPY_POINTS':
+        if (initialPoints.length > 1) {
+          // Remove last canopy point
+          setInitialPoints(prev => prev.slice(0, -1));
+          setInstructionText("Click 2 canopy points of the tree.");
+          setShowInstructionToast(true);
+        } else {
+          // Go back to trunk confirmation
+          setTransientPoint(initialPoints[0]);
+          setInitialPoints([]);
+          setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION');
+          setInstructionText("Confirm the trunk point, or undo to select again.");
+          setShowInstructionToast(true);
+        }
+        break;
+
+      case 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION':
+        // Remove last canopy point and go back to collecting
+        setInitialPoints(prev => prev.slice(0, -1));
+        setAppStatus('ANALYSIS_AWAITING_CANOPY_POINTS');
+        setInstructionText("Click 2 canopy points of the tree.");
+        setShowInstructionToast(true);
+        break;
+      
       case 'ANALYSIS_AWAITING_REFINE_POINTS':
         setRefinePoints(p => p.slice(0, -1));
         break;
@@ -1358,6 +1408,12 @@ function App() {
       case 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS':
         if (manualPoints.height.length > 0) {
           setManualPoints(p => ({ ...p, height: p.height.slice(0, -1) }));
+        } else {
+          // No height points yet - go back to base click and clear the red DBH guide line
+          setDbhGuideRect(null);
+          setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK');
+          setInstructionText("Manual Mode: Click the exact base of the tree trunk.");
+          setShowInstructionToast(true);
         }
         break;
       
@@ -1375,7 +1431,7 @@ function App() {
           setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         } else {
           setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS');
-          setInstructionText("STEP 2/3 (Canopy): Click widest points.");
+          setInstructionText("STEP 2/3 (Canopy): Click 2 canopy points.");
         }
         break;
 
@@ -1556,16 +1612,39 @@ function App() {
           {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} theme={theme} /> ) : (
             originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} />
           )}
-          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || isManualMode(appStatus) || appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION') && (
+          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
+            appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ||
+            appStatus === 'ANALYSIS_AWAITING_CANOPY_POINTS' ||
+            appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION' ||
+            isManualMode(appStatus)) && (
             <FloatingInteractionControls 
               onUndo={handleUndo}
-              onConfirm={appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ? handleConfirmInitialClick : handleApplyRefinements}
-              showConfirm={appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION'}
+              onConfirm={
+                appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' 
+                  ? handleConfirmInitialClick 
+                  : appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION'
+                  ? handleConfirmAllInitialPoints
+                  : handleApplyRefinements
+              }
+              showConfirm={
+                appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
+                appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ||
+                appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION'
+              }
               undoDisabled={
                 (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' && refinePoints.length === 0) ||
-                (isManualMode(appStatus) && manualPoints.height.length === 0 && manualPoints.canopy.length === 0 && manualPoints.girth.length === 0)
+                (appStatus === 'ANALYSIS_MANUAL_AWAITING_BASE_CLICK') ||
+                (appStatus === 'ANALYSIS_AWAITING_CANOPY_POINTS' && initialPoints.length <= 1) ||
+                (isManualMode(appStatus) && 
+                 appStatus !== 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS' && 
+                 manualPoints.height.length === 0 && 
+                 manualPoints.canopy.length === 0 && 
+                 manualPoints.girth.length === 0)
               }
-              confirmDisabled={refinePoints.length === 0 && appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS'}
+              confirmDisabled={
+                (refinePoints.length === 0 && appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') ||
+                (initialPoints.length !== 3 && appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION')
+              }
             />
           )}
       </div>
