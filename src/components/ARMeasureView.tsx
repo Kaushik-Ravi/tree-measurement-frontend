@@ -21,6 +21,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
   const arStateRef = useRef<ARState>('SCANNING');
   const distanceRef = useRef<number | null>(null);
+  const measurementCompletedRef = useRef(false); // CRITICAL: Track if measurement was successful
   
   // UI state (safe to cause re-renders)
   const [instruction, setInstruction] = useState("Scan the ground to detect surface.");
@@ -70,6 +71,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   // --- Core Action Handlers ---
   const handleConfirm = useCallback(() => {
     if (distanceRef.current !== null) {
+      measurementCompletedRef.current = true; // Mark measurement as successful
       onDistanceMeasured(distanceRef.current);
     }
   }, [onDistanceMeasured]);
@@ -346,7 +348,10 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     
     renderer.xr.addEventListener('sessionend', () => {
         setArSessionActive(false);
-        onCancel();
+        // CRITICAL FIX: Only call onCancel if measurement wasn't completed successfully
+        if (!measurementCompletedRef.current) {
+          onCancel();
+        }
     });
 
     // --- 5. Render Loop ---
