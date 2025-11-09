@@ -456,13 +456,33 @@ canvas {
   z-index: 1;
 }
 
-.leaflet-pane {
-  z-index: auto;
+/* CRITICAL: Leaflet popup must be above map */
+.leaflet-popup-pane {
+  z-index: 1100 !important;
+}
+
+.leaflet-popup {
+  z-index: 1100 !important;
 }
 
 .leaflet-top,
 .leaflet-bottom {
   z-index: 1000;
+}
+
+/* Custom tree marker styling */
+.custom-tree-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-tree-marker > div {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.custom-tree-marker:hover > div {
+  transform: scale(1.1);
 }
 
 

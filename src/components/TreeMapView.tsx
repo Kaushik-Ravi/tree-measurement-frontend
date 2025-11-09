@@ -1,10 +1,12 @@
 // src/components/TreeMapView.tsx
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import { Icon } from 'leaflet';
+import { DivIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TreeResult } from '../apiService';
 import { MapPin, Eye } from 'lucide-react';
 import { useMemo } from 'react';
+import { renderToString } from 'react-dom/server';
+import { TreePine } from 'lucide-react';
 
 interface TreeMapViewProps {
   trees: TreeResult[];
@@ -12,7 +14,7 @@ interface TreeMapViewProps {
   theme?: 'light' | 'dark';
 }
 
-// Custom tree marker icons by status
+// Custom tree marker icons by status using Tree icon from lucide-react
 const createTreeIcon = (status?: string) => {
   const colorMap: Record<string, string> = {
     'COMPLETE': '#10b981',           // green-500 (verified)
@@ -24,19 +26,35 @@ const createTreeIcon = (status?: string) => {
   
   const color = colorMap[status || 'DEFAULT'] || colorMap['DEFAULT'];
   
-  const svgIcon = `
-    <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-      <path d="M15 0C6.716 0 0 6.716 0 15c0 8.284 15 25 15 25s15-16.716 15-25c0-8.284-6.716-15-15-15z" 
-            fill="${color}" stroke="white" stroke-width="2"/>
-      <circle cx="15" cy="15" r="5" fill="white"/>
-    </svg>
-  `;
+  // Create tree icon using lucide-react TreePine component
+  const iconHtml = renderToString(
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '40px',
+      height: '40px',
+      backgroundColor: 'white',
+      borderRadius: '50%',
+      border: `3px solid ${color}`,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+    }}>
+      <TreePine 
+        size={24} 
+        color={color}
+        strokeWidth={2.5}
+        fill={color}
+        fillOpacity={0.2}
+      />
+    </div>
+  );
   
-  return new Icon({
-    iconUrl: `data:image/svg+xml;base64,${btoa(svgIcon)}`,
-    iconSize: [30, 40],
-    iconAnchor: [15, 40],
-    popupAnchor: [0, -40],
+  return new DivIcon({
+    html: iconHtml,
+    className: 'custom-tree-marker',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    popupAnchor: [0, -20],
   });
 };
 
