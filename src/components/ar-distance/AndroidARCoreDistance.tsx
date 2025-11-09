@@ -229,17 +229,16 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
         </div>
       </header>
 
-      {/* Model Viewer - Using inline minimal GLB */}
+      {/* Model Viewer - Using minimal sphere from Google CDN */}
       <model-viewer
         ref={modelViewerRef}
-        src="data:model/gltf-binary;base64,Z2xURgIAAADsAAAAdAEAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAifSwic2NlbmUiOjAsInNjZW5lcyI6W3sibm9kZXMiOlswXX1dLCJub2RlcyI6W3sibWVzaCI6MH1dLCJtZXNoZXMiOlt7InByaW1pdGl2ZXMiOlt7ImF0dHJpYnV0ZXMiOnsiUE9TSVRJT04iOjB9LCJpbmRpY2VzIjoxfV19XSwiYWNjZXNzb3JzIjpbeyJjb21wb25lbnRUeXBlIjo1MTI2LCJjb3VudCI6NCwidHlwZSI6IlZFQzMiLCJtYXgiOlswLjEsMC4xLDAuMV0sIm1pbiI6Wy0wLjEsLTAuMSwtMC4xXX0seyJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6NiwidHlwZSI6IlNDQUxBUiJ9XX0="
+        src="https://modelviewer.dev/shared-assets/models/reflective-sphere.gltf"
         ar
         ar-modes="scene-viewer webxr quick-look"
         ar-scale="fixed"
         camera-controls
         shadow-intensity="1"
         alt="Distance measurement marker"
-        autoplay
         style={{
           width: '100%',
           height: '100%',

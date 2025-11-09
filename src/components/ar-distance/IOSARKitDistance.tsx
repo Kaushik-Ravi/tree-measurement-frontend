@@ -178,16 +178,15 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
         </div>
       </header>
 
-      {/* Model Viewer (Hidden until AR activated) */}
+      {/* Model Viewer (Hidden until AR activated) - Using minimal sphere from Google CDN */}
       <model-viewer
         ref={modelViewerRef}
-        src="data:model/gltf-binary;base64,Z2xURgIAAADsAAAATUFUSAAAAABleGFtcGxl"
+        src="https://modelviewer.dev/shared-assets/models/reflective-sphere.gltf"
         ar
         ar-modes="quick-look scene-viewer webxr"
         ar-scale="fixed"
         camera-controls
         shadow-intensity="1"
-        autoplay
         alt="Distance measurement marker"
         style={{
           width: '100%',
