@@ -76,16 +76,6 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
       }
     }, []);
 
-  const handleARSessionStart = () => {
-    const modelViewer = modelViewerRef.current;
-    if (!modelViewer) return;
-
-    // Activate AR mode (triggers native ARKit/Quick Look)
-    modelViewer.activateAR();
-    arSessionActive.current = true;
-    setState('AR_ACTIVE');
-  };
-
   const handleModelLoad = () => {
     console.log('✅ [iOS ARKit] 3D model loaded successfully');
     console.log('✅ [iOS ARKit] AR is READY - Waiting for user to tap "View in AR"');
@@ -120,7 +110,7 @@ export const IOSARKitDistance: React.FC<IOSARKitDistanceProps> = ({
     // Get the model's position in AR world space
     // Model-viewer exposes camera and model transforms
     const camera = modelViewer.getCameraOrbit();
-    const modelPosition = modelViewer.getModelPosition();
+    // const modelPosition = modelViewer.getModelPosition(); // Not used currently
 
     // Calculate distance (Euclidean distance in 3D space)
     // camera.distance gives us the distance from camera to model center
