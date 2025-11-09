@@ -325,3 +325,129 @@ canvas {
     bottom: max(24px, calc(1.5rem + env(safe-area-inset-bottom, 0px)));
   }
 }
+
+/*
+  ==============================================
+  COMPACT TREE MAP POPUP STYLES
+  ==============================================
+  Clean, professional map popup with proper light/dark mode support
+*/
+
+/* Override Leaflet's default popup styles */
+.leaflet-popup-content-wrapper {
+  @apply !bg-background-default !rounded-xl !shadow-lg border border-stroke-default !p-0;
+  overflow: hidden;
+}
+
+.leaflet-popup-content {
+  @apply !m-0 w-full;
+}
+
+.leaflet-popup-tip {
+  @apply !bg-background-default border-l border-b border-stroke-default;
+}
+
+/* Close button styling */
+.leaflet-popup-close-button {
+  @apply !text-content-subtle hover:!text-content-default !text-2xl !leading-none;
+  top: 8px !important;
+  right: 8px !important;
+}
+
+/* Compact tree card layout */
+.compact-tree-card {
+  @apply flex flex-col;
+  width: 100%;
+}
+
+.popup-image {
+  @apply w-full h-24 object-cover;
+  margin: 0;
+}
+
+.popup-header {
+  @apply px-3 pt-3 pb-2;
+}
+
+.popup-scientific-name {
+  @apply text-sm font-bold italic text-content-default leading-tight m-0;
+}
+
+.popup-common-name {
+  @apply text-xs text-content-subtle capitalize mt-1 m-0;
+}
+
+/* Compact metrics grid */
+.popup-metrics {
+  @apply grid grid-cols-3 gap-0 border-t border-b border-stroke-subtle;
+}
+
+.metric-item {
+  @apply flex flex-col items-center justify-center py-2 px-1;
+  border-right: 1px solid rgb(var(--stroke-subtle));
+}
+
+.metric-item:last-child {
+  border-right: none;
+}
+
+.metric-label {
+  @apply text-[10px] text-content-subtle uppercase tracking-wide mb-0.5;
+}
+
+.metric-value {
+  @apply text-xs font-mono font-semibold text-content-default;
+}
+
+/* Footer with status and button */
+.popup-footer {
+  @apply flex items-center justify-between px-3 py-2;
+}
+
+.status-badge {
+  @apply inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-full uppercase tracking-wide;
+}
+
+.status-complete {
+  @apply bg-status-success/10 text-status-success;
+}
+
+.status-verified {
+  @apply bg-brand-secondary/10 text-brand-secondary;
+}
+
+.status-pending {
+  @apply bg-brand-accent/10 text-brand-accent;
+}
+
+.status-progress {
+  @apply bg-brand-primary/10 text-brand-primary;
+}
+
+.status-unknown {
+  @apply bg-background-subtle text-content-subtle;
+}
+
+.view-details-btn {
+  @apply flex items-center gap-1 px-3 py-1.5 bg-brand-primary text-content-on-brand rounded-lg text-xs font-medium;
+  @apply hover:bg-brand-primary-hover transition-colors;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.view-details-btn:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+/* Dark mode specific enhancements */
+:root.dark .leaflet-popup-content-wrapper {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+:root.dark .view-details-btn {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+:root.dark .view-details-btn:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+

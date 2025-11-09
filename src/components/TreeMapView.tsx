@@ -111,74 +111,67 @@ export function TreeMapView({ trees, onTreeClick, theme = 'light' }: TreeMapView
             position={[tree.latitude!, tree.longitude!]}
             icon={createTreeIcon(tree.status)}
           >
-            <Popup className="tree-popup" minWidth={250}>
-              <div className="p-2 space-y-3">
+            <Popup className="tree-popup compact-popup" minWidth={220} maxWidth={280}>
+              <div className="compact-tree-card">
                 {/* Thumbnail */}
                 {tree.image_url && (
                   <img 
                     src={tree.image_url} 
                     alt={tree.file_name}
-                    className="w-full h-32 object-cover rounded-lg"
+                    className="popup-image"
                   />
                 )}
                 
-                {/* Species Name */}
-                <div>
-                  <h3 className="font-bold text-base italic text-content-default">
+                {/* Species Info - More Compact */}
+                <div className="popup-header">
+                  <h3 className="popup-scientific-name">
                     {tree.species?.scientificName || 'Unidentified'}
                   </h3>
                   {tree.species?.commonNames && tree.species.commonNames.length > 0 && (
-                    <p className="text-xs text-content-subtle capitalize">
+                    <p className="popup-common-name">
                       {tree.species.commonNames[0]}
                     </p>
                   )}
                 </div>
                 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="bg-background-subtle p-2 rounded">
-                    <p className="text-content-subtle">Height</p>
-                    <p className="font-mono font-semibold text-content-default">
-                      {tree.metrics?.height_m?.toFixed(1) ?? '--'} m
-                    </p>
+                {/* Compact Metrics Grid */}
+                <div className="popup-metrics">
+                  <div className="metric-item">
+                    <span className="metric-label">Height</span>
+                    <span className="metric-value">{tree.metrics?.height_m?.toFixed(1) ?? '--'} m</span>
                   </div>
-                  <div className="bg-background-subtle p-2 rounded">
-                    <p className="text-content-subtle">Canopy</p>
-                    <p className="font-mono font-semibold text-content-default">
-                      {tree.metrics?.canopy_m?.toFixed(1) ?? '--'} m
-                    </p>
+                  <div className="metric-item">
+                    <span className="metric-label">Canopy</span>
+                    <span className="metric-value">{tree.metrics?.canopy_m?.toFixed(1) ?? '--'} m</span>
                   </div>
-                  <div className="bg-background-subtle p-2 rounded">
-                    <p className="text-content-subtle">DBH</p>
-                    <p className="font-mono font-semibold text-content-default">
-                      {tree.metrics?.dbh_cm?.toFixed(1) ?? '--'} cm
-                    </p>
+                  <div className="metric-item">
+                    <span className="metric-label">DBH</span>
+                    <span className="metric-value">{tree.metrics?.dbh_cm?.toFixed(1) ?? '--'} cm</span>
                   </div>
                 </div>
                 
-                {/* Status Badge */}
-                <div className="flex items-center justify-between">
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                {/* Compact Footer */}
+                <div className="popup-footer">
+                  <span className={`status-badge ${
                     tree.status === 'COMPLETE' 
-                      ? 'bg-status-success/10 text-status-success'
+                      ? 'status-complete'
                       : tree.status === 'VERIFIED'
-                      ? 'bg-brand-secondary/10 text-brand-secondary'
+                      ? 'status-verified'
                       : tree.status === 'PENDING_ANALYSIS'
-                      ? 'bg-brand-accent/10 text-brand-accent'
+                      ? 'status-pending'
                       : tree.status === 'ANALYSIS_IN_PROGRESS'
-                      ? 'bg-brand-primary/10 text-brand-primary'
-                      : 'bg-background-subtle text-content-subtle'
+                      ? 'status-progress'
+                      : 'status-unknown'
                   }`}>
                     {tree.status || 'UNKNOWN'}
                   </span>
                   
-                  {/* View Details Button */}
                   <button
                     onClick={() => onTreeClick(tree)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-brand-primary text-white rounded-lg text-xs font-medium hover:bg-brand-primary-hover transition-colors"
+                    className="view-details-btn"
                   >
                     <Eye className="w-3 h-3" />
-                    View Details
+                    View
                   </button>
                 </div>
               </div>
