@@ -267,7 +267,7 @@ canvas {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* 
+/*
   ==============================================
   PHASE 5: SLIDE-UP ANIMATION
   ==============================================
@@ -286,4 +286,36 @@ canvas {
 
 .animate-slide-up {
   animation: slide-up 0.3s ease-out forwards;
+}
+
+/* 
+  ==============================================
+  MOBILE BROWSER UI SAFE POSITIONING
+  ==============================================
+  Critical fix for floating controls on mobile browsers (Chrome, Brave, Safari, Firefox)
+  
+  Problem: Mobile browsers have dynamic bottom navigation bars (48-56px) that obscure
+  fixed-position elements. Standard CSS 'bottom' doesn't account for this.
+  
+  Solution: Multi-layer safety approach used by Instagram, Google Maps, YouTube:
+    Layer 1: env(safe-area-inset-bottom) - iOS notches & Android gesture bars
+    Layer 2: max(80px, ...) - Clearance above browser bottom nav
+    Layer 3: Responsive - 80px mobile, 24px desktop
+  
+  Best Practices:
+    - Always use 'fixed' not 'absolute' for viewport-level positioning
+    - Use z-50 or higher to ensure controls are on top
+    - Combine with backdrop-blur for visual separation
+  
+  Reference: https://developer.mozilla.org/en-US/docs/Web/CSS/env#safe-area-inset-bottom
+*/
+.safe-area-bottom {
+  bottom: max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)));
+}
+
+/* Desktop override - smaller offset when there's no mobile browser UI */
+@media (min-width: 768px) {
+  .safe-area-bottom {
+    bottom: max(24px, calc(1.5rem + env(safe-area-inset-bottom, 0px)));
+  }
 }

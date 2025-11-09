@@ -183,8 +183,15 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
         {points.length > 0 && !isPanelVisible && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
-                <button onClick={handleUndo} className="p-3 bg-background-subtle/90 text-content-default rounded-lg shadow-lg backdrop-blur-sm border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors">
+            <div 
+              className="fixed left-1/2 -translate-x-1/2 z-50"
+              style={{
+                // CRITICAL FIX: Multi-layer mobile browser UI safety
+                // Ensures undo button is always visible above mobile browser bottom navigation
+                bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+              }}
+            >
+                <button onClick={handleUndo} className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors">
                     <RotateCcw size={20} />
                 </button>
             </div>

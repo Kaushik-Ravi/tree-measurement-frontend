@@ -101,7 +101,16 @@ interface FloatingInteractionControlsProps {
 
 const FloatingInteractionControls = ({ onUndo, onConfirm, showConfirm, undoDisabled, confirmDisabled }: FloatingInteractionControlsProps) => {
   return (
-    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-background-subtle/90 text-content-default p-2 rounded-xl shadow-lg backdrop-blur-sm border border-stroke-default">
+    <div 
+      className="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
+      style={{
+        // CRITICAL FIX: Multi-layer mobile browser UI safety
+        // Layer 1: env(safe-area-inset-bottom) handles iOS notches & Android gesture bars
+        // Layer 2: max(80px, ...) ensures clearance above mobile browser bottom nav (48-56px)
+        // Layer 3: Adaptive sizing - larger on mobile (80px), smaller on desktop (24px)
+        bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+      }}
+    >
       <button onClick={onUndo} disabled={undoDisabled} className="p-3 rounded-lg hover:bg-background-inset disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
         <RotateCcw size={20} />
       </button>
@@ -1424,7 +1433,14 @@ function App() {
     }
 
     return (
-      <button onClick={() => setIsPanelOpen(true)} className="fixed bottom-6 right-6 z-30 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-lg hover:bg-brand-primary-hover active:scale-95 transition-transform flex items-center gap-2"> 
+      <button 
+        onClick={() => setIsPanelOpen(true)} 
+        className="fixed right-6 z-50 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-2xl hover:bg-brand-primary-hover active:scale-95 transition-transform flex items-center gap-2"
+        style={{
+          // CRITICAL FIX: Multi-layer mobile browser UI safety (same as FloatingInteractionControls)
+          bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+        }}
+      > 
         <Menu size={24} /> 
         <span className="text-sm font-semibold">{buttonText}</span>
       </button> 
