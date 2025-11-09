@@ -127,8 +127,19 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
     if (!modelViewer) return;
 
     console.log('🚀 [Android ARCore] Activating AR session...');
-    // Activate AR mode (triggers Scene Viewer on Android)
-    modelViewer.activateAR();
+    
+    // Scene Viewer activation: Click the hidden AR button
+    // model-viewer generates this button automatically when ar attribute is present
+    const arButton = modelViewer.querySelector('[slot="ar-button"]') as HTMLButtonElement;
+    if (arButton) {
+      console.log('✅ [Android ARCore] Triggering Scene Viewer via AR button...');
+      arButton.click(); // This triggers the Scene Viewer intent
+    } else {
+      console.error('❌ [Android ARCore] AR button not found - using fallback activateAR()');
+      // Fallback to activateAR() for WebXR mode
+      modelViewer.activateAR();
+    }
+    
     arSessionActive.current = true;
     setState('AR_ACTIVE');
   };
@@ -245,12 +256,23 @@ export const AndroidARCoreDistance: React.FC<AndroidARCoreDistanceProps> = ({
           position: 'absolute',
           top: 0,
           left: 0,
-          display: state === 'AR_ACTIVE' || state === 'PLACEMENT_LOCKED' ? 'block' : 'none'
+          display: 'none' // Hidden - we only need the AR button
         }}
         // @ts-ignore
         onArStatus={handleARStatus}
       >
-        <button slot="ar-button" style={{ display: 'none' }} />
+        {/* This button is what actually triggers Scene Viewer */}
+        <button
+          slot="ar-button"
+          id="ar-button"
+          style={{
+            position: 'absolute',
+            left: '-9999px', // Hidden but accessible to querySelector
+            opacity: 0,
+            pointerEvents: 'none'
+          }}
+          aria-hidden="true"
+        />
       </model-viewer>
 
       {/* UI States */}
