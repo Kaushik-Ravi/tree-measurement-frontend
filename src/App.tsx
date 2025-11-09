@@ -582,6 +582,22 @@ function App() {
     };
   }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive]);
   
+  // CRITICAL FIX: Restore image sources after returning from AR mode
+  // When AR Ruler is used, the photo view unmounts. When returning, we need to restore the image.
+  useEffect(() => {
+    // Only restore if:
+    // 1. Not in AR mode anymore
+    // 2. We have a measurement file (photo was uploaded)
+    // 3. Image sources are missing
+    // 4. Not in calibration view
+    if (!isArModeActive && !isLiveARModeActive && currentMeasurementFile && !originalImageSrc && currentView === 'SESSION') {
+      console.log('[AR Return Fix] Restoring image sources after AR measurement');
+      const objURL = URL.createObjectURL(currentMeasurementFile);
+      setOriginalImageSrc(objURL);
+      setResultImageSrc(objURL);
+    }
+  }, [isArModeActive, isLiveARModeActive, currentMeasurementFile, originalImageSrc, currentView]);
+  
   const handleStartSession = () => {
     setCurrentView('SESSION');
     setAppStatus('SESSION_AWAITING_PERMISSIONS');
