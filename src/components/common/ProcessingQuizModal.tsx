@@ -98,7 +98,7 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
       setTotalSPEarned(prev => prev + 0.5);
     }
     
-    // Auto-advance after 2.5 seconds if more questions available
+    // Auto-advance after 5 seconds to give time to read the fun fact
     setTimeout(() => {
       if (currentQuestionIndex < shuffledQuestions.length - 1) {
         setCurrentQuestionIndex(prev => prev + 1);
@@ -108,7 +108,7 @@ export const ProcessingQuizModal: React.FC<ProcessingQuizModalProps> = ({
         // No more questions, just stay on last feedback
         setSelectedAnswer(null);
       }
-    }, 2500);
+    }, 5000);
   }, [quizState, shuffledQuestions, currentQuestionIndex]);
   
   // Award SP when modal closes (processing complete)
