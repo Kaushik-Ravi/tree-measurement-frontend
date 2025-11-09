@@ -127,18 +127,9 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
             <div>
               <h3 className="text-sm font-semibold text-content-default mb-2">Wood Density</h3>
               <div className="bg-background-subtle p-3 rounded-lg border border-stroke-subtle">
-                <p className="text-sm text-content-default">
-                  <span className="font-semibold">{tree.wood_density.value?.toFixed(3) ?? '--'}</span> {tree.wood_density.unit}
+                <p className="text-lg font-mono font-semibold text-content-default">
+                  {tree.wood_density.value?.toFixed(3) ?? '--'} <span className="text-sm font-normal text-content-subtle">{tree.wood_density.unit}</span>
                 </p>
-                {tree.wood_density.sourceSpecies && (
-                  <p className="text-xs text-content-subtle mt-1">Source: {tree.wood_density.sourceSpecies}</p>
-                )}
-                {tree.wood_density.sourceRegion && (
-                  <p className="text-xs text-content-subtle">Region: {tree.wood_density.sourceRegion}</p>
-                )}
-                {tree.wood_density.matchScore !== undefined && (
-                  <p className="text-xs text-content-subtle">Match Score: {(tree.wood_density.matchScore * 100).toFixed(1)}%</p>
-                )}
               </div>
             </div>
           )}
