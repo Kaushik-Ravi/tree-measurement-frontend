@@ -1,7 +1,7 @@
 // src/components/CommunityGroveView.tsx
 import { useState } from 'react';
 import { PendingTree } from '../apiService';
-import { MapPin, Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock } from 'lucide-react';
+import { Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock } from 'lucide-react';
 
 interface CommunityGroveViewProps {
   pendingTrees: PendingTree[];
@@ -15,20 +15,35 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageError, setImageError] = useState(false);
 
-    // Calculate time since upload
-    const getTimeAgo = (uploadedAt: string) => {
+    // Calculate time since upload (relative format)
+    const getTimeAgo = (createdAt: string) => {
         const now = new Date();
-        const uploaded = new Date(uploadedAt);
-        const diffMs = now.getTime() - uploaded.getTime();
+        const created = new Date(createdAt);
+        const diffMs = now.getTime() - created.getTime();
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
+        const diffWeeks = Math.floor(diffMs / 604800000);
+        const diffMonths = Math.floor(diffMs / 2592000000);
 
+        if (diffMins < 1) return 'Just now';
         if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
         if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
         if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-        return uploaded.toLocaleDateString();
+        if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks !== 1 ? 's' : ''} ago`;
+        if (diffMonths < 12) return `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`;
+        return `${Math.floor(diffMonths / 12)} year${Math.floor(diffMonths / 12) !== 1 ? 's' : ''} ago`;
     };
+
+    // Calculate auto-verification progress
+    // Logic: 5+ analyses = auto-verified, 3-4 with consensus = possible
+    const getVerificationProgress = (count: number) => {
+        const percentage = Math.min((count / 5) * 100, 100);
+        return Math.round(percentage);
+    };
+
+    const verificationProgress = getVerificationProgress(tree.analysis_count);
+    const isNearComplete = verificationProgress >= 60; // 3+ analyses
 
     return (
         <div className="bg-background-default border border-stroke-default rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
@@ -66,13 +81,7 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
                 </div>
             </div>
             
-            <div className="p-3 flex-grow flex flex-col space-y-2">
-                {/* Location - more compact */}
-                <div className="flex items-center gap-1.5 text-xs text-content-subtle">
-                    <MapPin size={12} className="flex-shrink-0" />
-                    <span className="truncate">{tree.latitude?.toFixed(4)}, {tree.longitude?.toFixed(4)}</span>
-                </div>
-                
+            <div className="p-3 flex-grow flex flex-col space-y-2.5">
                 {/* Time Since Upload */}
                 {tree.created_at && (
                     <div className="flex items-center gap-1.5 text-xs text-content-subtle">
@@ -81,20 +90,43 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
                     </div>
                 )}
                 
-                {/* File Name - truncated */}
-                <p className="text-xs text-content-subtle/70 truncate" title={tree.file_name}>
-                    {tree.file_name}
-                </p>
+                {/* Auto-Verification Progress */}
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                        <span className={`font-medium ${isNearComplete ? 'text-status-success' : 'text-content-subtle'}`}>
+                            {verificationProgress}% to auto-verify
+                        </span>
+                        <span className="text-content-subtle/70">
+                            {tree.analysis_count}/5
+                        </span>
+                    </div>
+                    <div className="w-full bg-background-inset rounded-full h-1.5 overflow-hidden">
+                        <div 
+                            className={`h-full transition-all duration-500 rounded-full ${
+                                verificationProgress === 100 
+                                    ? 'bg-status-success' 
+                                    : isNearComplete 
+                                        ? 'bg-brand-accent' 
+                                        : 'bg-brand-primary'
+                            }`}
+                            style={{ width: `${verificationProgress}%` }}
+                        />
+                    </div>
+                </div>
                 
                 <div className="flex-grow" />
                 
                 {/* Analyze Button */}
                 <button
                     onClick={() => onClaimTree(tree.id)}
-                    className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors text-sm"
+                    className={`w-full mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${
+                        isNearComplete
+                            ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
+                            : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover'
+                    }`}
                 >
                     <GitMerge size={16} />
-                    Analyze
+                    {isNearComplete ? 'Complete Verification' : 'Analyze'}
                 </button>
             </div>
         </div>
