@@ -1,10 +1,18 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
+// --- START: STANDARD REFERENCE OBJECTS INTEGRATION ---
+import { ReferenceObjectSelector } from './ReferenceObjectSelector';
+import { 
+  StandardReferenceObject, 
+  calculateFovRatioFromStandardObject,
+  DEFAULT_CALIBRATION_DISTANCE 
+} from '../utils/standardReferenceObjects';
+// --- END: STANDARD REFERENCE OBJECTS INTEGRATION ---
 
 interface Point { x: number; y: number; }
 
@@ -39,6 +47,9 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   const [showInstructionToast, setShowInstructionToast] = useState(false);
   // --- START: SURGICAL ADDITION ---
   const [showARDistanceMeasure, setShowARDistanceMeasure] = useState(false);
+  // Standard Reference Objects Integration
+  const [showObjectSelector, setShowObjectSelector] = useState(false);
+  const [selectedObject, setSelectedObject] = useState<StandardReferenceObject | null>(null);
   // --- END: SURGICAL ADDITION ---
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -132,23 +143,69 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   // --- END: SURGICAL ADDITION ---
 
   const calculateAndFinish = (finalPoints: Point[]) => {
-    if (!imageDimensions || !distance || !realSize) return;
-    setInstruction("Calibration complete! You can now measure trees.");
+    if (!imageDimensions) return;
+    
+    // --- START: STANDARD REFERENCE OBJECTS ENHANCEMENT ---
+    // Calculate pixel distance between marked points
+    const pixelDistance = Math.hypot(
+      finalPoints[0].x - finalPoints[1].x, 
+      finalPoints[0].y - finalPoints[1].y
+    );
+    
+    let cameraConstant: number;
+    
+    if (selectedObject) {
+      // NEW PATH: Standard reference object selected - auto-calculate with known dimensions
+      console.log('[Calibration] Using standard object:', selectedObject.name);
+      
+      cameraConstant = calculateFovRatioFromStandardObject(
+        pixelDistance,
+        selectedObject.id,
+        imageDimensions.w,
+        imageDimensions.h,
+        DEFAULT_CALIBRATION_DISTANCE
+      );
+      
+      setInstruction(`Calibration complete using ${selectedObject.name}!`);
+    } else {
+      // LEGACY PATH: Manual distance & size entry (preserve existing behavior)
+      if (!distance || !realSize) {
+        console.warn('[Calibration] Missing distance or real size for manual calibration');
+        return;
+      }
+      
+      console.log('[Calibration] Using manual distance entry');
+      
+      const r = parseFloat(realSize);
+      const D = parseFloat(distance);
+      const w = Math.max(imageDimensions.w, imageDimensions.h);
+      const D_in_cm = D * 100;
+      
+      cameraConstant = (r * w) / (pixelDistance * D_in_cm);
+    }
+    // --- END: STANDARD REFERENCE OBJECTS ENHANCEMENT ---
+    
     setIsPanelVisible(true);
-    const r = parseFloat(realSize); const D = parseFloat(distance);
-    const w = Math.max(imageDimensions.w, imageDimensions.h);
-    const n = Math.hypot(finalPoints[0].x - finalPoints[1].x, finalPoints[0].y - finalPoints[1].y);
-    const D_in_cm = D * 100;
-    const cameraConstant = (r * w) / (n * D_in_cm);
-    console.log(`Final Calculated Camera Constant (FOV Ratio): ${cameraConstant}`);
-    setTimeout(() => onCalibrationComplete(cameraConstant), 1500); // Delay to show final message
+    console.log(`[Calibration] Final Calculated Camera Constant (FOV Ratio): ${cameraConstant}`);
+    setTimeout(() => onCalibrationComplete(cameraConstant), 1500);
   };
 
-  const canSelectPoints = !!(calibFile && distance && realSize);
+  const canSelectPoints = !!(
+    calibFile && 
+    (selectedObject || (distance && realSize)) // Either object selected OR manual values entered
+  );
 
   const handlePrepareCalibration = () => {
     if (!canSelectPoints) return;
-    setInstruction("Please click the two endpoints of your known object in the image.");
+    
+    // --- START: STANDARD REFERENCE OBJECTS ENHANCEMENT ---
+    if (selectedObject) {
+      setInstruction(selectedObject.instructionText);
+    } else {
+      setInstruction("Please click the two endpoints of your known object in the image.");
+    }
+    // --- END: STANDARD REFERENCE OBJECTS ENHANCEMENT ---
+    
     setIsPanelVisible(false);
     setShowInstructionToast(true);
   };
@@ -162,6 +219,31 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
 
   const handleARDistanceCancel = () => {
     setShowARDistanceMeasure(false);
+  };
+
+  // Standard Reference Objects Handlers
+  const handleObjectSelected = (obj: StandardReferenceObject | null) => {
+    setShowObjectSelector(false);
+    
+    if (obj === null) {
+      // User chose "Manual Entry" fallback - keep existing flow
+      setSelectedObject(null);
+      setInstruction("Manual mode: Enter distance and object size below.");
+    } else {
+      // User chose standard object - pre-fill real size, hide distance input
+      setSelectedObject(obj);
+      setRealSize((obj.widthMM / 10).toString()); // Convert mm to cm
+      setDistance(DEFAULT_CALIBRATION_DISTANCE.toString()); // Auto-set default distance
+      setInstruction(`${obj.name} selected! Upload photo and mark the object's width.`);
+    }
+  };
+
+  const handleQuickStartWithObject = () => {
+    if (!calibFile) {
+      alert('Please upload a calibration photo first');
+      return;
+    }
+    setShowObjectSelector(true);
   };
   // --- END: SURGICAL ADDITION ---
   
@@ -234,26 +316,85 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
                   </button>
                   <p className="text-xs text-content-subtle mt-2">Tip: Use a photo of a standard A4 paper for best results.</p>
+                  
+                  {/* --- START: STANDARD REFERENCE OBJECTS QUICK START --- */}
+                  {calibFile && !selectedObject && (
+                    <button
+                      onClick={handleQuickStartWithObject}
+                      className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-accent/10 to-brand-primary/10 border-2 border-brand-accent/30 rounded-lg hover:from-brand-accent/20 hover:to-brand-primary/20 hover:border-brand-accent/50 transition-all duration-200 group"
+                      title="Skip manual entry with standard objects"
+                    >
+                      <Sparkles className="w-5 h-5 text-brand-accent group-hover:scale-110 transition-transform" />
+                      <span className="text-brand-accent font-semibold">Quick Start with Standard Object</span>
+                    </button>
+                  )}
+                  
+                  {selectedObject && (
+                    <div className="mt-3 p-3 bg-brand-primary/10 border border-brand-primary/30 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-brand-primary" />
+                          <span className="text-sm font-semibold text-brand-primary">
+                            {selectedObject.name} ({selectedObject.widthMM}mm)
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedObject(null);
+                            setRealSize('');
+                            setDistance('');
+                            setInstruction("Manual mode: Enter distance and object size below.");
+                          }}
+                          className="text-xs text-brand-primary hover:text-brand-primary-hover underline"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {/* --- END: STANDARD REFERENCE OBJECTS QUICK START --- */}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-content-default mb-2">2. Distance to Object (meters)</label>
-                  <input type="number" value={distance} onChange={e => setDistance(e.target.value)} placeholder="e.g., 1.5" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" />
+                  <label className="block text-sm font-medium text-content-default mb-2">
+                    2. Distance to Object (meters)
+                    {selectedObject && <span className="ml-2 text-xs text-status-success">(Auto-set)</span>}
+                  </label>
+                  <input 
+                    type="number" 
+                    value={distance} 
+                    onChange={e => setDistance(e.target.value)} 
+                    placeholder="e.g., 1.5" 
+                    disabled={!!selectedObject}
+                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed" 
+                  />
                   
                   {/* AR Measurement Option - Prominent Button */}
-                  <button 
-                    onClick={() => setShowARDistanceMeasure(true)}
-                    className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
-                    title="Measure distance using AR"
-                  >
-                    <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-brand-primary font-semibold">Measure with Camera (AR)</span>
-                  </button>
+                  {!selectedObject && (
+                    <button 
+                      onClick={() => setShowARDistanceMeasure(true)}
+                      className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
+                      title="Measure distance using AR"
+                    >
+                      <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
+                      <span className="text-brand-primary font-semibold">Measure with Camera (AR)</span>
+                    </button>
+                  )}
                   
-                  <ARLinks />
+                  {!selectedObject && <ARLinks />}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-content-default mb-2">3. Object's Real Size (cm)</label>
-                  <input type="number" value={realSize} onChange={e => setRealSize(e.target.value)} placeholder="e.g., 29.7 for A4 paper" className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary"/>
+                  <label className="block text-sm font-medium text-content-default mb-2">
+                    3. Object's Real Size (cm)
+                    {selectedObject && <span className="ml-2 text-xs text-status-success">(Auto-set)</span>}
+                  </label>
+                  <input 
+                    type="number" 
+                    value={realSize} 
+                    onChange={e => setRealSize(e.target.value)} 
+                    placeholder="e.g., 29.7 for A4 paper" 
+                    disabled={!!selectedObject}
+                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
+                  />
                 </div>
                 <button 
                   onClick={handlePrepareCalibration} 
@@ -275,6 +416,13 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
             onCancel={handleARDistanceCancel}
           />
         </div>
+      )}
+      
+      {showObjectSelector && (
+        <ReferenceObjectSelector
+          onSelectObject={handleObjectSelected}
+          onCancel={() => setShowObjectSelector(false)}
+        />
       )}
       {/* --- END: SURGICAL ADDITION --- */}
     </div>
