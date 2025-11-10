@@ -36,10 +36,7 @@ export function ReferenceObjectSelector({ onSelectObject, onCancel }: ReferenceO
     onSelectObject(obj);
   };
 
-  const handleManualFallback = () => {
-    // Return null to signal manual distance entry (legacy flow)
-    onSelectObject(null);
-  };
+  // Note: handleManualFallback removed - user can close modal and use regular flow instead
 
   const handleCustomSave = () => {
     const widthMM = parseFloat(customWidth);
@@ -129,7 +126,7 @@ export function ReferenceObjectSelector({ onSelectObject, onCancel }: ReferenceO
             </h3>
 
             {!showCustomForm ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1">
                 {/* Custom Object Button */}
                 <button
                   onClick={() => setShowCustomForm(true)}
@@ -142,22 +139,6 @@ export function ReferenceObjectSelector({ onSelectObject, onCancel }: ReferenceO
                     <div className="text-left">
                       <p className="font-semibold text-content-default text-sm">Custom Object</p>
                       <p className="text-xs text-content-subtle">Enter your own dimensions</p>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Manual Fallback Button */}
-                <button
-                  onClick={handleManualFallback}
-                  className="p-4 bg-background-subtle hover:bg-background-inset border-2 border-stroke-default hover:border-content-subtle rounded-xl transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-content-subtle/10 rounded-lg">
-                      <Edit3 className="w-5 h-5 text-content-subtle" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-semibold text-content-default text-sm">Manual Entry</p>
-                      <p className="text-xs text-content-subtle">Enter distance yourself</p>
                     </div>
                   </div>
                 </button>

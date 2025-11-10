@@ -1,7 +1,7 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
@@ -264,20 +264,77 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           onClick={canSelectPoints ? handleCanvasClick : undefined} 
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
+        
+        {/* Marking Mode Controls */}
         {points.length > 0 && !isPanelVisible && (
+          <>
+            {/* Undo Button (LEFT) */}
             <div 
               className="fixed left-6 z-50"
               style={{
-                // CRITICAL FIX: Multi-layer mobile browser UI safety + Left positioning
-                // Ensures undo button is always visible above mobile browser bottom navigation
-                // Left-aligned to match main app controls and avoid UI clustering
                 bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
               }}
             >
-                <button onClick={handleUndo} className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors">
-                    <RotateCcw size={20} />
-                </button>
+              <button 
+                onClick={handleUndo} 
+                className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors"
+                aria-label="Undo last point"
+              >
+                <RotateCcw size={20} />
+              </button>
             </div>
+
+            {/* Show Panel Button (RIGHT) */}
+            <div 
+              className="fixed right-6 z-50"
+              style={{
+                bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+              }}
+            >
+              <button 
+                onClick={() => setIsPanelVisible(true)}
+                className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset transition-colors"
+                aria-label="Show control panel"
+              >
+                <Menu size={20} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Bottom Action Bar (After 1 Point Marked) */}
+        {points.length === 1 && !isPanelVisible && (
+          <div 
+            className="fixed bottom-0 left-0 right-0 z-50 bg-background-default/95 backdrop-blur-md border-t border-stroke-default"
+            style={{
+              paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
+            }}
+          >
+            <div className="p-4">
+              <p className="text-center text-sm text-content-default mb-3">
+                {selectedObject 
+                  ? `Mark the second endpoint of the ${selectedObject.name}'s WIDTH`
+                  : 'Click the second endpoint of your object'
+                }
+              </p>
+              <div className="flex gap-3 max-w-md mx-auto">
+                <button
+                  onClick={handleUndo}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-background-subtle text-content-default rounded-lg font-medium hover:bg-background-inset transition-colors border border-stroke-default"
+                >
+                  <RotateCcw size={18} />
+                  Undo
+                </button>
+                <button
+                  onClick={() => setIsPanelVisible(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors"
+                >
+                  <Menu size={18} />
+                  Show Panel
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
       
@@ -315,7 +372,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <Upload className="w-5 h-5 text-content-subtle" />
                     <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
                   </button>
-                  <p className="text-xs text-content-subtle mt-2">Tip: Use a photo of a standard A4 paper for best results.</p>
+                  <p className="text-xs text-content-subtle mt-2">Tip: For fastest setup, use "Quick Start" with a standard object (A4 paper, credit card, etc.)</p>
                   
                   {/* --- START: STANDARD REFERENCE OBJECTS QUICK START --- */}
                   {calibFile && !selectedObject && (
@@ -357,44 +414,57 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 <div>
                   <label className="block text-sm font-medium text-content-default mb-2">
                     2. Distance to Object (meters)
-                    {selectedObject && <span className="ml-2 text-xs text-status-success">(Auto-set)</span>}
+                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled - you can change)</span>}
                   </label>
                   <input 
                     type="number" 
                     value={distance} 
                     onChange={e => setDistance(e.target.value)} 
-                    placeholder="e.g., 1.5" 
-                    disabled={!!selectedObject}
-                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed" 
+                    placeholder={selectedObject ? "1.0 (recommended)" : "e.g., 1.5"}
+                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" 
                   />
+                  {selectedObject && (
+                    <p className="text-xs text-content-subtle mt-1">
+                      Default: 1 meter. Change if your object is closer or farther.
+                    </p>
+                  )}
                   
                   {/* AR Measurement Option - Prominent Button */}
-                  {!selectedObject && (
-                    <button 
-                      onClick={() => setShowARDistanceMeasure(true)}
-                      className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
-                      title="Measure distance using AR"
-                    >
-                      <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
-                      <span className="text-brand-primary font-semibold">Measure with Camera (AR)</span>
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => setShowARDistanceMeasure(true)}
+                    className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
+                    title="Measure distance using AR"
+                  >
+                    <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-brand-primary font-semibold">
+                      {selectedObject ? 'Verify Distance with AR' : 'Measure with Camera (AR)'}
+                    </span>
+                  </button>
                   
                   {!selectedObject && <ARLinks />}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-content-default mb-2">
-                    3. Object's Real Size (cm)
-                    {selectedObject && <span className="ml-2 text-xs text-status-success">(Auto-set)</span>}
+                    3. Object's Width (cm)
+                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled)</span>}
                   </label>
                   <input 
                     type="number" 
                     value={realSize} 
                     onChange={e => setRealSize(e.target.value)} 
-                    placeholder="e.g., 29.7 for A4 paper" 
+                    placeholder={selectedObject ? `${selectedObject.widthMM / 10} (width)` : "e.g., 21 for A4 width"}
                     disabled={!!selectedObject}
                     className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
                   />
+                  {selectedObject ? (
+                    <p className="text-xs text-content-subtle mt-1">
+                      You'll mark the <strong>WIDTH</strong> of your {selectedObject.name} in the photo
+                    </p>
+                  ) : (
+                    <p className="text-xs text-content-subtle mt-1">
+                      Measure the width (short edge) of your object
+                    </p>
+                  )}
                 </div>
                 <button 
                   onClick={handlePrepareCalibration} 
