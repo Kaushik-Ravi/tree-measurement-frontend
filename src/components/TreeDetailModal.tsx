@@ -241,41 +241,43 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete, onAnalyze }: 
         </div>
 
         {/* Actions */}
-        <div className="sticky bottom-0 bg-background-default border-t border-stroke-default px-6 py-4 flex gap-3">
-          {tree.status === 'PENDING_ANALYSIS' && onAnalyze && (
+        <div className="sticky bottom-0 bg-background-default border-t border-stroke-default px-6 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {tree.status === 'PENDING_ANALYSIS' && onAnalyze && (
+              <button
+                onClick={() => {
+                  onAnalyze(tree.id);
+                  onClose();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-accent text-white rounded-lg font-medium hover:bg-brand-accent-hover transition-colors shadow-md"
+              >
+                <FlaskConical className="w-4 h-4" />
+                Complete Analysis
+              </button>
+            )}
             <button
               onClick={() => {
-                onAnalyze(tree.id);
+                onEdit(tree);
                 onClose();
               }}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-brand-accent text-content-on-brand rounded-lg font-medium hover:bg-brand-accent-hover transition-colors shadow-md"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors"
             >
-              <FlaskConical className="w-4 h-4" />
-              Complete Analysis
+              <Edit className="w-4 h-4" />
+              Edit Details
             </button>
-          )}
-          <button
-            onClick={() => {
-              onEdit(tree);
-              onClose();
-            }}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-brand-secondary text-content-on-brand rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            Edit Details
-          </button>
-          <button
-            onClick={() => {
-              if (confirm('Are you sure you want to delete this tree?')) {
-                onDelete(tree.id);
-                onClose();
-              }
-            }}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-status-error text-white rounded-lg font-medium hover:bg-status-error/90 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete Tree
-          </button>
+            <button
+              onClick={() => {
+                if (confirm('Are you sure you want to delete this tree?')) {
+                  onDelete(tree.id);
+                  onClose();
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-status-error text-white rounded-lg font-medium hover:bg-status-error/90 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Tree
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -184,25 +184,26 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
                   }`}>
                     {tree.status || 'UNKNOWN'}
                   </span>
-                  
-                  <div className="flex items-center gap-1">
-                    {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
-                      <button
-                        onClick={() => onAnalyzeTree(tree.id)}
-                        className="analyze-btn"
-                      >
-                        <FlaskConical className="w-3 h-3" />
-                        Analyze
-                      </button>
-                    )}
+                </div>
+                
+                {/* Action Buttons - Separate Row */}
+                <div className="popup-actions">
+                  {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
                     <button
-                      onClick={() => onTreeClick(tree)}
-                      className="view-details-btn"
+                      onClick={() => onAnalyzeTree(tree.id)}
+                      className="analyze-btn-full"
                     >
-                      <Eye className="w-3 h-3" />
-                      View
+                      <FlaskConical className="w-3.5 h-3.5" />
+                      Pending Analysis
                     </button>
-                  </div>
+                  )}
+                  <button
+                    onClick={() => onTreeClick(tree)}
+                    className="view-details-btn-full"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View Details
+                  </button>
                 </div>
               </div>
             </Popup>

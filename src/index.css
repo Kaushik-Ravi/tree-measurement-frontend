@@ -401,7 +401,11 @@ canvas {
 
 /* Footer with status and button */
 .popup-footer {
-  @apply flex items-center justify-between px-3 py-2;
+  @apply flex items-center justify-center px-3 py-2 border-b border-stroke-subtle;
+}
+
+.popup-actions {
+  @apply flex flex-col gap-2 px-3 py-2;
 }
 
 .status-badge {
@@ -438,6 +442,16 @@ canvas {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
+.view-details-btn-full {
+  @apply w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-primary text-white rounded-lg text-xs font-medium;
+  @apply hover:bg-brand-primary-hover transition-colors;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.view-details-btn-full:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
 .analyze-btn {
   @apply flex items-center gap-1 px-3 py-1.5 bg-brand-accent text-content-on-brand rounded-lg text-xs font-medium;
   @apply hover:bg-brand-accent-hover transition-colors;
@@ -445,6 +459,16 @@ canvas {
 }
 
 .analyze-btn:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.analyze-btn-full {
+  @apply w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-accent text-white rounded-lg text-xs font-medium;
+  @apply hover:bg-brand-accent-hover transition-colors;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.analyze-btn-full:hover {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }
 
