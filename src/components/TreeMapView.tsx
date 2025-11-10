@@ -3,7 +3,7 @@ import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import { DivIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TreeResult } from '../apiService';
-import { MapPin, Eye } from 'lucide-react';
+import { MapPin, Eye, FlaskConical } from 'lucide-react';
 import { useMemo } from 'react';
 import { renderToString } from 'react-dom/server';
 import { TreePine } from 'lucide-react';
@@ -11,6 +11,7 @@ import { TreePine } from 'lucide-react';
 interface TreeMapViewProps {
   trees: TreeResult[];
   onTreeClick: (tree: TreeResult) => void;
+  onAnalyzeTree?: (treeId: string) => void; // NEW: Optional callback for analyzing pending trees
   theme?: 'light' | 'dark';
 }
 
@@ -58,7 +59,7 @@ const createTreeIcon = (status?: string) => {
   });
 };
 
-export function TreeMapView({ trees, onTreeClick, theme = 'light' }: TreeMapViewProps) {
+export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light' }: TreeMapViewProps) {
   // Filter trees with valid GPS coordinates
   const validTrees = useMemo(() => 
     trees.filter(t => t.latitude && t.longitude && 
@@ -184,13 +185,24 @@ export function TreeMapView({ trees, onTreeClick, theme = 'light' }: TreeMapView
                     {tree.status || 'UNKNOWN'}
                   </span>
                   
-                  <button
-                    onClick={() => onTreeClick(tree)}
-                    className="view-details-btn"
-                  >
-                    <Eye className="w-3 h-3" />
-                    View
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                      <button
+                        onClick={() => onAnalyzeTree(tree.id)}
+                        className="analyze-btn"
+                      >
+                        <FlaskConical className="w-3 h-3" />
+                        Analyze
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onTreeClick(tree)}
+                      className="view-details-btn"
+                    >
+                      <Eye className="w-3 h-3" />
+                      View
+                    </button>
+                  </div>
                 </div>
               </div>
             </Popup>

@@ -1,6 +1,6 @@
 // src/components/TreeDetailModal.tsx
 import React, { useEffect } from 'react';
-import { X, Edit, Trash2, MapPin, Calendar, Ruler } from 'lucide-react';
+import { X, Edit, Trash2, MapPin, Calendar, Ruler, FlaskConical } from 'lucide-react';
 import { TreeResult } from '../apiService';
 
 interface TreeDetailModalProps {
@@ -8,9 +8,10 @@ interface TreeDetailModalProps {
   onClose: () => void;
   onEdit: (tree: TreeResult) => void;
   onDelete: (id: string) => void;
+  onAnalyze?: (treeId: string) => void; // NEW: Optional callback for analyzing pending trees
 }
 
-export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailModalProps) {
+export function TreeDetailModal({ tree, onClose, onEdit, onDelete, onAnalyze }: TreeDetailModalProps) {
   if (!tree) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -241,6 +242,18 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete }: TreeDetailM
 
         {/* Actions */}
         <div className="sticky bottom-0 bg-background-default border-t border-stroke-default px-6 py-4 flex gap-3">
+          {tree.status === 'PENDING_ANALYSIS' && onAnalyze && (
+            <button
+              onClick={() => {
+                onAnalyze(tree.id);
+                onClose();
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-brand-accent text-content-on-brand rounded-lg font-medium hover:bg-brand-accent-hover transition-colors shadow-md"
+            >
+              <FlaskConical className="w-4 h-4" />
+              Complete Analysis
+            </button>
+          )}
           <button
             onClick={() => {
               onEdit(tree);

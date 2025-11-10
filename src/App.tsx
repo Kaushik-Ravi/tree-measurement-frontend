@@ -1277,6 +1277,59 @@ function App() {
     }
   };
 
+  // NEW: Navigate to Community Grove and auto-select a specific tree for analysis
+  const handleAnalyzePendingTree = async (treeId: string) => {
+    if (!session?.access_token) return;
+    
+    // First navigate to Community Grove
+    setCurrentView('COMMUNITY_GROVE');
+    setAppStatus('COMMUNITY_GROVE_LOADING');
+    setInstructionText("Loading tree for analysis...");
+    
+    try {
+      // Fetch all pending trees
+      const trees = await getPendingTrees(session.access_token);
+      setPendingTrees(trees);
+      
+      // Auto-claim the specific tree
+      setAppStatus('ANALYSIS_PROCESSING');
+      const res = await claimTree(treeId, session.access_token);
+      const claimedData = res.data;
+
+      if (!claimedData || claimedData.distance_m == null || claimedData.scale_factor == null) {
+        throw new Error("Failed to claim tree: The record is missing essential measurement data.");
+      }
+      
+      setClaimedTree(claimedData);
+
+      const response = await fetch(claimedData.image_url);
+      const blob = await response.blob();
+      const fileName = claimedData.image_url.split('/').pop() || 'claimed-tree.jpg';
+      const file = new File([blob], fileName, { type: blob.type });
+      setCurrentMeasurementFile(file);
+      setAdditionalData(initialAdditionalData);
+
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.src = claimedData.image_url;
+      img.onload = () => {
+        setImageDimensions({w: img.naturalWidth, h: img.naturalHeight});
+        setOriginalImageSrc(claimedData.image_url);
+        setResultImageSrc(claimedData.image_url);
+        setCurrentLocation(claimedData.latitude && claimedData.longitude ? {lat: claimedData.latitude, lng: claimedData.longitude} : null);
+        setDistance(claimedData.distance_m ? String(claimedData.distance_m) : '');
+
+        setAppStatus('ANALYSIS_AWAITING_MODE_SELECTION');
+        setIsPanelOpen(true);
+        setInstructionText(`Tree ready for analysis. Select a measurement mode to begin.`);
+      };
+      img.onerror = () => { throw new Error("Could not load tree image."); }
+    } catch(e: any) {
+      setErrorMessage(`Failed to load tree: ${e.message}`);
+      setAppStatus('ERROR');
+    }
+  };
+
   const handleClaimTree = async (treeId: string) => {
     if (!session?.access_token) return;
     setAppStatus('ANALYSIS_PROCESSING'); 
@@ -2110,13 +2163,15 @@ function App() {
                   <ResultsTable 
                     results={allResults} 
                     onDeleteResult={handleDeleteResult} 
-                    onEditResult={handleOpenEditModal} 
+                    onEditResult={handleOpenEditModal}
+                    onAnalyzeTree={handleAnalyzePendingTree}
                     isLoading={isHistoryLoading} 
                   />
                 ) : (
                   <TreeMapView 
                     trees={allResults} 
                     onTreeClick={setSelectedTreeForModal}
+                    onAnalyzeTree={handleAnalyzePendingTree}
                     theme={theme}
                   />
                 )}
@@ -2128,6 +2183,7 @@ function App() {
                 onClose={() => setSelectedTreeForModal(null)}
                 onEdit={handleOpenEditModal}
                 onDelete={handleDeleteResult}
+                onAnalyze={handleAnalyzePendingTree}
               />
             </main>
         </div>

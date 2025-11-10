@@ -1,6 +1,6 @@
 // src/components/ResultsTable.tsx
 import React, { useState } from 'react';
-import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2, Users, GitCommitVertical, Loader2 } from 'lucide-react';
+import { Download, LayoutList, Trash2, Edit, ImageIcon, ChevronDown, MapPin, Maximize2, Minimize2, Clock, CheckCircle2, Users, GitCommitVertical, Loader2, FlaskConical } from 'lucide-react';
 import { downloadResultsAsCSV } from '../utils/csvExporter';
 import { TreeResult } from '../apiService';
 
@@ -8,6 +8,7 @@ interface ResultsTableProps {
   results: TreeResult[];
   onDeleteResult: (id: string) => void;
   onEditResult: (result: TreeResult) => void;
+  onAnalyzeTree?: (treeId: string) => void; // NEW: Optional callback for analyzing pending trees
   isLoading: boolean;
 }
 
@@ -92,7 +93,7 @@ const StatusBadge = ({ status }: { status: TreeResult['status'] }) => {
 };
 
 
-export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading }: ResultsTableProps) {
+export function ResultsTable({ results, onDeleteResult, onEditResult, onAnalyzeTree, isLoading }: ResultsTableProps) {
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   
@@ -183,6 +184,16 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
                   <td className="px-4 py-3 text-center"><StatusBadge status={result.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end items-center gap-2">
+                      {result.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onAnalyzeTree(result.id); }} 
+                          className="px-3 py-1.5 text-xs font-medium text-content-on-brand bg-brand-accent hover:bg-brand-accent-hover rounded-md flex items-center gap-1 transition-colors" 
+                          aria-label="Complete analysis"
+                        >
+                          <FlaskConical className="w-4 h-4" />
+                          Complete Analysis
+                        </button>
+                      )}
                       <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-content-subtle hover:text-brand-secondary rounded-md" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-content-subtle hover:text-status-error rounded-md" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
                     </div>
@@ -234,7 +245,17 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, isLoading 
                 <button onClick={() => handleRowClick(result.id)} className="flex items-center gap-1.5 text-xs font-medium text-brand-secondary p-1">
                   {expandedRowId === result.id ? <><Minimize2 size={12}/>Hide</> : <><Maximize2 size={12}/>Show</>} Details
                 </button>
-                <div className="flex items-center">
+                <div className="flex items-center gap-1">
+                    {result.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onAnalyzeTree(result.id); }} 
+                        className="px-2 py-1 text-xs font-medium text-content-on-brand bg-brand-accent hover:bg-brand-accent-hover rounded-md flex items-center gap-1" 
+                        aria-label="Complete analysis"
+                      >
+                        <FlaskConical className="w-3 h-3" />
+                        Analyze
+                      </button>
+                    )}
                     <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-content-subtle hover:text-brand-secondary" aria-label="Edit result"><Edit className="w-5 h-5" /></button>
                     <button onClick={(e) => { e.stopPropagation(); onDeleteResult(result.id); }} className="p-2 text-content-subtle hover:text-status-error" aria-label="Delete result"><Trash2 className="w-5 h-5" /></button>
                 </div>
