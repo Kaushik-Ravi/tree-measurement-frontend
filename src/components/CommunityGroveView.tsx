@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { PendingTree } from '../apiService';
 import { Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock } from 'lucide-react';
+import { getOptimizedImageUrl } from '../utils/imageOptimization';
 
 interface CommunityGroveViewProps {
   pendingTrees: PendingTree[];
