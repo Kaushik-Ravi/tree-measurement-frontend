@@ -1,11 +1,10 @@
 // src/components/ReferenceObjectSelector.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   FileText, CreditCard, StickyNote, Smartphone, X, Edit3, AlertCircle
 } from 'lucide-react';
 import { 
   StandardReferenceObject, 
-  saveCustomObject,
   STANDARD_OBJECTS 
 } from '../utils/standardReferenceObjects';
 
@@ -24,32 +23,11 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 export function ReferenceObjectSelector({ onSelectObject, onCancel }: ReferenceObjectSelectorProps) {
-  const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customWidth, setCustomWidth] = useState('');
-  const [customHeight, setCustomHeight] = useState('');
-
-  // Note: getAllReferenceObjects() available for future custom objects feature
-  // const availableObjects = getAllReferenceObjects();
+  // Note: Custom object functionality removed for simpler UX
+  // Users should select from standard objects or close modal
 
   const handleSelectObject = (obj: StandardReferenceObject) => {
     onSelectObject(obj);
-  };
-
-  // Note: handleManualFallback removed - user can close modal and use regular flow instead
-
-  const handleCustomSave = () => {
-    const widthMM = parseFloat(customWidth);
-    const heightMM = parseFloat(customHeight);
-
-    if (!customName.trim() || isNaN(widthMM) || isNaN(heightMM) || widthMM <= 0 || heightMM <= 0) {
-      alert('Please enter valid dimensions (positive numbers)');
-      return;
-    }
-
-    const customObj = saveCustomObject(customName.trim(), widthMM, heightMM);
-    setShowCustomForm(false);
-    onSelectObject(customObj);
   };
 
   return (
@@ -117,91 +95,6 @@ export function ReferenceObjectSelector({ onSelectObject, onCancel }: ReferenceO
                 </button>
               );
             })}
-          </div>
-
-          {/* Custom Object Section */}
-          <div className="border-t border-stroke-default pt-6">
-            <h3 className="text-sm font-semibold text-content-subtle uppercase tracking-wide mb-4">
-              Advanced Options
-            </h3>
-
-            {!showCustomForm ? (
-              <div className="grid grid-cols-1">
-                {/* Custom Object Button */}
-                <button
-                  onClick={() => setShowCustomForm(true)}
-                  className="p-4 bg-background-subtle hover:bg-brand-accent/10 border-2 border-dashed border-stroke-default hover:border-brand-accent rounded-xl transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-brand-accent/10 rounded-lg">
-                      <Edit3 className="w-5 h-5 text-brand-accent" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-semibold text-content-default text-sm">Custom Object</p>
-                      <p className="text-xs text-content-subtle">Enter your own dimensions</p>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            ) : (
-              <div className="p-6 bg-background-subtle rounded-xl border border-stroke-default">
-                <h4 className="font-semibold text-content-default mb-4">Create Custom Reference Object</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-content-default mb-2">
-                      Object Name
-                    </label>
-                    <input
-                      type="text"
-                      value={customName}
-                      onChange={(e) => setCustomName(e.target.value)}
-                      placeholder="e.g., My Ruler"
-                      className="w-full px-4 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-content-default mb-2">
-                        Width (mm)
-                      </label>
-                      <input
-                        type="number"
-                        value={customWidth}
-                        onChange={(e) => setCustomWidth(e.target.value)}
-                        placeholder="210"
-                        className="w-full px-4 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-content-default mb-2">
-                        Height (mm)
-                      </label>
-                      <input
-                        type="number"
-                        value={customHeight}
-                        onChange={(e) => setCustomHeight(e.target.value)}
-                        placeholder="297"
-                        className="w-full px-4 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={handleCustomSave}
-                      className="flex-1 px-4 py-2 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors"
-                    >
-                      Save & Use
-                    </button>
-                    <button
-                      onClick={() => setShowCustomForm(false)}
-                      className="px-4 py-2 bg-background-default border border-stroke-default text-content-default rounded-lg font-medium hover:bg-background-inset transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
