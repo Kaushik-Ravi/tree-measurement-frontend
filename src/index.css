@@ -78,19 +78,26 @@
     height: 100%;
   }
   
+  /* --- START: MOBILE VIEWPORT FIX (WebXR AR) --- */
   /* Prevent mobile Safari address bar from shifting AR content */
   html {
-    height: -webkit-fill-available;
+    height: 100vh; /* Fallback for older browsers */
+    height: 100dvh; /* Dynamic viewport height - adapts when browser UI retracts (Chrome 108+, Safari 15.4+) */
+    height: -webkit-fill-available; /* iOS Safari specific fallback */
   }
 
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport height for mobile */
+    min-height: -webkit-fill-available;
     /* --- START: SURGICAL REPLACEMENT --- */
     /* Applying a theme-aware background using our new CSS variables. */
     @apply bg-background-default text-content-default;
     /* --- END: SURGICAL REPLACEMENT --- */
   }
+  /* --- END: MOBILE VIEWPORT FIX (WebXR AR) --- */
 
   /* --- START: SURGICAL ADDITION (BROWSER STYLE OVERRIDE) --- */
   /*
@@ -518,5 +525,60 @@ canvas {
 .custom-tree-marker:hover > div {
   transform: scale(1.1);
 }
+
+/* --- START: WEBXR AR VIEWPORT FIX --- */
+/*
+  ==============================================
+  AR FULLSCREEN & SAFE AREA UTILITIES
+  ==============================================
+  Industry-standard patterns from Google WebXR, 8thWall, Meta Immersive Web
+*/
+
+/* Full viewport overlay with dynamic height (adapts to mobile browser UI) */
+.ar-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  width: 100dvw; /* Dynamic viewport width - adapts when browser UI changes */
+  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height - crucial for mobile AR */
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area inset utilities for AR overlays (iOS notch, home indicator) */
+.ar-safe-top {
+  top: env(safe-area-inset-top, 0);
+}
+
+.ar-safe-bottom {
+  bottom: env(safe-area-inset-bottom, 0);
+}
+
+.ar-safe-left {
+  left: env(safe-area-inset-left, 0);
+}
+
+.ar-safe-right {
+  right: env(safe-area-inset-right, 0);
+}
+
+/* Padding utilities for AR UI elements (ensures visibility) */
+.ar-padding-top {
+  padding-top: env(safe-area-inset-top, 1rem);
+}
+
+.ar-padding-bottom {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+}
+
+/* Prevent text selection and callouts during AR interactions */
+.ar-no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* --- END: WEBXR AR VIEWPORT FIX --- */
 
 

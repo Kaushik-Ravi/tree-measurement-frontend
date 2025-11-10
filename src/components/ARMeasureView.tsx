@@ -143,18 +143,25 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     renderer.xr.enabled = true;
     rendererRef.current = renderer;
     
-    // CRITICAL FIX: Apply proper WebXR canvas styling to prevent viewport shifts
-    // This ensures the canvas fills the entire viewport correctly during AR sessions
+    // --- START: CRITICAL FIX - WebXR Canvas Styling for Mobile Viewport ---
+    // Industry-standard pattern from Google WebXR, 8thWall, Meta Immersive Web
+    // Prevents viewport shift when mobile browser UI (address bar) retracts during AR session
     Object.assign(renderer.domElement.style, {
       position: 'fixed',
       top: '0',
       left: '0',
-      width: '100%',
-      height: '100%',
+      width: '100vw',              // Full viewport width (fallback)
+      maxWidth: '100dvw',          // Dynamic viewport width (mobile browser adaptation)
+      height: '100vh',             // Full viewport height (fallback)
+      maxHeight: '100dvh',         // Dynamic viewport height (crucial for mobile AR)
       display: 'block',
-      touchAction: 'none', // Prevent touch gestures from interfering
-      zIndex: '1' // Behind UI overlay
+      touchAction: 'none',         // Prevent touch gestures from interfering with AR
+      zIndex: '1',                 // Behind UI overlay
+      // iOS-specific fixes
+      WebkitUserSelect: 'none',
+      WebkitTouchCallout: 'none'
     });
+    // --- END: CRITICAL FIX ---
     
     currentContainer.appendChild(renderer.domElement);
     
@@ -432,6 +439,33 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     };
     window.addEventListener('resize', onWindowResize);
 
+    // --- START: VISUAL VIEWPORT API INTEGRATION (Mobile Browser Adaptation) ---
+    // Handles dynamic mobile browser UI changes (address bar show/hide)
+    // Reference: https://developer.mozilla.org/en-US/docs/Web/API/Visual_Viewport_API
+    let visualViewportHandler: (() => void) | null = null;
+
+    if ('visualViewport' in window && window.visualViewport) {
+      const vv = window.visualViewport;
+      
+      visualViewportHandler = () => {
+        // Only adjust when NOT in XR session (XR manages its own sizing)
+        const currentSession = renderer.xr.getSession();
+        if (!currentSession || !renderer.xr.isPresenting) {
+          camera.aspect = vv.width / vv.height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(vv.width, vv.height, false); // false = don't update style
+          
+          console.log('[AR Viewport] Adjusted to visual viewport:', vv.width, 'x', vv.height);
+        }
+      };
+      
+      vv.addEventListener('resize', visualViewportHandler);
+      vv.addEventListener('scroll', visualViewportHandler);
+      
+      console.log('[AR Viewport] Visual Viewport API active - mobile browser UI adaptation enabled');
+    }
+    // --- END: VISUAL VIEWPORT API INTEGRATION ---
+
     // --- 6. Cleanup Logic ---
     return () => {
       isMountedRef.current = false;
@@ -447,6 +481,13 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
       // Remove event listeners
       controller.removeEventListener('select', onSelect);
       window.removeEventListener('resize', onWindowResize);
+
+      // Clean up Visual Viewport API listeners
+      if (visualViewportHandler && 'visualViewport' in window && window.visualViewport) {
+        const vv = window.visualViewport;
+        vv.removeEventListener('resize', visualViewportHandler);
+        vv.removeEventListener('scroll', visualViewportHandler);
+      }
 
       // Clear cooldown timer
       if (cooldownTimerRef.current) {
@@ -542,17 +583,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   }, []);
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50" style={{
-      /* CRITICAL FIX: Ensure container properly fills viewport */
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      width: '100%',
-      height: '100%',
-      overflow: 'hidden',
-    }}>
+    <div ref={containerRef} className="ar-fullscreen z-50">
       {/* AR Entry Screen - Only shown before AR session starts */}
       {!arSessionActive && (
         <div className="absolute inset-0 z-50 bg-gradient-to-br from-background-default via-background-subtle to-background-inset dark:from-background-default dark:via-background-subtle dark:to-background-inset flex flex-col items-center justify-center p-6">
@@ -630,18 +661,24 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
       {/* AR Session Overlay - Only shown during active AR session */}
       <div id="ar-overlay" className="absolute inset-0 pointer-events-none" style={{
-        /* CRITICAL FIX: Overlay must be fixed to viewport, not canvas */
+        /* CRITICAL FIX: Safe-area insets prevent content from overlapping with iOS notch and home indicator */
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        top: 'env(safe-area-inset-top, 0)',
+        left: 'env(safe-area-inset-left, 0)',
+        right: 'env(safe-area-inset-right, 0)',
+        bottom: 'env(safe-area-inset-bottom, 0)',
         zIndex: 10,
       }}>
         <div className="w-full h-full flex flex-col justify-between p-4 md:p-6">
           
           {/* Top Bar: Instructions & Distance Display */}
-          <div className="flex items-start justify-between gap-4 pointer-events-auto">
+          <div 
+            className="flex items-start justify-between gap-4 pointer-events-auto"
+            style={{
+              /* Extra padding for devices with notch */
+              paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))',
+            }}
+          >
             {/* Instruction Panel - NON-INTERACTIVE (visual only) */}
             <div className="flex-1 max-w-md bg-background-default/90 dark:bg-background-subtle/90 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-stroke-default pointer-events-none">
               <div className="flex items-center gap-3">
@@ -672,7 +709,13 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           </div>
 
           {/* Bottom Controls: Context-Aware Action Buttons */}
-          <div className="flex justify-center items-end pb-safe pointer-events-auto">
+          <div 
+            className="flex justify-center items-end pointer-events-auto"
+            style={{
+              /* Ensures controls are visible above iOS home indicator */
+              paddingBottom: `max(1.5rem, env(safe-area-inset-bottom, 1.5rem))`,
+            }}
+          >
             
             {/* Scanning State */}
             {isScanning && (
