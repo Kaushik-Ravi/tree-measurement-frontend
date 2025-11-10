@@ -58,9 +58,11 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
                 
                 {/* Image */}
                 <img 
-                    src={tree.image_url} 
+                    src={getOptimizedImageUrl(tree.image_url, 'medium')}
                     alt={tree.file_name}
                     className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    loading="lazy"
+                    decoding="async"
                     onLoad={() => setImageLoaded(true)}
                     onError={() => {
                         setImageError(true);
