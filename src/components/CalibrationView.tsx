@@ -1,7 +1,7 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
@@ -127,17 +127,30 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         setInstruction("First point selected. Click the second endpoint or undo."); 
         setShowInstructionToast(true);
     }
+    // --- START: SURGICAL MODIFICATION ---
+    // DO NOT auto-confirm on 2nd point - show Confirm button instead (matches main app pattern)
     if (newPoints.length === 2) { 
-        calculateAndFinish(newPoints); 
+        setInstruction("Two points marked! Click the green checkmark to confirm calibration."); 
+        setShowInstructionToast(true);
     }
+    // --- END: SURGICAL MODIFICATION ---
   };
   
   // --- START: SURGICAL ADDITION ---
   const handleUndo = () => {
     if (points.length > 0) {
       setPoints(p => p.slice(0, -1));
-      setInstruction("Previous point removed. Click to place the first point.");
+      setInstruction(points.length === 1 
+        ? "Ready to mark. Click to place the first point."
+        : "First point removed. Click to place the first point again."
+      );
       setShowInstructionToast(true);
+    }
+  };
+
+  const handleConfirmCalibration = () => {
+    if (points.length === 2) {
+      calculateAndFinish(points);
     }
   };
   // --- END: SURGICAL ADDITION ---
@@ -265,76 +278,50 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
         
-        {/* Marking Mode Controls */}
+        {/* Floating Controls (Matches Main App Pattern) */}
         {points.length > 0 && !isPanelVisible && (
           <>
-            {/* Undo Button (LEFT) */}
+            {/* LEFT: Undo + Confirm Buttons (FloatingInteractionControls pattern) */}
             <div 
-              className="fixed left-6 z-50"
+              className="fixed left-6 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
               style={{
                 bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
               }}
             >
               <button 
                 onClick={handleUndo} 
-                className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset disabled:opacity-50 transition-colors"
+                disabled={points.length === 0}
+                className="p-3 rounded-lg hover:bg-background-inset disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-label="Undo last point"
               >
                 <RotateCcw size={20} />
               </button>
+              {points.length === 2 && (
+                <>
+                  <div className="w-px h-6 bg-stroke-default" />
+                  <button 
+                    onClick={handleConfirmCalibration}
+                    className="p-3 rounded-lg bg-status-success text-white hover:opacity-90 transition-colors"
+                    aria-label="Confirm calibration"
+                  >
+                    <Check size={20} />
+                  </button>
+                </>
+              )}
             </div>
 
-            {/* Show Panel Button (RIGHT) */}
-            <div 
-              className="fixed right-6 z-50"
+            {/* RIGHT: Hamburger Menu Button (Show Panel) */}
+            <button 
+              onClick={() => setIsPanelVisible(true)} 
+              className="fixed right-6 z-50 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-2xl hover:bg-brand-primary-hover active:scale-95 transition-transform flex items-center gap-2"
               style={{
                 bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
               }}
-            >
-              <button 
-                onClick={() => setIsPanelVisible(true)}
-                className="p-3 bg-background-subtle/95 text-content-default rounded-lg shadow-2xl backdrop-blur-md border border-stroke-default hover:bg-background-inset transition-colors"
-                aria-label="Show control panel"
-              >
-                <Menu size={20} />
-              </button>
-            </div>
+            > 
+              <Menu size={24} /> 
+              <span className="text-sm font-semibold">Show Panel</span>
+            </button>
           </>
-        )}
-
-        {/* Bottom Action Bar (After 1 Point Marked) */}
-        {points.length === 1 && !isPanelVisible && (
-          <div 
-            className="fixed bottom-0 left-0 right-0 z-50 bg-background-default/95 backdrop-blur-md border-t border-stroke-default"
-            style={{
-              paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
-            }}
-          >
-            <div className="p-4">
-              <p className="text-center text-sm text-content-default mb-3">
-                {selectedObject 
-                  ? `Mark the second endpoint of the ${selectedObject.name}'s WIDTH`
-                  : 'Click the second endpoint of your object'
-                }
-              </p>
-              <div className="flex gap-3 max-w-md mx-auto">
-                <button
-                  onClick={handleUndo}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-background-subtle text-content-default rounded-lg font-medium hover:bg-background-inset transition-colors border border-stroke-default"
-                >
-                  <RotateCcw size={18} />
-                  Undo
-                </button>
-                <button
-                  onClick={() => setIsPanelVisible(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors"
-                >
-                  <Menu size={18} />
-                  Show Panel
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </div>
       
