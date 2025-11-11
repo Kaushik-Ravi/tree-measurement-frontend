@@ -2121,12 +2121,15 @@ function App() {
       {isSessionActive ? renderSessionView() : (
         <div className="w-full flex flex-col h-full">
             <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default bg-background-default/80 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-brand-primary" /><h1 className="text-xl font-semibold text-content-default">Elite Tree Measurement</h1></div>
+                <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-brand-primary" /><h1 className="text-xl font-semibold text-content-default">Roots</h1></div>
                 <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} />
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6 bg-background-subtle">
               <div className="max-w-4xl mx-auto text-center py-8 md:py-16">
-                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-content-default">Map the Planet's Trees</h1>
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-content-default">Nature's Fingerprints</h1>
+                <p className="text-xl text-brand-primary font-medium mt-2">
+                  Every tree tells a story
+                </p>
                 <p className="mt-4 max-w-2xl mx-auto text-lg text-content-subtle">
                   Snap a photo, get instant measurements. Identify species, calculate carbon impact, and contribute to a global tree database.
                 </p>
