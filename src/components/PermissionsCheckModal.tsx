@@ -112,19 +112,34 @@ export function PermissionsCheckModal({
                     <p className="text-xs text-status-success mt-1 font-medium">✓ Location access granted</p>
                   )}
                   {locationStatus === 'DENIED' && (
-                    <p className="text-xs text-status-error mt-1 font-medium">✗ Access denied - See instructions below</p>
+                    <div className="mt-2 p-2 bg-status-error/10 border border-status-error/20 rounded">
+                      <p className="text-xs text-status-error font-medium">✗ Access denied</p>
+                      <p className="text-xs text-content-subtle mt-1">Follow the instructions below to enable location, then tap "Try Again"</p>
+                    </div>
                   )}
                   {locationStatus === 'UNAVAILABLE' && (
-                    <p className="text-xs text-status-warning mt-1 font-medium">⚠ GPS is turned off in device settings</p>
+                    <div className="mt-2 p-2 bg-status-warning/10 border border-status-warning/20 rounded">
+                      <p className="text-xs text-status-warning font-medium">⚠ GPS is turned off</p>
+                      <p className="text-xs text-content-subtle mt-1">Enable location services in your device Settings</p>
+                    </div>
                   )}
                   {locationStatus === 'TIMEOUT' && (
-                    <p className="text-xs text-status-warning mt-1 font-medium">⏱ Location request timed out</p>
+                    <div className="mt-2 p-2 bg-status-warning/10 border border-status-warning/20 rounded">
+                      <p className="text-xs text-status-warning font-medium">⏱ Request timed out</p>
+                      <p className="text-xs text-content-subtle mt-1">Try moving to an open area with clear sky view, then tap "Try Again" below</p>
+                    </div>
                   )}
                   {locationStatus === 'HTTPS_REQUIRED' && (
                     <p className="text-xs text-status-error mt-1 font-medium">🔒 HTTPS connection required</p>
                   )}
                   {locationStatus === 'NOT_SUPPORTED' && (
                     <p className="text-xs text-status-error mt-1 font-medium">✗ Browser doesn't support location</p>
+                  )}
+                  {locationStatus === 'ERROR' && (
+                    <div className="mt-2 p-2 bg-status-error/10 border border-status-error/20 rounded">
+                      <p className="text-xs text-status-error font-medium">✗ Location error</p>
+                      <p className="text-xs text-content-subtle mt-1">Check your connection and try again</p>
+                    </div>
                   )}
                 </div>
                 <div className="flex-shrink-0 pt-1">
@@ -157,7 +172,7 @@ export function PermissionsCheckModal({
                             <li>Scroll to <strong>{deviceInfo.isSafari ? 'Safari' : 'Chrome'}</strong></li>
                             <li>Tap <strong>Location</strong></li>
                             <li>Select <strong>"While Using the App"</strong> or <strong>"Always"</strong></li>
-                            <li>Return here and tap "Grant Permissions" again</li>
+                            <li>Return here and tap "Try Again" below</li>
                           </ol>
                         </>
                       )}
@@ -195,18 +210,25 @@ export function PermissionsCheckModal({
                     </div>
                   )}
                   
-                  {/* Try Again Button - Shows after help instructions */}
-                  {showLocationHelp && (
-                    <button 
-                      onClick={onRequestPermissions}
-                      className="mt-3 w-full px-4 py-2 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Try Again
-                    </button>
-                  )}
+                  {/* --- START: PHASE 1 ENHANCEMENT (Manual Retry Button) --- */}
+                  {/* Try Again Button - Always shows when location needs help */}
+                  <button 
+                    onClick={onRequestPermissions}
+                    className="mt-3 w-full px-4 py-3 bg-brand-secondary text-white rounded-lg font-medium hover:bg-brand-secondary-hover transition-colors flex items-center justify-center gap-2 shadow-md"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Try Again
+                  </button>
+                  <p className="text-xs text-content-subtle mt-2 text-center">
+                    {locationStatus === 'TIMEOUT' && '💡 Enable location and tap to retry'}
+                    {locationStatus === 'UNAVAILABLE' && '💡 Turn on GPS in Settings, then retry'}
+                    {locationStatus === 'DENIED' && '💡 Allow location access, then retry'}
+                    {locationStatus === 'ERROR' && '💡 Check your connection and retry'}
+                    {locationStatus === 'HTTPS_REQUIRED' && '💡 Access site via HTTPS'}
+                  </p>
+                  {/* --- END: PHASE 1 ENHANCEMENT --- */}
                 </div>
               )}
             </div>

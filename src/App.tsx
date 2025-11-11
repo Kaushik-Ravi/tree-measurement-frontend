@@ -314,6 +314,100 @@ function App() {
   }, [currentView]);
 
 
+  // --- START: PHASE 1 ENHANCEMENT (Visibility API Listener) ---
+  // Auto-retry permissions when user returns from Settings
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // Only re-check if we're in permission modal AND in an error state
+      if (appStatus === 'SESSION_AWAITING_PERMISSIONS' &&
+          document.visibilityState === 'visible' && 
+          (prereqStatus.location === 'TIMEOUT' || 
+           prereqStatus.location === 'DENIED' ||
+           prereqStatus.location === 'UNAVAILABLE' ||
+           prereqStatus.location === 'ERROR')) {
+        
+        console.log('[Permission Monitor] 👀 Tab visible - auto-checking if location enabled...');
+        
+        // Silent check - doesn't trigger new permission prompt
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // ✅ Location now available - update state
+            console.log('[Permission Monitor] ✅ Location now available!');
+            const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setUserGeoLocation(userLoc);
+            setCurrentLocation(userLoc);
+            setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+            setInstructionText('Location access granted!');
+            setErrorMessage('');
+          },
+          (error) => {
+            // Still unavailable - keep current error state
+            console.log('[Permission Monitor] ⏳ Still unavailable:', error.code);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 3000,
+            maximumAge: 0
+          }
+        );
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [appStatus, prereqStatus.location]);
+  // --- END: PHASE 1 ENHANCEMENT ---
+
+  // --- START: PHASE 1 ENHANCEMENT (Polling for Error States) ---
+  // Continuously check permission when in TIMEOUT/ERROR/UNAVAILABLE
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null;
+    
+    // Start polling when in error state AND permission modal is active
+    if (appStatus === 'SESSION_AWAITING_PERMISSIONS' &&
+        (prereqStatus.location === 'TIMEOUT' || 
+         prereqStatus.location === 'ERROR' ||
+         prereqStatus.location === 'UNAVAILABLE')) {
+      
+      console.log('[Permission Poll] 🔄 Starting 3-second polling...');
+      
+      pollInterval = setInterval(() => {
+        console.log('[Permission Poll] Checking if location enabled...');
+        
+        // Silent check - doesn't trigger new permission prompt
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            // ✅ Location now available - update state and stop polling
+            console.log('[Permission Poll] ✅ Location detected!');
+            const userLoc = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setUserGeoLocation(userLoc);
+            setCurrentLocation(userLoc);
+            setPrereqStatus(prev => ({ ...prev, location: 'GRANTED' }));
+            setInstructionText('Location access granted!');
+            setErrorMessage('');
+          },
+          (error) => {
+            // Still unavailable - continue polling
+            console.log('[Permission Poll] Still unavailable - code:', error.code);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 3000,
+            maximumAge: 0
+          }
+        );
+      }, 3000); // Poll every 3 seconds
+    }
+    
+    return () => {
+      if (pollInterval) {
+        console.log('[Permission Poll] 🛑 Stopping polling');
+        clearInterval(pollInterval);
+      }
+    };
+  }, [appStatus, prereqStatus.location]);
+  // --- END: PHASE 1 ENHANCEMENT ---
+
   useEffect(() => {
     const fetchUserResults = async () => {
       if (session?.access_token && user) {
