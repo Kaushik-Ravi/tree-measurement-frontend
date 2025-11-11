@@ -120,6 +120,19 @@
     -moz-appearance: textfield;
   }
   /* --- END: SURGICAL ADDITION (BROWSER STYLE OVERRIDE) --- */
+
+  /* --- START: MODAL SCROLL LOCK --- */
+  /*
+    ==============================================
+    MODAL BODY SCROLL LOCK (CLASS-BASED)
+    ==============================================
+    Prevents body scroll when modal is open.
+    Class-based approach is safer than style mutation.
+  */
+  body.modal-open {
+    overflow: hidden;
+  }
+  /* --- END: MODAL SCROLL LOCK --- */
 }
 
 

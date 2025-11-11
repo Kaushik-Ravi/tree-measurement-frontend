@@ -29,12 +29,12 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete, onAnalyze }: 
     
     // Prevent body scroll when modal is open
     if (tree) {
-      document.body.style.overflow = 'hidden';
+      document.body.classList.add('modal-open');
       document.addEventListener('keydown', handleKeyDown);
     }
     
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.classList.remove('modal-open');
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose, tree]);
