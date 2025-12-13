@@ -89,6 +89,7 @@ type AppStatus =
   'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS' |
   'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS' |
   'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' |
+  'ANALYSIS_MANUAL_AWAITING_CONFIRMATION' |
   'ANALYSIS_MANUAL_READY_TO_CALCULATE' |
   'COMMUNITY_GROVE_LOADING' |
   'ERROR';
@@ -1716,8 +1717,14 @@ function App() {
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
       setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
-      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
+      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CONFIRMATION'); setInstructionText("Points collected. Confirm to proceed."); setIsPanelOpen(false); setShowInstructionToast(true); } return {...p, girth: g}; }); 
     }
+  };
+
+  const handleConfirmManualPoints = () => {
+    setAppStatus('ANALYSIS_MANUAL_READY_TO_CALCULATE');
+    setIsPanelOpen(true);
+    setInstructionText("All points collected. Click 'Calculate'.");
   };
 
   const handleUndo = () => {
@@ -1785,6 +1792,12 @@ function App() {
           setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS');
           setInstructionText("STEP 2/3 (Canopy): Click 2 points on the canopy edges.");
         }
+        break;
+
+      case 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION':
+        setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
+        setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
+        setInstructionText("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width.");
         break;
 
       case 'ANALYSIS_MANUAL_READY_TO_CALCULATE':
@@ -1995,12 +2008,15 @@ function App() {
                   ? handleConfirmInitialClick 
                   : appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION'
                   ? handleConfirmAllInitialPoints
+                  : appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION'
+                  ? handleConfirmManualPoints
                   : handleApplyRefinements
               }
               showConfirm={
                 appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
                 appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ||
-                appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION'
+                appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION' ||
+                appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION'
               }
               undoDisabled={
                 (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' && refinePoints.length === 0) ||
