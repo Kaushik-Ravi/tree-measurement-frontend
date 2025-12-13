@@ -135,12 +135,13 @@ interface FloatingInteractionControlsProps {
   showConfirm: boolean;
   undoDisabled: boolean;
   confirmDisabled: boolean;
+  isInteracting?: boolean;
 }
 
-const FloatingInteractionControls = ({ onUndo, onConfirm, showConfirm, undoDisabled, confirmDisabled }: FloatingInteractionControlsProps) => {
+const FloatingInteractionControls = ({ onUndo, onConfirm, showConfirm, undoDisabled, confirmDisabled, isInteracting = false }: FloatingInteractionControlsProps) => {
   return (
     <div 
-      className="fixed left-6 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
+      className={`fixed left-6 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default transition-opacity duration-200 ${isInteracting ? 'opacity-10' : 'opacity-100'}`}
       style={{
         // CRITICAL FIX: Multi-layer mobile browser UI safety + Left positioning to avoid "Show Panel" button
         // Layer 1: env(safe-area-inset-bottom) handles iOS notches & Android gesture bars
@@ -1213,7 +1214,7 @@ function App() {
             setShowInstructionToast(true);
         } else if (newInitialPoints.length === 2) {
             // Just collected first canopy point, need one more
-            setInstructionText("Good! Now click another canopy point.");
+            setInstructionText("Good! Now click the second canopy point.");
             setShowInstructionToast(true);
         }
     } else if (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') { 
@@ -1230,7 +1231,7 @@ function App() {
     setInitialPoints([transientPoint]);
     setTransientPoint(null);
     setAppStatus('ANALYSIS_AWAITING_CANOPY_POINTS');
-    setInstructionText("Great! Now click 2 canopy points of the tree.");
+    setInstructionText("Great! Now click 2 points on the canopy edges.");
     setIsPanelOpen(false);
     setShowInstructionToast(true);
   };
@@ -1429,14 +1430,14 @@ function App() {
     return finalScaleFactor;
   };
   
-  const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Tap the main trunk of the tree to begin."); setShowInstructionToast(true); } };
+  const handleStartAutoMeasurement = () => { if (prepareMeasurementSession()) { setAppStatus('ANALYSIS_AWAITING_INITIAL_CLICK'); setIsPanelOpen(false); setInstructionText("Tap the main trunk of the tree (1 point) to begin."); setShowInstructionToast(true); } };
   
   const handleStartManualMeasurement = () => { 
       const imageToUse = currentView === 'COMMUNITY_GROVE' ? claimedTree?.image_url : originalImageSrc;
       if (prepareMeasurementSession() && imageToUse) { 
           setMaskGenerated(false);
           setResultImageSrc(imageToUse); setCurrentMetrics(null); setDbhLine(null); setRefinePoints([]); 
-          setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk."); setShowInstructionToast(true); 
+          setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK'); setIsPanelOpen(false); setInstructionText("Manual Mode: Click the exact base of the tree trunk (1 point)."); setShowInstructionToast(true); 
       } 
   };
 
@@ -1709,11 +1710,11 @@ function App() {
     if (!scaleFactor || !imageDimensions) return;
     const showNextInstruction = (text: string) => { setInstructionText(text); setShowInstructionToast(true); };
     if (appStatus === 'ANALYSIS_MANUAL_AWAITING_BASE_CLICK') {
-      try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS'); showNextInstruction("STEP 1/3 (Height): Click highest and lowest points."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
+      try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS'); showNextInstruction("STEP 1/3 (Height): Click the highest and lowest points (2 points)."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
-      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 canopy points."); } return {...p, height: h}; }); 
+      setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 points on the canopy edges."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
-      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width."); } return {...p, canopy: c}; }); 
+      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
       setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_READY_TO_CALCULATE'); setIsPanelOpen(true); setInstructionText("All points collected. Click 'Calculate'."); } return {...p, girth: g}; }); 
     }
@@ -1732,7 +1733,7 @@ function App() {
         if (initialPoints.length > 1) {
           // Remove last canopy point
           setInitialPoints(prev => prev.slice(0, -1));
-          setInstructionText("Click 2 canopy points of the tree.");
+          setInstructionText("Click 2 points on the canopy edges.");
           setShowInstructionToast(true);
         } else {
           // Go back to trunk confirmation
@@ -1748,7 +1749,7 @@ function App() {
         // Remove last canopy point and go back to collecting
         setInitialPoints(prev => prev.slice(0, -1));
         setAppStatus('ANALYSIS_AWAITING_CANOPY_POINTS');
-        setInstructionText("Click 2 canopy points of the tree.");
+        setInstructionText("Click 2 points on the canopy edges.");
         setShowInstructionToast(true);
         break;
       
@@ -1763,7 +1764,7 @@ function App() {
           // No height points yet - go back to base click and clear the red DBH guide line
           setDbhGuideRect(null);
           setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK');
-          setInstructionText("Manual Mode: Click the exact base of the tree trunk.");
+          setInstructionText("Manual Mode: Click the exact base of the tree trunk (1 point).");
           setShowInstructionToast(true);
         }
         break;
@@ -1773,7 +1774,7 @@ function App() {
           setManualPoints(p => ({ ...p, canopy: p.canopy.slice(0, -1) }));
         } else {
           setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS');
-          setInstructionText("STEP 1/3 (Height): Click highest and lowest points.");
+          setInstructionText("STEP 1/3 (Height): Click the highest and lowest points (2 points).");
         }
         break;
       
@@ -1782,13 +1783,13 @@ function App() {
           setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         } else {
           setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS');
-          setInstructionText("STEP 2/3 (Canopy): Click 2 canopy points.");
+          setInstructionText("STEP 2/3 (Canopy): Click 2 points on the canopy edges.");
         }
         break;
 
       case 'ANALYSIS_MANUAL_READY_TO_CALCULATE':
         setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
-        setInstructionText("STEP 3/3 (Girth): Use the red dotted guide to click the trunk's width.");
+        setInstructionText("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width.");
         setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         break;
     }
@@ -1842,7 +1843,7 @@ function App() {
     return (
       <button 
         onClick={() => setIsPanelOpen(true)} 
-        className="fixed right-6 z-50 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-2xl hover:bg-brand-primary-hover active:scale-95 transition-transform flex items-center gap-2"
+        className={`fixed right-6 z-50 p-4 bg-brand-primary text-content-on-brand rounded-full shadow-2xl hover:bg-brand-primary-hover active:scale-95 transition-all duration-200 flex items-center gap-2 ${magnifierState.show ? 'opacity-10' : 'opacity-100'}`}
         style={{
           // CRITICAL FIX: Multi-layer mobile browser UI safety (same as FloatingInteractionControls)
           bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))',
@@ -1982,7 +1983,7 @@ function App() {
               </>
             )
           )}
-          {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
+          {(!isPanelOpen || window.innerWidth >= 768) && (appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
             appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ||
             appStatus === 'ANALYSIS_AWAITING_CANOPY_POINTS' ||
             appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION' ||
@@ -2015,6 +2016,7 @@ function App() {
                 (refinePoints.length === 0 && appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS') ||
                 (initialPoints.length !== 3 && appStatus === 'ANALYSIS_AWAITING_CANOPY_CONFIRMATION')
               }
+              isInteracting={magnifierState.show}
             />
           )}
       </div>
