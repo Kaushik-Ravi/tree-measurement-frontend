@@ -38,12 +38,36 @@ export const Magnifier: React.FC<MagnifierProps> = ({
   const bgPosX = -1 * (relX * zoom - size / 2);
   const bgPosY = -1 * (relY * zoom - size / 2);
 
+  // --- SMART POSITIONING LOGIC ---
+  // 1. Vertical Flip (Anti-Crop)
+  // Default is above the finger (offsetY is negative)
+  let finalOffsetY = offsetY;
+  const topEdge = y - size / 2 + offsetY;
+  
+  // If the magnifier goes off the top of the screen, flip it to below the finger
+  if (topEdge < 0) {
+    finalOffsetY = Math.abs(offsetY);
+  }
+
+  // 2. Horizontal Clamp (Side-Scroll Fix)
+  let finalLeft = x - size / 2;
+  
+  // Clamp to left edge
+  if (finalLeft < 0) {
+    finalLeft = 0;
+  } 
+  // Clamp to right edge
+  else if (finalLeft + size > window.innerWidth) {
+    finalLeft = window.innerWidth - size;
+  }
+  // --- END SMART POSITIONING ---
+
   return (
     <div
       className="fixed pointer-events-none z-50 overflow-hidden bg-white shadow-2xl border-4 border-white rounded-full"
       style={{
-        left: x - size / 2,
-        top: y - size / 2 + offsetY,
+        left: finalLeft,
+        top: y - size / 2 + finalOffsetY,
         width: size,
         height: size,
         backgroundImage: `url(${imageSrc})`,
