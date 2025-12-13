@@ -236,7 +236,7 @@ function App() {
   const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // Live AR mode
 
   // Magnifier State
-  const [magnifierState, setMagnifierState] = useState<{x: number, y: number, show: boolean}>({x: 0, y: 0, show: false});
+  const [magnifierState, setMagnifierState] = useState<{x: number, y: number, show: boolean, isSnapped: boolean}>({x: 0, y: 0, show: false, isSnapped: false});
   const [isDragging, setIsDragging] = useState(false);
 
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
@@ -929,7 +929,27 @@ function App() {
 
       // Existing Overlays
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
-      if (dbhGuideRect && imageDimensions && (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION')) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
+      if (dbhGuideRect && imageDimensions && (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION')) { 
+          const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); 
+          const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; 
+          const lineY = p.y + rectHeight / 2; 
+          
+          // OPTION A: "Magnetic Band" (Cyan Glow)
+          // Draw a semi-transparent band instead of a thin red line
+          const bandHeight = canvas.height * 0.05; // 5% of screen height
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.15)'; // Cyan with low opacity
+          ctx.fillRect(0, lineY - bandHeight/2, canvas.width, bandHeight);
+          
+          // Draw a subtle center guide (white dashed)
+          ctx.beginPath(); 
+          ctx.setLineDash([5, 5]); 
+          ctx.moveTo(0, lineY); 
+          ctx.lineTo(canvas.width, lineY); 
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; 
+          ctx.lineWidth = 1.5; 
+          ctx.stroke(); 
+          ctx.setLineDash([]); 
+      }
       
       // Refine Points
       refinePoints.forEach(p => drawPoint(p, '#EF4444'));
@@ -1252,13 +1272,48 @@ function App() {
     if (isSelectionState) {
       e.currentTarget.setPointerCapture(e.pointerId);
       setIsDragging(true);
-      setMagnifierState({ x: e.clientX, y: e.clientY, show: true });
+      
+      // Check for snap immediately on down
+      let isSnapped = false;
+      if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
+          const canvas = e.currentTarget;
+          const rect = canvas.getBoundingClientRect();
+          const scaleY = canvas.height / rect.height;
+          const canvasClickY = (e.clientY - rect.top) * scaleY;
+          const imageClickY = (canvasClickY / canvas.height) * imageDimensions.h;
+          
+          const guideLineY = dbhGuideRect.y + (dbhGuideRect.height / 2);
+          const threshold = imageDimensions.h * 0.05;
+          
+          if (Math.abs(imageClickY - guideLineY) < threshold) {
+              isSnapped = true;
+          }
+      }
+      
+      setMagnifierState({ x: e.clientX, y: e.clientY, show: true, isSnapped });
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (isDragging) {
-      setMagnifierState({ x: e.clientX, y: e.clientY, show: true });
+      // Check for snap during drag
+      let isSnapped = false;
+      if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
+          const canvas = e.currentTarget;
+          const rect = canvas.getBoundingClientRect();
+          const scaleY = canvas.height / rect.height;
+          const canvasClickY = (e.clientY - rect.top) * scaleY;
+          const imageClickY = (canvasClickY / canvas.height) * imageDimensions.h;
+          
+          const guideLineY = dbhGuideRect.y + (dbhGuideRect.height / 2);
+          const threshold = imageDimensions.h * 0.05;
+          
+          if (Math.abs(imageClickY - guideLineY) < threshold) {
+              isSnapped = true;
+          }
+      }
+      
+      setMagnifierState({ x: e.clientX, y: e.clientY, show: true, isSnapped });
     }
   };
 
@@ -1266,7 +1321,7 @@ function App() {
     if (isDragging) {
       e.currentTarget.releasePointerCapture(e.pointerId);
       setIsDragging(false);
-      setMagnifierState(prev => ({ ...prev, show: false }));
+      setMagnifierState(prev => ({ ...prev, show: false, isSnapped: false }));
       
       // Process the click at the final position
       processCanvasClick(e.clientX, e.clientY, e.currentTarget);
@@ -2167,6 +2222,7 @@ function App() {
                     y={magnifierState.y} 
                     imageSrc={originalImageSrc} 
                     canvas={canvasRef.current}
+                    isSnapped={magnifierState.isSnapped}
                   />
                 )}
               </>

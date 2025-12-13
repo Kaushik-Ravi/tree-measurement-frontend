@@ -8,6 +8,7 @@ interface MagnifierProps {
   size?: number;
   canvas: HTMLCanvasElement | null;
   offsetY?: number;
+  isSnapped?: boolean; // New prop for snap state
 }
 
 export const Magnifier: React.FC<MagnifierProps> = ({ 
@@ -17,7 +18,8 @@ export const Magnifier: React.FC<MagnifierProps> = ({
   zoom = 3, 
   size = 140, 
   canvas,
-  offsetY = -100 
+  offsetY = -100,
+  isSnapped = false // Default to false
 }) => {
   if (!canvas || !imageSrc) return null;
 
@@ -62,9 +64,13 @@ export const Magnifier: React.FC<MagnifierProps> = ({
   }
   // --- END SMART POSITIONING ---
 
+  // Dynamic Crosshair Color
+  const crosshairColor = isSnapped ? 'bg-green-400' : 'bg-red-500/60';
+  const glowClass = isSnapped ? 'shadow-[0_0_15px_rgba(74,222,128,0.8)] border-green-400' : 'shadow-2xl border-white';
+
   return (
     <div
-      className="fixed pointer-events-none z-50 overflow-hidden bg-white shadow-2xl border-4 border-white rounded-full"
+      className={`fixed pointer-events-none z-50 overflow-hidden bg-white rounded-full border-4 transition-all duration-200 ${glowClass}`}
       style={{
         left: finalLeft,
         top: y - size / 2 + finalOffsetY,
@@ -77,8 +83,13 @@ export const Magnifier: React.FC<MagnifierProps> = ({
       }}
     >
       {/* Crosshair */}
-      <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/60 transform -translate-y-1/2"></div>
-      <div className="absolute left-1/2 top-0 h-full w-0.5 bg-red-500/60 transform -translate-x-1/2"></div>
+      <div className={`absolute top-1/2 left-0 w-full h-0.5 ${crosshairColor} transform -translate-y-1/2 transition-colors duration-200`}></div>
+      <div className={`absolute left-1/2 top-0 h-full w-0.5 ${crosshairColor} transform -translate-x-1/2 transition-colors duration-200`}></div>
+      
+      {/* Optional: Center Dot for extra precision when snapped */}
+      {isSnapped && (
+        <div className="absolute top-1/2 left-1/2 w-2 h-2 bg-green-400 rounded-full transform -translate-x-1/2 -translate-y-1/2 shadow-sm"></div>
+      )}
     </div>
   );
 };
