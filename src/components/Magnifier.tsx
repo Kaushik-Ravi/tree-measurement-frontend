@@ -70,7 +70,7 @@ export const Magnifier: React.FC<MagnifierProps> = ({
 
   return (
     <div
-      className={`fixed pointer-events-none z-50 overflow-hidden bg-white rounded-full border-4 transition-all duration-200 ${glowClass}`}
+      className={`fixed pointer-events-none z-50 overflow-hidden bg-white rounded-full border-4 transition-[box-shadow,border-color] duration-200 ${glowClass}`}
       style={{
         left: finalLeft,
         top: y - size / 2 + finalOffsetY,

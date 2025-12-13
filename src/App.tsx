@@ -308,6 +308,7 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragRectRef = useRef<DOMRect | null>(null); // Optimization: Cache canvas rect during drag
 
   // --- START: SESSION PERSISTENCE ---
   const { isRestoring, restoredSession, saveSession, clearSession } = useSessionPersistence();
@@ -1273,11 +1274,15 @@ function App() {
       e.currentTarget.setPointerCapture(e.pointerId);
       setIsDragging(true);
       
+      // Optimization: Cache rect on down to avoid reflows during move
+      const rect = e.currentTarget.getBoundingClientRect();
+      dragRectRef.current = rect;
+      
       // Check for snap immediately on down
       let isSnapped = false;
       if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
           const canvas = e.currentTarget;
-          const rect = canvas.getBoundingClientRect();
+          // Use cached rect
           const scaleY = canvas.height / rect.height;
           const canvasClickY = (e.clientY - rect.top) * scaleY;
           const imageClickY = (canvasClickY / canvas.height) * imageDimensions.h;
@@ -1300,7 +1305,8 @@ function App() {
       let isSnapped = false;
       if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
           const canvas = e.currentTarget;
-          const rect = canvas.getBoundingClientRect();
+          // Use cached rect if available, else fallback (should be available during drag)
+          const rect = dragRectRef.current || canvas.getBoundingClientRect();
           const scaleY = canvas.height / rect.height;
           const canvasClickY = (e.clientY - rect.top) * scaleY;
           const imageClickY = (canvasClickY / canvas.height) * imageDimensions.h;
@@ -1321,6 +1327,7 @@ function App() {
     if (isDragging) {
       e.currentTarget.releasePointerCapture(e.pointerId);
       setIsDragging(false);
+      dragRectRef.current = null; // Clear cache
       setMagnifierState(prev => ({ ...prev, show: false, isSnapped: false }));
       
       // Process the click at the final position
@@ -1914,7 +1921,7 @@ function App() {
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
       setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 points on the canopy edges."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
-      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width."); } return {...p, canopy: c}; }); 
+      setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Click 2 points on the Cyan Magnetic Band. The crosshair will snap green when locked on."); } return {...p, canopy: c}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION') {
       // --- SNAP TO GUIDE LINE LOGIC ---
       let finalPoint = point;
@@ -1940,7 +1947,7 @@ function App() {
           if (g.length >= 2 && g.length % 2 === 0) { 
               setAppStatus('ANALYSIS_MANUAL_AWAITING_CONFIRMATION'); 
               setInstructionText("Trunk segment added. Add more segments (for forked trees) or click 'Calculate'."); 
-              setIsPanelOpen(true); // Open panel to show Calculate button
+              // Panel should NOT open automatically here. User must click Calculate manually.
               setShowInstructionToast(true); 
           } else {
               // Odd number of points - waiting for the second point of the pair
@@ -1996,31 +2003,35 @@ function App() {
         break;
 
       case 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS':
-        if (manualPoints.height.length > 0) {
-          setManualPoints(p => ({ ...p, height: p.height.slice(0, -1) }));
-        } else {
-          // No height points yet - go back to base click and clear the red DBH guide line
-          setDbhGuideRect(null);
-          setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK');
-          setInstructionText("Manual Mode: Click the exact base of the tree trunk (1 point).");
-          setShowInstructionToast(true);
-        }
+        // We are here because we have 1 point (Base). Waiting for Top.
+        // Undo should clear Base and go back to BASE_CLICK state immediately.
+        setManualPoints(p => ({ ...p, height: [] }));
+        setDbhGuideRect(null);
+        setAppStatus('ANALYSIS_MANUAL_AWAITING_BASE_CLICK');
+        setInstructionText("Manual Mode: Click the exact base of the tree trunk (1 point).");
+        setShowInstructionToast(true);
         break;
       
       case 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS':
         if (manualPoints.canopy.length > 0) {
           setManualPoints(p => ({ ...p, canopy: p.canopy.slice(0, -1) }));
+          setInstructionText("STEP 2/3 (Canopy): Click 2 points on the canopy edges.");
         } else {
+          // Go back to Height, remove the 2nd height point
           setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS');
-          setInstructionText("STEP 1/3 (Height): Click the highest and lowest points (2 points).");
+          setManualPoints(p => ({ ...p, height: p.height.slice(0, -1) }));
+          setInstructionText("STEP 1/3 (Height): Base set. Now click the TOP of the tree.");
         }
         break;
       
       case 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS':
         if (manualPoints.girth.length > 0) {
           setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
+          setInstructionText("STEP 3/3 (Girth): Click 2 points on the Cyan Magnetic Band.");
         } else {
+          // Go back to Canopy, remove the 2nd canopy point
           setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS');
+          setManualPoints(p => ({ ...p, canopy: p.canopy.slice(0, -1) }));
           setInstructionText("STEP 2/3 (Canopy): Click 2 points on the canopy edges.");
         }
         break;
@@ -2028,12 +2039,12 @@ function App() {
       case 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION':
         setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
-        setInstructionText("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width.");
+        setInstructionText("STEP 3/3 (Girth): Click the other side of this trunk segment.");
         break;
 
       case 'ANALYSIS_MANUAL_READY_TO_CALCULATE':
         setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
-        setInstructionText("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width.");
+        setInstructionText("STEP 3/3 (Girth): Click 2 points on the Cyan Magnetic Band.");
         setManualPoints(p => ({ ...p, girth: p.girth.slice(0, -1) }));
         break;
     }
