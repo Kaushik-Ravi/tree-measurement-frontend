@@ -1223,8 +1223,9 @@ function App() {
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
     // --- START: SURGICAL UPDATE ---
     // Also save to the new "Top Engineering" key to ensure it is picked up by calculateScaleFactor
-    localStorage.setItem('device_calibration_factor', newFovRatio.toString());
-    console.log('[App] Saved new calibration factor to device_calibration_factor:', newFovRatio);
+    // V2 MIGRATION: We renamed this to _v2 to flush old/bad calibrations from before the 4:3 fix.
+    localStorage.setItem('device_calibration_factor_v2', newFovRatio.toString());
+    console.log('[App] Saved new calibration factor to device_calibration_factor_v2:', newFovRatio);
     // --- END: SURGICAL UPDATE ---
     setCurrentView('SESSION');
 
@@ -1277,11 +1278,12 @@ function App() {
     let calibrationSource: string = 'none';
 
     // Priority 0: User-Specific Device Calibration (The "Top Engineering" Solution)
-    const savedCalibration = localStorage.getItem('device_calibration_factor');
+    // V2 MIGRATION: We check _v2 to ensure we don't use old/bad calibrations.
+    const savedCalibration = localStorage.getItem('device_calibration_factor_v2');
     if (savedCalibration) {
         cameraConstant = parseFloat(savedCalibration);
-        calibrationSource = 'device_calibration_storage';
-        console.log('[Scale Factor] ✅ Using SAVED DEVICE CALIBRATION');
+        calibrationSource = 'device_calibration_storage_v2';
+        console.log('[Scale Factor] ✅ Using SAVED DEVICE CALIBRATION (V2)');
         console.log('[Scale Factor] This overrides EXIF and handles device-specific sensor geometry.');
         console.log('[Scale Factor] Calibration Factor (K):', cameraConstant);
     }

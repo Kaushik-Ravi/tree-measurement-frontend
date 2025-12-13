@@ -358,8 +358,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
   const getCalibrationValues = useCallback(() => {
     // Priority 1: Use props from parent (App.tsx)
     if (focalLength && focalLength > 0) {
-      const fovRatioCalculated = 36.0 / focalLength; // Convert focal length to FOV ratio
-      console.log('[LiveAR Calibration] Using props - Focal length:', focalLength, '→ FOV ratio:', fovRatioCalculated);
+      // CORRECTION: Universal 4:3 Sensor Geometry Fix
+      // Standard 35mm film is 36mm wide (3:2), but smartphones are 4:3.
+      // Effective sensor width for 4:3 is ~34.616mm.
+      const SENSOR_WIDTH_MM = 34.616;
+      const fovRatioCalculated = SENSOR_WIDTH_MM / focalLength; // Convert focal length to FOV ratio
+      console.log('[LiveAR Calibration] Using props - Focal length:', focalLength, '→ FOV ratio:', fovRatioCalculated, '(Corrected for 4:3 sensor)');
       return { focalLength35mm: focalLength, fovRatio: fovRatioCalculated, source: 'props' };
     }
     
@@ -373,8 +377,10 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       const { focalLength35mm, fovHorizontal, calibrationMethod } = cameraCalibration;
       
       if (focalLength35mm && focalLength35mm > 0) {
-        const fovRatioCalculated = 36.0 / focalLength35mm;
-        console.log('[LiveAR Calibration] Using internal state - Method:', calibrationMethod, 'Focal length:', focalLength35mm, '→ FOV ratio:', fovRatioCalculated);
+        // CORRECTION: Universal 4:3 Sensor Geometry Fix
+        const SENSOR_WIDTH_MM = 34.616;
+        const fovRatioCalculated = SENSOR_WIDTH_MM / focalLength35mm;
+        console.log('[LiveAR Calibration] Using internal state - Method:', calibrationMethod, 'Focal length:', focalLength35mm, '→ FOV ratio:', fovRatioCalculated, '(Corrected for 4:3 sensor)');
         return { focalLength35mm, fovRatio: fovRatioCalculated, source: calibrationMethod };
       }
       
@@ -530,15 +536,18 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       const calibrationData = getCalibrationValues();
       let cameraConstant: number;
       
+      // CORRECTION: Universal 4:3 Sensor Geometry Fix
+      const SENSOR_WIDTH_MM = 34.616;
+
       if (calibrationData.focalLength35mm) {
-        cameraConstant = 36.0 / calibrationData.focalLength35mm;
-        console.log('[LiveAR] 📏 Focal length:', calibrationData.focalLength35mm, 'mm');
+        cameraConstant = SENSOR_WIDTH_MM / calibrationData.focalLength35mm;
+        console.log('[LiveAR] 📏 Focal length:', calibrationData.focalLength35mm, 'mm (Corrected for 4:3 sensor)');
       } else if (calibrationData.fovRatio) {
         cameraConstant = calibrationData.fovRatio;
         console.log('[LiveAR] 📏 FOV ratio:', calibrationData.fovRatio);
       } else {
-        cameraConstant = 36.0 / 28; // Default 28mm
-        console.warn('[LiveAR] ⚠️ Using default 28mm calibration');
+        cameraConstant = SENSOR_WIDTH_MM / 28; // Default 28mm
+        console.warn('[LiveAR] ⚠️ Using default 28mm calibration (Corrected for 4:3 sensor)');
       }
       
       const distMM = dist * 1000;
