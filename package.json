@@ -13,6 +13,7 @@
     "@google/model-viewer": "3.5.0",
     "@supabase/supabase-js": "^2.75.0",
     "exifreader": "^4.31.0",
+    "idb-keyval": "^6.2.2",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^3.11.0",
     "lucide-react": "^0.344.0",
