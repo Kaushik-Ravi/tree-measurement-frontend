@@ -837,10 +837,103 @@ function App() {
       
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const scaleCoords = (p: Point): Point => !imageDimensions ? p : { x: (p.x / imageDimensions.w) * canvas.width, y: (p.y / imageDimensions.h) * canvas.height };
-      const drawPoint = (p: Point, color: string) => { const sp = scaleCoords(p); ctx.beginPath(); ctx.arc(sp.x, sp.y, 5, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.stroke(); };
+      
+      // --- ENHANCED VISUALIZATION HELPERS ---
+      const drawPoint = (p: Point, color: string, label?: string, isCrosshair: boolean = false) => { 
+        const sp = scaleCoords(p); 
+        
+        if (isCrosshair) {
+            // Draw Target Crosshair (For Base/Anchor points)
+            ctx.beginPath();
+            ctx.moveTo(sp.x - 12, sp.y); ctx.lineTo(sp.x + 12, sp.y);
+            ctx.moveTo(sp.x, sp.y - 12); ctx.lineTo(sp.x, sp.y + 12);
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 4; ctx.stroke(); // Outer stroke for contrast
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();   // Inner color
+            
+            ctx.beginPath(); 
+            ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); 
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+        } else {
+            // Draw Standard Point
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); 
+            ctx.fillStyle = color; ctx.fill(); 
+            ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke(); 
+        }
+
+        // Draw Label with Shadow for Readability
+        if (label) {
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+            ctx.strokeText(label, sp.x + 10, sp.y - 8);
+            ctx.fillStyle = 'white';
+            ctx.fillText(label, sp.x + 10, sp.y - 8);
+        }
+      };
+
+      const drawConnector = (p1: Point, p2: Point, color: string, dashed: boolean = false) => {
+          const sp1 = scaleCoords(p1);
+          const sp2 = scaleCoords(p2);
+          ctx.beginPath();
+          ctx.moveTo(sp1.x, sp1.y);
+          ctx.lineTo(sp2.x, sp2.y);
+          ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 4; ctx.stroke(); // Shadow
+          ctx.strokeStyle = color; ctx.lineWidth = 2; 
+          if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+      };
+
+      // --- AUTO MODE RENDERING ---
+      if (initialPoints.length > 0) {
+          // Trunk Point -> Fuchsia Crosshair
+          drawPoint(initialPoints[0], '#D946EF', 'Trunk', true);
+      }
+      if (initialPoints.length > 1) {
+          // Canopy Points -> Red
+          initialPoints.slice(1).forEach((p, i) => drawPoint(p, '#EF4444', `Canopy ${i+1}`));
+          if (initialPoints.length === 3) {
+              drawConnector(initialPoints[1], initialPoints[2], '#EF4444', true);
+          }
+      }
+
+      // --- MANUAL MODE RENDERING ---
+      // 1. Height (Yellow - High Contrast)
+      if (manualPoints.height.length > 0) {
+          manualPoints.height.forEach((p, i) => drawPoint(p, '#FACC15', `H${i+1}`));
+          if (manualPoints.height.length === 2) {
+              drawConnector(manualPoints.height[0], manualPoints.height[1], '#FACC15', true);
+          }
+      }
+      
+      // 2. Canopy (Red - High Contrast)
+      if (manualPoints.canopy.length > 0) {
+          manualPoints.canopy.forEach((p, i) => drawPoint(p, '#EF4444', `C${i+1}`));
+          if (manualPoints.canopy.length === 2) {
+              drawConnector(manualPoints.canopy[0], manualPoints.canopy[1], '#EF4444', true);
+          }
+      }
+
+      // 3. Girth (Cyan - High Contrast)
+      if (manualPoints.girth.length > 0) {
+          manualPoints.girth.forEach((p, i) => drawPoint(p, '#06B6D4', `G${i+1}`));
+          if (manualPoints.girth.length === 2) {
+              drawConnector(manualPoints.girth[0], manualPoints.girth[1], '#06B6D4', false);
+          }
+      }
+
+      // Transient Point (Blue Crosshair for active selection)
+      if (transientPoint) drawPoint(transientPoint, '#3B82F6', 'Select...', true);
+
+      // Existing Overlays
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
       if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
-      initialPoints.forEach(p => drawPoint(p, '#10B981')); refinePoints.forEach(p => drawPoint(p, '#EF4444')); Object.values(manualPoints).flat().forEach(p => drawPoint(p, '#F97316')); if (transientPoint) drawPoint(transientPoint, '#3B82F6');
+      
+      // Refine Points
+      refinePoints.forEach(p => drawPoint(p, '#EF4444'));
     };
   }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, initialPoints, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive]);
   
