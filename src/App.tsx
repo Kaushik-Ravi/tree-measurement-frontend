@@ -908,59 +908,20 @@ function App() {
               const isBase = i === 0;
               drawPoint(p, '#FACC15', `H${i+1}`, isBase);
           });
-          if (manualPoints.height.length === 2) {
-              // VISUALIZATION FIX: Show Vertical Height vs Slant
-              // Determine top and base points (y=0 is top)
-              const p1 = manualPoints.height[0];
-              const p2 = manualPoints.height[1];
-              const topP = p1.y < p2.y ? p1 : p2;
-              const baseP = p1.y < p2.y ? p2 : p1;
-              
-              // Calculate the corner point for the right triangle (Top X, Base Y)
-              const cornerP = { x: topP.x, y: baseP.y };
-              
-              // 1. Draw Vertical Line (The Actual Height Measurement) - Solid Yellow
-              drawConnector(topP, cornerP, '#FACC15', false);
-              
-              // 2. Draw Horizontal Offset - Dashed White (Visual reference only)
-              drawConnector(baseP, cornerP, 'rgba(255, 255, 255, 0.8)', true);
-              
-              // 3. Draw Slant/Hypotenuse - Faint Dashed (To show the connection)
-              drawConnector(p1, p2, 'rgba(250, 204, 21, 0.4)', true);
-              
-              // 4. Add "Height" Label to the vertical line
-              const spTop = scaleCoords(topP);
-              const spCorner = scaleCoords(cornerP);
-              const midX = spTop.x;
-              const midY = (spTop.y + spCorner.y) / 2;
-              
-              ctx.save();
-              ctx.font = 'bold 12px sans-serif';
-              ctx.fillStyle = '#FACC15';
-              ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-              ctx.lineWidth = 3;
-              ctx.textAlign = 'right';
-              ctx.textBaseline = 'middle';
-              ctx.strokeText('Height', midX - 8, midY);
-              ctx.fillText('Height', midX - 8, midY);
-              ctx.restore();
-          }
+          // NOTE: User requested NO lines connecting points for simplicity.
+          // Just points (H1, H2) are sufficient.
       }
       
       // 2. Canopy (Red - High Contrast)
       if (manualPoints.canopy.length > 0) {
           manualPoints.canopy.forEach((p, i) => drawPoint(p, '#EF4444', `C${i+1}`));
-          if (manualPoints.canopy.length === 2) {
-              drawConnector(manualPoints.canopy[0], manualPoints.canopy[1], '#EF4444', true);
-          }
+          // NOTE: User requested NO lines connecting points for simplicity.
       }
 
       // 3. Girth (Cyan - High Contrast)
       if (manualPoints.girth.length > 0) {
           manualPoints.girth.forEach((p, i) => drawPoint(p, '#06B6D4', `G${i+1}`));
-          if (manualPoints.girth.length === 2) {
-              drawConnector(manualPoints.girth[0], manualPoints.girth[1], '#06B6D4', false);
-          }
+          // NOTE: User requested NO lines connecting points for simplicity.
       }
 
       // Transient Point (Blue Crosshair for active selection)
