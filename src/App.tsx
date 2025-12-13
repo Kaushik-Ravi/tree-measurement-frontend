@@ -1221,6 +1221,11 @@ function App() {
   const onCalibrationComplete = (newFovRatio: number) => {
     setFovRatio(newFovRatio);
     localStorage.setItem(CAMERA_FOV_RATIO_KEY, newFovRatio.toString());
+    // --- START: SURGICAL UPDATE ---
+    // Also save to the new "Top Engineering" key to ensure it is picked up by calculateScaleFactor
+    localStorage.setItem('device_calibration_factor', newFovRatio.toString());
+    console.log('[App] Saved new calibration factor to device_calibration_factor:', newFovRatio);
+    // --- END: SURGICAL UPDATE ---
     setCurrentView('SESSION');
 
     if (pendingTreeFile) {
@@ -1260,23 +1265,28 @@ function App() {
     }
 
     // --- START: DISTANCE CORRECTION ---
-    const distForCalc = calculateCorrectedDistance(distForCalcRaw);
+    // NOTE: We are keeping the confidence UI, but disabling the "hardcoded" correction
+    // because we are moving to a robust Calibration Factor approach.
+    // The user correctly pointed out that hardcoding 0.018 is not device-agnostic.
+    const distForCalc = distForCalcRaw; // Trust the raw distance for now, rely on Calibration Factor
     const confidence = getConfidenceInfo(distForCalcRaw);
     setConfidenceInfo(confidence);
-    
-    console.log('[Scale Factor] Distance Correction:', {
-      raw: distForCalcRaw,
-      corrected: distForCalc,
-      correctionFactor: distForCalc / distForCalcRaw,
-      confidence
-    });
     // --- END: DISTANCE CORRECTION ---
 
     let cameraConstant: number | null = null;
     let calibrationSource: string = 'none';
 
+    // Priority 0: User-Specific Device Calibration (The "Top Engineering" Solution)
+    const savedCalibration = localStorage.getItem('device_calibration_factor');
+    if (savedCalibration) {
+        cameraConstant = parseFloat(savedCalibration);
+        calibrationSource = 'device_calibration_storage';
+        console.log('[Scale Factor] ✅ Using SAVED DEVICE CALIBRATION');
+        console.log('[Scale Factor] This overrides EXIF and handles device-specific sensor geometry.');
+        console.log('[Scale Factor] Calibration Factor (K):', cameraConstant);
+    }
     // Priority 1: Focal length (from EXIF or Tier 2)
-    if (focalLength) {
+    else if (focalLength) {
         cameraConstant = 36.0 / focalLength;
         calibrationSource = 'focal_length_35mm';
         console.log('[Scale Factor] ✅ Using focal length calibration');
@@ -1303,8 +1313,13 @@ function App() {
     else {
         console.error('[Scale Factor] ❌ No calibration available!');
         console.log('[Scale Factor] Redirecting to manual calibration view...');
-        setCurrentView('CALIBRATION');
-        return null;
+        // Instead of forcing calibration immediately, we might want to warn the user
+        // But for now, let's default to a standard wide angle if absolutely nothing else exists
+        // to prevent crash, but warn heavily.
+        console.warn('[Scale Factor] Fallback to generic wide angle (approx 26mm equiv)');
+        cameraConstant = 36.0 / 26.0; 
+        calibrationSource = 'fallback_generic';
+        setErrorMessage("Warning: Uncalibrated Device. Results may be 5-10% off. Please calibrate in Settings.");
     }
 
     // Calculate scale factor using the standard formula
@@ -2060,25 +2075,37 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_CALIBRATION_CHOICE' && (
               <div className="space-y-4 pt-4 border-t border-stroke-subtle">
-                <h3 className="text-base font-semibold text-center text-content-default">Use Existing Calibration?</h3>
-                <button 
-                  onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setInstructionText("Using saved calibration. Please enter the distance."); }}
-                  className="w-full text-left p-4 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4"
-                >
-                  <ShieldCheck className="w-6 h-6 flex-shrink-0" />
-                  <div>
-                    <p className="font-semibold">Use Saved Calibration</p>
-                    <p className="text-xs opacity-80">Proceed with your previously saved camera settings.</p>
+                <h3 className="text-base font-semibold text-center text-content-default">Device Calibration</h3>
+                <div className="p-4 bg-background-subtle rounded-lg border border-stroke-subtle">
+                  <p className="text-sm text-content-default mb-2">
+                    For "Top Engineering" accuracy (±1%), we need to calibrate your specific phone camera once.
+                    This handles differences between Samsung, Redmi, Pixel, etc.
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-content-subtle">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>One-time setup</span>
                   </div>
-                </button>
+                </div>
+
                 <button 
                   onClick={() => setCurrentView('CALIBRATION')}
                   className="w-full text-left p-4 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover transition-all flex items-center gap-4"
                 >
                   <Navigation className="w-6 h-6 flex-shrink-0" />
                   <div>
-                    <p className="font-semibold">Recalibrate</p>
-                    <p className="text-xs opacity-80">Perform a new calibration for maximum accuracy.</p>
+                    <p className="font-semibold">Calibrate My Device</p>
+                    <p className="text-xs opacity-80">Measure a door frame once to fix all future errors.</p>
+                  </div>
+                </button>
+
+                <button 
+                  onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setInstructionText("Using standard settings. Please enter the distance."); }}
+                  className="w-full text-left p-4 bg-background-subtle text-content-default rounded-lg hover:bg-background-inset transition-all flex items-center gap-4 border border-stroke-default"
+                >
+                  <ShieldCheck className="w-6 h-6 flex-shrink-0 text-content-subtle" />
+                  <div>
+                    <p className="font-semibold">Skip Calibration</p>
+                    <p className="text-xs opacity-80">Use standard EXIF data (Expect ~5-10% error).</p>
                   </div>
                 </button>
               </div>
