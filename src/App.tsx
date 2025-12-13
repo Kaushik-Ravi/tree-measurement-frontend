@@ -1287,10 +1287,15 @@ function App() {
     }
     // Priority 1: Focal length (from EXIF or Tier 2)
     else if (focalLength) {
-        cameraConstant = 36.0 / focalLength;
-        calibrationSource = 'focal_length_35mm';
-        console.log('[Scale Factor] ✅ Using focal length calibration');
+        // CORRECTION: Universal 4:3 Sensor Geometry Fix (See AR_MARKET_VALIDATION.md)
+        // Standard 35mm film is 36mm wide (3:2), but smartphones are 4:3.
+        // Effective sensor width for 4:3 is ~34.616mm.
+        const SENSOR_WIDTH_MM = 34.616;
+        cameraConstant = SENSOR_WIDTH_MM / focalLength;
+        calibrationSource = 'focal_length_smartphone_corrected';
+        console.log('[Scale Factor] ✅ Using focal length calibration (Sensor Corrected)');
         console.log('[Scale Factor] Focal length:', focalLength, 'mm (35mm equivalent)');
+        console.log('[Scale Factor] Sensor Width:', SENSOR_WIDTH_MM, 'mm (4:3 Standard)');
         console.log('[Scale Factor] Camera constant:', cameraConstant);
     } 
     // Priority 2: FOV ratio (from saved calibration or Tier 2)

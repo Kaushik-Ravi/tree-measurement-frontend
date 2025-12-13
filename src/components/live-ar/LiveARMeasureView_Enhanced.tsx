@@ -1173,8 +1173,11 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       let cameraConstant: number | null = null;
 
       if (focalLength) {
-        cameraConstant = 36.0 / focalLength;
-        console.log('[Phase A.2] Using focal length:', focalLength, 'mm → camera constant:', cameraConstant);
+        // CORRECTION: Universal 4:3 Sensor Geometry Fix (See AR_MARKET_VALIDATION.md)
+        const SENSOR_WIDTH_MM = 34.616;
+        cameraConstant = SENSOR_WIDTH_MM / focalLength;
+        console.log('[Phase A.2] Using focal length:', focalLength, 'mm');
+        console.log('[Phase A.2] Using corrected sensor width:', SENSOR_WIDTH_MM, 'mm');
       } else if (fovRatio) {
         cameraConstant = fovRatio;
         console.log('[Phase A.2] Using FOV ratio:', fovRatio);
