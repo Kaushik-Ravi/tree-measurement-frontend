@@ -33,6 +33,38 @@ import { LeaderboardView } from './components/LeaderboardView';
 import { PermissionsCheckModal } from './components/PermissionsCheckModal';
 import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 
+// --- START: DISTANCE CORRECTION HELPERS ---
+// Helper to correct distance drift (Linear Model with Clamping)
+const calculateCorrectedDistance = (rawDistance: number): number => {
+  // If distance is less than 2m, trust the raw value (avoid negative correction)
+  if (rawDistance < 2.0) {
+    return rawDistance;
+  }
+  
+  // Linear correction for distance > 2m
+  // Based on empirical data: Error grows ~1.8% per meter
+  // We reduce the effective distance to compensate for the overestimation
+  const driftFactor = 0.018;
+  const correction = 1.0 - (driftFactor * (rawDistance - 2.0));
+  
+  // Safety clamp: Don't let correction go below 0.8 (20% max reduction)
+  const clampedCorrection = Math.max(0.8, correction);
+  
+  return rawDistance * clampedCorrection;
+};
+
+// Helper to get confidence info
+const getConfidenceInfo = (rawDistance: number) => {
+  if (rawDistance < 3.0) {
+    return { label: 'High Accuracy', color: 'text-green-500', margin: `± ${(rawDistance * 100 * 0.02).toFixed(1)} cm` };
+  } else if (rawDistance < 6.0) {
+    return { label: 'Moderate Accuracy', color: 'text-yellow-500', margin: `± ${(rawDistance * 100 * 0.03).toFixed(1)} cm` };
+  } else {
+    return { label: 'Low Accuracy (Move Closer)', color: 'text-red-500', margin: `± ${(rawDistance * 100 * 0.05).toFixed(1)} cm` };
+  }
+};
+// --- END: DISTANCE CORRECTION HELPERS ---
+
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
 
 type AppStatus = 
@@ -230,6 +262,7 @@ function App() {
   const [focalLength, setFocalLength] = useState<number | null>(null);
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const [currentMetrics, setCurrentMetrics] = useState<Metrics | null>(null);
+  const [confidenceInfo, setConfidenceInfo] = useState<{ label: string; color: string; margin: string } | null>(null);
   const [currentIdentification, setCurrentIdentification] = useState<IdentificationData>(null);
   const [currentCO2, setCurrentCO2] = useState<number | null>(null);
   const [isCO2Calculating, setIsCO2Calculating] = useState(false);
@@ -1208,23 +1241,36 @@ function App() {
   const prepareMeasurementSession = (): number | null => {
     console.log('[Scale Factor] 📐 Calculating scale factor for measurement session...');
     
-    const distForCalc = currentView === 'COMMUNITY_GROVE' ? claimedTree?.distance_m : parseFloat(distance);
+    const distForCalcRaw = currentView === 'COMMUNITY_GROVE' ? claimedTree?.distance_m : parseFloat(distance);
     const dims = imageDimensions;
     
     console.log('[Scale Factor] Input data:', {
-      distance: distForCalc,
+      distanceRaw: distForCalcRaw,
       imageDimensions: dims,
       view: currentView
     });
     
-    if (!distForCalc || !dims) {
+    if (!distForCalcRaw || !dims) {
         console.error('[Scale Factor] ❌ Missing required data:', {
-          distance: distForCalc,
+          distance: distForCalcRaw,
           dimensions: dims
         });
         setErrorMessage("Missing distance or image dimensions.");
         return null;
     }
+
+    // --- START: DISTANCE CORRECTION ---
+    const distForCalc = calculateCorrectedDistance(distForCalcRaw);
+    const confidence = getConfidenceInfo(distForCalcRaw);
+    setConfidenceInfo(confidence);
+    
+    console.log('[Scale Factor] Distance Correction:', {
+      raw: distForCalcRaw,
+      corrected: distForCalc,
+      correctionFactor: distForCalc / distForCalcRaw,
+      confidence
+    });
+    // --- END: DISTANCE CORRECTION ---
 
     let cameraConstant: number | null = null;
     let calibrationSource: string = 'none';
@@ -2094,6 +2140,21 @@ function App() {
                           <span className="font-mono text-lg text-content-default ml-2">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
                         </div>
                       </div>
+                      
+                      {/* Confidence Info */}
+                      {confidenceInfo && (
+                        <div className="mt-3 p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-content-default">Distance Accuracy</span>
+                            <span className={`text-sm font-bold ${confidenceInfo.color}`}>{confidenceInfo.label}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-content-subtle">Estimated Margin</span>
+                            <span className="font-mono text-sm text-content-default">{confidenceInfo.margin}</span>
+                          </div>
+                        </div>
+                      )}
+
                       {maskGenerated && (
                         <button 
                           onClick={() => setIsPanelOpen(false)} 
