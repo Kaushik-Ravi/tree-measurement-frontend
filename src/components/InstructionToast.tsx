@@ -7,9 +7,10 @@ interface InstructionToastProps {
   message: string;
   show: boolean;
   onClose: () => void;
+  isInteracting?: boolean;
 }
 
-export function InstructionToast({ message, show, onClose }: InstructionToastProps) {
+export function InstructionToast({ message, show, onClose, isInteracting = false }: InstructionToastProps) {
   useEffect(() => {
     if (show) {
       const timer = setTimeout(() => {
@@ -24,7 +25,7 @@ export function InstructionToast({ message, show, onClose }: InstructionToastPro
   }
 
   return (
-    <div className="md:hidden fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-md pointer-events-none">
+    <div className={`md:hidden fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-md pointer-events-none transition-opacity duration-200 ${isInteracting ? 'opacity-10' : 'opacity-100'}`}>
       <div className="flex items-start gap-3 bg-slate-800/95 text-white p-4 rounded-xl shadow-lg backdrop-blur-sm animate-fade-in-down">
         <Info className="w-5 h-5 text-sky-300 flex-shrink-0 mt-0.5" />
         <p className="text-sm font-medium">{message}</p>

@@ -2440,7 +2440,12 @@ function App() {
   return (
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} theme={theme} /> )}
-      <InstructionToast message={instructionText} show={showInstructionToast} onClose={() => setShowInstructionToast(false)} />
+      <InstructionToast 
+        message={instructionText} 
+        show={showInstructionToast} 
+        onClose={() => setShowInstructionToast(false)} 
+        isInteracting={magnifierState.show}
+      />
       
       {isSessionActive ? renderSessionView() : (
         <div className="w-full flex flex-col h-full">
