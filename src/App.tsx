@@ -929,12 +929,12 @@ function App() {
 
       // Existing Overlays
       if (dbhLine) { const p1 = scaleCoords({x: dbhLine.x1, y: dbhLine.y1}); const p2 = scaleCoords({x: dbhLine.x2, y: dbhLine.y2}); ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.strokeStyle = '#FFD700'; ctx.lineWidth = 4; ctx.stroke(); }
-      if (dbhGuideRect && imageDimensions) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
+      if (dbhGuideRect && imageDimensions && (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION')) { const p = scaleCoords({x: dbhGuideRect.x, y: dbhGuideRect.y}); const rectHeight = (dbhGuideRect.height / imageDimensions.h) * canvas.height; const lineY = p.y + rectHeight / 2; ctx.beginPath(); ctx.setLineDash([10, 10]); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.setLineDash([]); }
       
       // Refine Points
       refinePoints.forEach(p => drawPoint(p, '#EF4444'));
     };
-  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, initialPoints, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive]);
+  }, [resultImageSrc, originalImageSrc, dbhLine, dbhGuideRect, initialPoints, refinePoints, manualPoints, transientPoint, imageDimensions, isLocationPickerActive, isArModeActive, appStatus]);
   
   // CRITICAL FIX: Restore image sources after returning from AR mode
   // When AR Ruler is used, the photo view unmounts. When returning, we need to restore the image.
@@ -1555,7 +1555,47 @@ function App() {
       setErrorMessage(error.message);
     }
   };
-  const handleCalculateManual = async () => { try { setAppStatus('ANALYSIS_PROCESSING'); setIsPanelOpen(true); setInstructionText("Calculating manual results..."); const response = await manualCalculation(manualPoints.height, manualPoints.canopy, manualPoints.girth, scaleFactor!); if (response.status !== 'success') throw new Error(response.message); setManualPoints({ height: [], canopy: [], girth: [] }); setDbhGuideRect(null); handleMeasurementSuccess(response.metrics); } catch(error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); } };
+  const handleCalculateManual = async () => { 
+      try { 
+          setAppStatus('ANALYSIS_PROCESSING'); 
+          setIsPanelOpen(true); 
+          setInstructionText("Calculating manual results..."); 
+          
+          // --- MULTI-SEGMENT GIRTH LOGIC ---
+          // If we have more than 2 girth points (multi-stem), we need to sum the widths
+          // and send a "proxy" pair of points that represents the total width.
+          let finalGirthPoints = manualPoints.girth;
+          
+          if (manualPoints.girth.length > 2) {
+              let totalWidthPixels = 0;
+              // Iterate in pairs (0-1, 2-3, etc.)
+              for (let i = 0; i < manualPoints.girth.length - 1; i += 2) {
+                  const p1 = manualPoints.girth[i];
+                  const p2 = manualPoints.girth[i+1];
+                  // Calculate horizontal width of this segment
+                  totalWidthPixels += Math.abs(p2.x - p1.x);
+              }
+              
+              console.log(`[Manual Calc] Multi-segment girth detected. Total width: ${totalWidthPixels}px from ${manualPoints.girth.length} points.`);
+              
+              // Create two virtual points separated by totalWidthPixels
+              // We'll place them at (0,0) and (totalWidth, 0) just for the calculation
+              finalGirthPoints = [
+                  { x: 0, y: 0 },
+                  { x: totalWidthPixels, y: 0 }
+              ];
+          }
+          
+          const response = await manualCalculation(manualPoints.height, manualPoints.canopy, finalGirthPoints, scaleFactor!); 
+          if (response.status !== 'success') throw new Error(response.message); 
+          setManualPoints({ height: [], canopy: [], girth: [] }); 
+          setDbhGuideRect(null); 
+          handleMeasurementSuccess(response.metrics); 
+      } catch(error: any) { 
+          setAppStatus('ERROR'); 
+          setErrorMessage(error.message); 
+      } 
+  };
   
   const handleSaveResult = async () => {
     if (!currentMeasurementFile || !currentMetrics || !session?.access_token || !scaleFactor) {
@@ -1820,8 +1860,40 @@ function App() {
       setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 points on the canopy edges."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
       setManualPoints(p => { const c = [...p.canopy, point]; if (c.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS'); showNextInstruction("STEP 3/3 (Girth): Click 2 points on the red dotted guide to mark the trunk's width."); } return {...p, canopy: c}; }); 
-    } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS') {
-      setManualPoints(p => { const g = [...p.girth, point]; if (g.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CONFIRMATION'); setInstructionText("Points collected. Confirm to proceed."); setIsPanelOpen(false); setShowInstructionToast(true); } return {...p, girth: g}; }); 
+    } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION') {
+      // --- SNAP TO GUIDE LINE LOGIC ---
+      let finalPoint = point;
+      if (dbhGuideRect) {
+          // Calculate the Y-coordinate of the guide line center
+          // dbhGuideRect.y is the top-left Y. The line is at y + height/2
+          const guideLineY = dbhGuideRect.y + (dbhGuideRect.height / 2);
+          
+          // Check if click is within a reasonable threshold (e.g., 5% of image height)
+          const threshold = imageDimensions.h * 0.05;
+          if (Math.abs(point.y - guideLineY) < threshold) {
+              // SNAP!
+              finalPoint = { x: point.x, y: guideLineY };
+              console.log('⚡ Snapped point to DBH guide line!');
+          }
+      }
+
+      setManualPoints(p => { 
+          const g = [...p.girth, finalPoint]; 
+          // Allow multiple pairs (2, 4, 6...)
+          // If we have an even number of points, we *could* be done, but let user decide.
+          // We'll update the instruction to indicate they can add more or finish.
+          if (g.length >= 2 && g.length % 2 === 0) { 
+              setAppStatus('ANALYSIS_MANUAL_AWAITING_CONFIRMATION'); 
+              setInstructionText("Trunk segment added. Add more segments (for forked trees) or click 'Calculate'."); 
+              setIsPanelOpen(true); // Open panel to show Calculate button
+              setShowInstructionToast(true); 
+          } else {
+              // Odd number of points - waiting for the second point of the pair
+              setAppStatus('ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS');
+              showNextInstruction("Click the other side of this trunk segment.");
+          }
+          return {...p, girth: g}; 
+      }); 
     }
   };
 
