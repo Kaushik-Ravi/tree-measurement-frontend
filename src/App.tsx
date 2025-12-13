@@ -8,6 +8,7 @@ import { ARMeasureView } from './components/ARMeasureView';
 import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_Enhanced';
 import { FeatureFlags } from './config/featureFlags';
 import { Magnifier } from './components/Magnifier';
+import { useSessionPersistence } from './hooks/useSessionPersistence';
 // --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
 import { 
@@ -305,6 +306,80 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- START: SESSION PERSISTENCE ---
+  const { isRestoring, restoredSession, saveSession, clearSession } = useSessionPersistence();
+
+  // 1. Restore Session
+  useEffect(() => {
+    if (restoredSession) {
+      console.log('[App] ♻️ Restoring saved session...');
+      const { state, imageFile, pendingImageFile } = restoredSession;
+      
+      // Restore State
+      setAppStatus(state.appStatus as AppStatus);
+      setCurrentView(state.currentView as AppView);
+      setInstructionText(state.instructionText);
+      setDistance(state.distance);
+      setFocalLength(state.focalLength);
+      setScaleFactor(state.scaleFactor);
+      setInitialPoints(state.initialPoints);
+      setRefinePoints(state.refinePoints);
+      setManualPoints(state.manualPoints);
+      setTransientPoint(state.transientPoint);
+      setImageDimensions(state.imageDimensions);
+      setDeviceHeading(state.deviceHeading);
+      setCapturedHeading(state.capturedHeading);
+      if (state.fovRatio) setFovRatio(state.fovRatio);
+
+      // Restore Images
+      if (imageFile) {
+        setCurrentMeasurementFile(imageFile);
+        const url = URL.createObjectURL(imageFile);
+        setOriginalImageSrc(url);
+        setResultImageSrc(url); 
+        console.log('[App] 📸 Restored main image');
+      }
+      
+      if (pendingImageFile) {
+        setPendingTreeFile(pendingImageFile);
+        console.log('[App] 📸 Restored pending image');
+      }
+      
+      // If we were in a session, ensure panel is open if needed
+      if (state.currentView === 'SESSION' && state.appStatus !== 'IDLE') {
+        setIsPanelOpen(true);
+      }
+    }
+  }, [restoredSession]);
+
+  // 2. Auto-Save Session
+  useEffect(() => {
+    if (isRestoring) return;
+    
+    saveSession({
+      appStatus,
+      currentView,
+      instructionText,
+      distance,
+      focalLength,
+      scaleFactor,
+      initialPoints,
+      refinePoints,
+      manualPoints,
+      transientPoint,
+      imageDimensions,
+      deviceHeading,
+      capturedHeading,
+      fovRatio
+    }, currentMeasurementFile, pendingTreeFile);
+  }, [
+    isRestoring, saveSession, appStatus, currentView, instructionText, distance, 
+    focalLength, scaleFactor, initialPoints, refinePoints, manualPoints, 
+    transientPoint, imageDimensions, deviceHeading, capturedHeading, fovRatio,
+    currentMeasurementFile, pendingTreeFile
+  ]);
+  // --- END: SESSION PERSISTENCE ---
 
   useEffect(() => { const savedRatio = localStorage.getItem(CAMERA_FOV_RATIO_KEY); if (savedRatio) { setFovRatio(parseFloat(savedRatio)); } }, []);
   
@@ -1592,6 +1667,7 @@ function App() {
 
 
   const softReset = () => {
+    clearSession(); // Clear persisted session
     setCurrentView('HUB');
     setAppStatus('IDLE');
     setInstructionText( "Session complete! Ready to map another tree.");
