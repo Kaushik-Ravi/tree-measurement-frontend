@@ -903,7 +903,11 @@ function App() {
       // --- MANUAL MODE RENDERING ---
       // 1. Height (Yellow - High Contrast)
       if (manualPoints.height.length > 0) {
-          manualPoints.height.forEach((p, i) => drawPoint(p, '#FACC15', `H${i+1}`));
+          manualPoints.height.forEach((p, i) => {
+              // Draw Base point (H1) as a Crosshair for better visibility/precision
+              const isBase = i === 0;
+              drawPoint(p, '#FACC15', `H${i+1}`, isBase);
+          });
           if (manualPoints.height.length === 2) {
               drawConnector(manualPoints.height[0], manualPoints.height[1], '#FACC15', true);
           }
@@ -1804,7 +1808,19 @@ function App() {
     if (!scaleFactor || !imageDimensions) return;
     const showNextInstruction = (text: string) => { setInstructionText(text); setShowInstructionToast(true); };
     if (appStatus === 'ANALYSIS_MANUAL_AWAITING_BASE_CLICK') {
-      try { const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); setDbhGuideRect(response.rectangle_coords); setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS'); showNextInstruction("STEP 1/3 (Height): Click the highest and lowest points (2 points)."); } catch (error: any) { setAppStatus('ERROR'); setErrorMessage(error.message); }
+      try { 
+          const response = await manualGetDbhRectangle(point, scaleFactor, imageDimensions.w, imageDimensions.h); 
+          setDbhGuideRect(response.rectangle_coords); 
+          
+          // AUTO-ADD BASE POINT: User just clicked the base, so let's use it as the first Height point
+          setManualPoints(prev => ({ ...prev, height: [point] }));
+          
+          setAppStatus('ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS'); 
+          showNextInstruction("STEP 1/3 (Height): Base set. Now click the TOP of the tree."); 
+      } catch (error: any) { 
+          setAppStatus('ERROR'); 
+          setErrorMessage(error.message); 
+      }
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_HEIGHT_POINTS') {
       setManualPoints(p => { const h = [...p.height, point]; if (h.length === 2) { setAppStatus('ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS'); showNextInstruction("STEP 2/3 (Canopy): Click 2 points on the canopy edges."); } return {...p, height: h}; }); 
     } else if (appStatus === 'ANALYSIS_MANUAL_AWAITING_CANOPY_POINTS') {
