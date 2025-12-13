@@ -7,6 +7,7 @@ import { ARMeasureView } from './components/ARMeasureView';
 // --- START: LIVE AR INTEGRATION ---
 import { LiveARMeasureView } from './components/live-ar/LiveARMeasureView_Enhanced';
 import { FeatureFlags } from './config/featureFlags';
+import { Magnifier } from './components/Magnifier';
 // --- END: LIVE AR INTEGRATION ---
 import ExifReader from 'exifreader';
 import { 
@@ -198,6 +199,11 @@ function App() {
   // --- START: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   const [isArModeActive, setIsArModeActive] = useState(false);
   const [isLiveARModeActive, setIsLiveARModeActive] = useState(false); // Live AR mode
+
+  // Magnifier State
+  const [magnifierState, setMagnifierState] = useState<{x: number, y: number, show: boolean}>({x: 0, y: 0, show: false});
+  const [isDragging, setIsDragging] = useState(false);
+
   // --- END: SURGICAL REPLACEMENT (SIMPLIFIED AR STATE) ---
   
   // --- START: DUAL-VIEW STATE ---
@@ -1033,15 +1039,49 @@ function App() {
       setInstructionText("Measurement complete. Review the results below and identify the species to save."); 
   };
   
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    // Only enable magnifier for point selection states
+    const isSelectionState = 
+      appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK' || 
+      appStatus === 'ANALYSIS_AWAITING_CANOPY_POINTS' || 
+      appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
+      isManualMode(appStatus);
+
+    if (isSelectionState) {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setIsDragging(true);
+      setMagnifierState({ x: e.clientX, y: e.clientY, show: true });
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isDragging) {
+      setMagnifierState({ x: e.clientX, y: e.clientY, show: true });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isDragging) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+      setIsDragging(false);
+      setMagnifierState(prev => ({ ...prev, show: false }));
+      
+      // Process the click at the final position
+      processCanvasClick(e.clientX, e.clientY, e.currentTarget);
+    } else {
+      // Fallback for simple clicks
+      processCanvasClick(e.clientX, e.clientY, e.currentTarget);
+    }
+  };
+
+  const processCanvasClick = (clientX: number, clientY: number, canvas: HTMLCanvasElement) => {
     setShowInstructionToast(false);
-    const canvas = event.currentTarget;
     if (!imageDimensions || !canvas) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const canvasClickX = (event.clientX - rect.left) * scaleX;
-    const canvasClickY = (event.clientY - rect.top) * scaleY;
+    const canvasClickX = (clientX - rect.left) * scaleX;
+    const canvasClickY = (clientY - rect.top) * scaleY;
     const imageClickX = (canvasClickX / canvas.width) * imageDimensions.w;
     const imageClickY = (canvasClickY / canvas.height) * imageDimensions.h;
     const clickPoint: Point = { x: Math.round(imageClickX), y: Math.round(imageClickY) };
@@ -1777,7 +1817,26 @@ function App() {
       <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
           {(!originalImageSrc && !isLocationPickerActive) && <div className="hidden md:flex flex-col items-center text-content-subtle"><TreePine size={64}/><p className="mt-4 text-lg">Awaiting photo...</p></div>}
           {isLocationPickerActive ? ( <LocationPicker onConfirm={handleConfirmLocation} onCancel={() => setIsLocationPickerActive(false)} initialLocation={currentLocation} theme={theme} /> ) : (
-            originalImageSrc && <canvas ref={canvasRef} id="image-canvas" onClick={handleCanvasClick} className={`max-w-full max-h-full ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} />
+            originalImageSrc && (
+              <>
+                <canvas 
+                  ref={canvasRef} 
+                  id="image-canvas" 
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  className={`max-w-full max-h-full touch-none ${appStatus.includes('AWAITING_CLICK') || appStatus.includes('AWAITING_POINTS') ? 'cursor-crosshair' : ''}`} 
+                />
+                {magnifierState.show && (
+                  <Magnifier 
+                    x={magnifierState.x} 
+                    y={magnifierState.y} 
+                    imageSrc={originalImageSrc} 
+                    canvas={canvasRef.current}
+                  />
+                )}
+              </>
+            )
           )}
           {(appStatus === 'ANALYSIS_AWAITING_REFINE_POINTS' || 
             appStatus === 'ANALYSIS_AWAITING_INITIAL_CLICK_CONFIRMATION' ||

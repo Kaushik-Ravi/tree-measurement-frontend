@@ -2148,13 +2148,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             </div>
 
             {/* Bottom Controls: Context-Aware Action Buttons */}
-            {/* CRITICAL FIX: Left-aligned positioning to prevent overlap with exit button (distributed layout) */}
-            <div 
-              className="fixed left-6 z-50 flex items-center gap-4 pointer-events-auto"
-              style={{
-                bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))'
-              }}
-            >
+            <div className="flex justify-center items-end pb-safe pointer-events-auto">
               
               {/* Scanning State */}
               {(state === 'AR_ACTIVE' || state === 'AR_SCANNING' || isScanning) && (
@@ -2171,7 +2165,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
 
               {/* Placement State - TAP ANYWHERE TO PLACE */}
               {(state === 'AR_PLACE_FIRST' || state === 'AR_PLACE_SECOND') && showPlaceButton && (
-                <>
+                <div className="flex items-center gap-4">
                   {/* Undo Button - INTERACTIVE */}
                   <button
                     onClick={handleArUndoSafe}
@@ -2181,12 +2175,12 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                   >
                     <RotateCcw className="w-6 h-6 text-content-subtle group-hover:text-content-default transition-colors" />
                   </button>
-                </>
+                </div>
               )}
 
               {/* Complete State */}
               {state === 'AR_COMPLETE' && showConfirmButtons && (
-                <>
+                <div className="flex gap-3">
                   {/* Redo Button - INTERACTIVE */}
                   <button
                     onClick={handleArRedoSafe}
@@ -2204,7 +2198,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
                     <Check className="w-5 h-5" />
                     <span>Confirm</span>
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -2600,13 +2594,7 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
             </div>
 
             {/* PHASE D.1: Minimal bottom controls (circular floating buttons) */}
-            {/* CRITICAL FIX: Left-aligned positioning for mobile browser UI safety + no overlap */}
-            <div 
-              className="fixed left-6 z-50 flex items-center gap-3"
-              style={{
-                bottom: 'max(80px, calc(1.5rem + env(safe-area-inset-bottom, 0px)))'
-              }}
-            >
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
               <button
                 onClick={handleUndoPoint}
                 disabled={tapPoints.length === 0}
