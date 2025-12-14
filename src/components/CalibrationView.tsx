@@ -54,6 +54,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   
   // Magnifier State
   const [magnifierState, setMagnifierState] = useState<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
+  const [isInteracting, setIsInteracting] = useState(false);
   // --- END: SURGICAL ADDITION ---
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,6 +67,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   }, [isPanelVisible]);
 
   // --- MAGNIFIER HANDLERS ---
+  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!canSelectPoints || isPanelVisible) return;
+    setIsInteracting(true);
+    handlePointerMove(e);
+  };
+
   const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!canSelectPoints || isPanelVisible) return;
     
@@ -82,8 +89,39 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
     setMagnifierState({ show: true, x: clientX, y: clientY });
   };
 
-  const handlePointerLeave = () => {
+  const handlePointerUp = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!canSelectPoints || isPanelVisible) return;
+    setIsInteracting(false);
     setMagnifierState(prev => ({ ...prev, show: false }));
+    
+    // Commit the point at the last magnifier position
+    if (points.length >= 2 || !imageDimensions || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    // Use the last known magnifier position (which is client coordinates)
+    const canvasClickX = (magnifierState.x - rect.left) * scaleX;
+    const canvasClickY = (magnifierState.y - rect.top) * scaleY;
+
+    const clickPoint: Point = { 
+        x: Math.round((canvasClickX / canvas.width) * imageDimensions.w), 
+        y: Math.round((canvasClickY / canvas.height) * imageDimensions.h) 
+    };
+
+    const newPoints = [...points, clickPoint];
+    setPoints(newPoints);
+    
+    if (newPoints.length === 1) { 
+        setInstruction("First point set (W1). Now mark the second point (W2)."); 
+        setShowInstructionToast(true);
+    }
+    if (newPoints.length === 2) { 
+        setInstruction("Width marked! Click the green checkmark to confirm."); 
+        setShowInstructionToast(true);
+    }
   };
   // ---------------------------
 
@@ -118,10 +156,26 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         canvas.height = img.height * ratio;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         
-        points.forEach(p => {
+        points.forEach((p, index) => {
             const sp = { x: (p.x / imageDimensions!.w) * canvas.width, y: (p.y / imageDimensions!.h) * canvas.height };
             // --- START: SURGICAL MODIFICATION ---
-            ctx.beginPath(); ctx.arc(sp.x, sp.y, 6, 0, 2 * Math.PI); ctx.fillStyle = 'rgb(var(--status-error))'; ctx.fill(); ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.stroke();
+            // Draw Point
+            ctx.beginPath(); 
+            ctx.arc(sp.x, sp.y, 8, 0, 2 * Math.PI); 
+            ctx.fillStyle = 'cyan'; // High contrast color
+            ctx.fill(); 
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'; 
+            ctx.lineWidth = 2; 
+            ctx.stroke();
+            
+            // Draw Label (W1, W2)
+            ctx.font = 'bold 16px Inter, sans-serif';
+            ctx.fillStyle = 'white';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            const label = index === 0 ? 'W1' : 'W2';
+            ctx.strokeText(label, sp.x + 15, sp.y - 15);
+            ctx.fillText(label, sp.x + 15, sp.y - 15);
             // --- END: SURGICAL MODIFICATION ---
         });
     }
@@ -132,35 +186,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
     if (file) { setCalibFile(file); setPoints([]); }
   };
 
-  const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    setShowInstructionToast(false);
-    if (points.length >= 2 || !imageDimensions || !canvasRef.current) return;
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const canvasClickX = (event.clientX - rect.left) * scaleX;
-    const canvasClickY = (event.clientY - rect.top) * scaleY;
-
-    const clickPoint: Point = { 
-        x: Math.round((canvasClickX / canvas.width) * imageDimensions.w), 
-        y: Math.round((canvasClickY / canvas.height) * imageDimensions.h) 
-    };
-
-    const newPoints = [...points, clickPoint];
-    setPoints(newPoints);
-    if (newPoints.length === 1) { 
-        setInstruction("First point selected. Click the second endpoint or undo."); 
-        setShowInstructionToast(true);
-    }
-    // --- START: SURGICAL MODIFICATION ---
-    // DO NOT auto-confirm on 2nd point - show Confirm button instead (matches main app pattern)
-    if (newPoints.length === 2) { 
-        setInstruction("Two points marked! Click the green checkmark to confirm calibration."); 
-        setShowInstructionToast(true);
-    }
-    // --- END: SURGICAL MODIFICATION ---
-  };
+  // Removed handleCanvasClick as it is replaced by handlePointerUp logic
   
   // --- START: SURGICAL ADDITION ---
   const handleUndo = () => {
@@ -340,12 +366,13 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         )}
         <canvas 
           ref={canvasRef} 
-          onClick={canSelectPoints ? handleCanvasClick : undefined}
+          onMouseDown={handlePointerDown}
           onMouseMove={handlePointerMove}
+          onMouseUp={handlePointerUp}
+          onMouseLeave={() => { setIsInteracting(false); setMagnifierState(prev => ({ ...prev, show: false })); }}
+          onTouchStart={handlePointerDown}
           onTouchMove={handlePointerMove}
-          onTouchStart={handlePointerMove}
-          onMouseLeave={handlePointerLeave}
-          onTouchEnd={handlePointerLeave}
+          onTouchEnd={handlePointerUp}
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
         
@@ -361,7 +388,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         
         {/* Floating Controls (Matches Main App Pattern) */}
         {points.length > 0 && !isPanelVisible && (
-          <>
+          <div className={`transition-opacity duration-200 ${isInteracting ? 'opacity-20' : 'opacity-100'}`}>
             {/* LEFT: Undo + Confirm Buttons (FloatingInteractionControls pattern) */}
             <div 
               className="fixed left-6 z-50 flex items-center gap-3 bg-background-subtle/95 text-content-default p-2 rounded-xl shadow-2xl backdrop-blur-md border border-stroke-default"
@@ -402,7 +429,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
               <Menu size={24} /> 
               <span className="text-sm font-semibold">Show Panel</span>
             </button>
-          </>
+          </div>
         )}
       </div>
       
@@ -441,21 +468,44 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   </div>
                   
                   {!selectedObject ? (
-                    <button
-                      onClick={handleQuickStartWithObject}
-                      className="w-full flex items-center justify-between p-4 bg-background-subtle border border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary group-hover:scale-110 transition-transform">
-                          <Sparkles size={20} />
+                    <div className="space-y-3">
+                      <button
+                        onClick={handleQuickStartWithObject}
+                        className="w-full flex items-center justify-between p-4 bg-background-subtle border border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary group-hover:scale-110 transition-transform">
+                            <Sparkles size={20} />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium text-content-default">Choose Standard Object</p>
+                            <p className="text-xs text-content-subtle">Credit Card, A4 Paper, etc.</p>
+                          </div>
                         </div>
-                        <div className="text-left">
-                          <p className="font-medium text-content-default">Choose Standard Object</p>
-                          <p className="text-xs text-content-subtle">Credit Card, A4 Paper, etc.</p>
+                        <div className="text-brand-primary">Select &rarr;</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSelectedObject(null);
+                          setInstruction("Manual mode: Enter distance and object size below.");
+                          // Scroll to upload section
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center justify-between p-4 bg-background-subtle border border-stroke-default rounded-xl hover:border-brand-secondary hover:bg-brand-secondary/5 transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-brand-secondary/10 rounded-lg text-brand-secondary group-hover:scale-110 transition-transform">
+                            <Settings size={20} />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium text-content-default">Use Custom Object</p>
+                            <p className="text-xs text-content-subtle">Enter your own measurements</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-brand-primary">Select &rarr;</div>
-                    </button>
+                        <div className="text-brand-secondary">Select &rarr;</div>
+                      </button>
+                    </div>
                   ) : (
                     <div className="p-4 bg-brand-primary/5 border border-brand-primary/20 rounded-xl relative">
                       <button 
@@ -554,7 +604,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-content-subtle mb-1">
-                        Distance (cm)
+                        Distance from Camera (cm)
                       </label>
                       <input 
                         type="number" 
@@ -566,7 +616,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-content-subtle mb-1">
-                        Object Width (cm)
+                        Known Object Width (cm)
                       </label>
                       <input 
                         type="number" 

@@ -1506,7 +1506,12 @@ function App() {
       setResultImageSrc(objURL);
       
       setCurrentMeasurementFile(pendingTreeFile);
-      setAppStatus('SESSION_PROCESSING_PHOTO');
+      // --- START: SURGICAL FIX ---
+      // Skip 'SESSION_PROCESSING_PHOTO' to avoid re-triggering EXIF check loop.
+      // We have calibration now, so go straight to distance entry.
+      setAppStatus('SESSION_AWAITING_DISTANCE');
+      setInstructionText("Calibration saved! Now enter the distance to the tree.");
+      // --- END: SURGICAL FIX ---
     } else {
       setAppStatus('SESSION_AWAITING_PHOTO');
       setInstructionText("Calibration complete! Please re-select your photo to begin.");
