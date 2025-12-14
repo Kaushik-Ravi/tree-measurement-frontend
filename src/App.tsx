@@ -54,16 +54,6 @@ const calculateCorrectedDistance = (rawDistance: number): number => {
   return rawDistance * clampedCorrection;
 };
 
-// Helper to get confidence info
-const getConfidenceInfo = (rawDistance: number) => {
-  if (rawDistance < 3.0) {
-    return { label: 'High Accuracy', color: 'text-green-500', margin: `± ${(rawDistance * 100 * 0.02).toFixed(1)} cm` };
-  } else if (rawDistance < 6.0) {
-    return { label: 'Moderate Accuracy', color: 'text-yellow-500', margin: `± ${(rawDistance * 100 * 0.03).toFixed(1)} cm` };
-  } else {
-    return { label: 'Low Accuracy (Move Closer)', color: 'text-red-500', margin: `± ${(rawDistance * 100 * 0.05).toFixed(1)} cm` };
-  }
-};
 // --- END: DISTANCE CORRECTION HELPERS ---
 
 type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
@@ -265,7 +255,6 @@ function App() {
   const [focalLength, setFocalLength] = useState<number | null>(null);
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const [currentMetrics, setCurrentMetrics] = useState<Metrics | null>(null);
-  const [confidenceInfo, setConfidenceInfo] = useState<{ label: string; color: string; margin: string } | null>(null);
   const [currentIdentification, setCurrentIdentification] = useState<IdentificationData>(null);
   const [currentCO2, setCurrentCO2] = useState<number | null>(null);
   
@@ -1550,8 +1539,6 @@ function App() {
     // because we are moving to a robust Calibration Factor approach.
     // The user correctly pointed out that hardcoding 0.018 is not device-agnostic.
     const distForCalc = distForCalcRaw; // Trust the raw distance for now, rely on Calibration Factor
-    const confidence = getConfidenceInfo(distForCalcRaw);
-    setConfidenceInfo(confidence);
     // --- END: DISTANCE CORRECTION ---
 
     let cameraConstant: number | null = null;
@@ -2570,20 +2557,6 @@ function App() {
                         </div>
                       </div>
                       
-                      {/* Confidence Info */}
-                      {confidenceInfo && (
-                        <div className="mt-3 p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-content-default">Distance Accuracy</span>
-                            <span className={`text-sm font-bold ${confidenceInfo.color}`}>{confidenceInfo.label}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-content-subtle">Estimated Margin</span>
-                            <span className="font-mono text-sm text-content-default">{confidenceInfo.margin}</span>
-                          </div>
-                        </div>
-                      )}
-
                       {maskGenerated && (
                         <button 
                           onClick={() => setIsPanelOpen(false)} 

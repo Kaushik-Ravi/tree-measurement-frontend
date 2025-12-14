@@ -14,8 +14,8 @@ type ARState = 'SCANNING' | 'READY_TO_PLACE_FIRST' | 'READY_TO_PLACE_SECOND' | '
 export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewProps) {
   console.log('📐 ========================================');
   console.log('📐 WebXR AR Ruler Component Mounted');
-  console.log('📐 THIS USES OLD WEBXR (±15-30cm accuracy)');
-  console.log('📐 NOT ARKit or ARCore!');
+  console.log('📐 UPDATED: Uses Horizontal Distance (ignores height)');
+  console.log('📐 UPDATED: Requests local-floor reference space');
   console.log('📐 ========================================');
   
   // --- CRITICAL FIX: Use refs for AR state to prevent re-render cycles ---
@@ -48,6 +48,13 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const onSelectRef = useRef<(() => void) | null>(null);
   const allowMarkerPlacement = useRef(true); // Control flag for marker placement
   const cooldownTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // --- START: ANCHOR SUPPORT ---
+  // Store the latest hit test result to create anchors from
+  const latestHitRef = useRef<XRHitTestResult | null>(null);
+  // Store active anchors to update positions every frame
+  const anchorsRef = useRef<XRAnchor[]>([]);
+  // --- END: ANCHOR SUPPORT ---
 
   // Wrapper function to prevent marker placement during UI button interactions
   const handleUIButtonClick = useCallback((callback: () => void) => {
@@ -83,6 +90,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
   const handleRedo = useCallback(() => {
     pointsRef.current = [];
+    anchorsRef.current = []; // Clear anchors
     distanceRef.current = null;
     arStateRef.current = 'READY_TO_PLACE_FIRST'; // Skip scanning, go straight to placement
     
@@ -107,6 +115,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const handleUndo = useCallback(() => {
     if (arStateRef.current === 'READY_TO_PLACE_SECOND' && pointsRef.current.length === 1) {
         pointsRef.current.pop();
+        if (anchorsRef.current.length > 0) anchorsRef.current.pop(); // Remove last anchor
         markersRef.current[0].visible = false;
         arStateRef.current = 'READY_TO_PLACE_FIRST';
         
@@ -282,6 +291,21 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             const markerIndex = pointsRef.current.length;
 
             if (markerIndex < 2) {
+                // --- START: ANCHOR CREATION ---
+                // Try to create an anchor from the latest hit test result
+                // This "sticks" the point to the real world, preventing drift
+                if (latestHitRef.current && latestHitRef.current.createAnchor) {
+                    latestHitRef.current.createAnchor().then((anchor) => {
+                        if (anchor) {
+                            console.log('[AR] ⚓ Anchor created successfully');
+                            anchorsRef.current.push(anchor);
+                        }
+                    }).catch(err => console.warn('[AR] Anchor creation failed:', err));
+                } else {
+                    console.log('[AR] ⚠️ No hit result available for anchor, using raw coordinate');
+                }
+                // --- END: ANCHOR CREATION ---
+
                 pointsRef.current.push(point);
                 markersRef.current[markerIndex].position.copy(point);
                 markersRef.current[markerIndex].visible = true;
@@ -292,7 +316,14 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                     setInstruction("Point at your feet, then tap screen");
                 } else { // Second point placed
                     const [p1, p2] = pointsRef.current;
-                    const calculatedDistance = p1.distanceTo(p2);
+                    
+                    // --- CRITICAL FIX: Horizontal Distance Calculation ---
+                    // We ignore the Y-axis (height) to measure ground distance only.
+                    // This solves the issue of measuring from a curb (high) to a road (low).
+                    const dx = p2.x - p1.x;
+                    const dz = p2.z - p1.z;
+                    const calculatedDistance = Math.sqrt(dx * dx + dz * dz);
+                    
                     distanceRef.current = calculatedDistance;
                     
                     // Update UI state
@@ -308,7 +339,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                     line.visible = true;
 
                     arStateRef.current = 'COMPLETE';
-                    setInstruction("Measurement Complete");
+                    setInstruction("Measurement Complete (Horizontal)");
                 }
             }
         }
@@ -327,8 +358,8 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     // --- 4. The Chimera AR Button Strategy ---
     // We hide the Three.js ARButton behind our custom UI but keep it functional
     const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay'],
+      requiredFeatures: ['hit-test', 'local-floor'], // CRITICAL: local-floor for stable gravity-aligned coordinates
+      optionalFeatures: ['dom-overlay', 'anchors'], // CRITICAL: anchors for drift correction
       domOverlay: { root: currentContainer.querySelector('#ar-overlay')! }
     });
     
@@ -381,6 +412,10 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
           const hitTestResults = frame.getHitTestResults(hitTestSource);
           if (hitTestResults.length > 0) {
             const hit = hitTestResults[0];
+            // --- START: ANCHOR SUPPORT ---
+            latestHitRef.current = hit; // Store for onSelect to use
+            // --- END: ANCHOR SUPPORT ---
+            
             const pose = hit.getPose(referenceSpace!);
             if (pose) {
                 reticle.visible = true;
@@ -408,10 +443,58 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             }
           } else {
             reticle.visible = false;
+            latestHitRef.current = null; // Clear if no hit
             (reticleRing.material as THREE.MeshBasicMaterial).opacity = 0.5;
           }
         }
       }
+
+      // --- START: ANCHOR UPDATE LOOP ---
+      // Update marker positions based on anchors (Anti-Drift)
+      if (frame && anchorsRef.current.length > 0) {
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          if (referenceSpace) {
+              let needsLineUpdate = false;
+              
+              anchorsRef.current.forEach((anchor, index) => {
+                  const anchorPose = frame.getPose(anchor.anchorSpace, referenceSpace);
+                  if (anchorPose) {
+                      // Update the Three.js marker position to match the anchor's new world position
+                      const newPosition = new THREE.Vector3().setFromMatrixPosition(
+                          new THREE.Matrix4().fromArray(anchorPose.transform.matrix)
+                      );
+                      
+                      // Only update if position changed significantly (optimization)
+                      if (markersRef.current[index] && pointsRef.current[index]) {
+                          markersRef.current[index].position.copy(newPosition);
+                          pointsRef.current[index].copy(newPosition);
+                          needsLineUpdate = true;
+                      }
+                  }
+              });
+
+              // If anchors moved, update the line and recalculate distance
+              if (needsLineUpdate && pointsRef.current.length === 2) {
+                  const [p1, p2] = pointsRef.current;
+                  
+                  // Update Line Geometry
+                  const linePositions = line.geometry.attributes.position as THREE.BufferAttribute;
+                  linePositions.setXYZ(0, p1.x, p1.y, p1.z);
+                  linePositions.setXYZ(1, p2.x, p2.y, p2.z);
+                  linePositions.needsUpdate = true;
+                  
+                  // Recalculate Horizontal Distance
+                  const dx = p2.x - p1.x;
+                  const dz = p2.z - p1.z;
+                  const newDistance = Math.sqrt(dx * dx + dz * dz);
+                  
+                  // Update Refs and UI
+                  distanceRef.current = newDistance;
+                  setUiDistance(newDistance);
+              }
+          }
+      }
+      // --- END: ANCHOR UPDATE LOOP ---
 
       // Pulse animation for markers
       markersRef.current.forEach(marker => {
