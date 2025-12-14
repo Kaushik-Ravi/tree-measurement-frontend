@@ -17,11 +17,13 @@ const LOCATED_ZOOM = 18;
 
 function MapCenterUpdater({ 
   setCenterPosition, 
+  setAccuracy,
   isLocating,
   onLocationFound,
   onLocationError
 }: { 
   setCenterPosition: (pos: [number, number]) => void;
+  setAccuracy: (acc: number | null) => void;
   isLocating: boolean;
   onLocationFound: () => void;
   onLocationError: () => void;
@@ -40,6 +42,7 @@ function MapCenterUpdater({
     locationfound(e) {
       map.flyTo(e.latlng, LOCATED_ZOOM);
       setCenterPosition([e.latlng.lat, e.latlng.lng]);
+      setAccuracy(e.accuracy);
       onLocationFound();
     },
     locationerror(e) {
@@ -74,6 +77,7 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
     initialLocation ? [initialLocation.lat, initialLocation.lng] : DEFAULT_CENTER
   );
   const [isLocating, setIsLocating] = useState(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
   
   const initialCenter = initialLocation ? [initialLocation.lat, initialLocation.lng] : DEFAULT_CENTER;
   const initialZoom = initialLocation ? LOCATED_ZOOM : DEFAULT_ZOOM;
@@ -119,6 +123,7 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
           />
           <MapCenterUpdater 
             setCenterPosition={setCenterPosition} 
+            setAccuracy={setAccuracy}
             isLocating={isLocating}
             onLocationFound={handleLocationFound}
             onLocationError={handleLocationError}
@@ -147,11 +152,20 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
       </div>
       
       <div className={`${bgClass} border-t p-4 pb-[env(safe-area-inset-bottom,20px)] flex flex-col gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-[1001]`}>
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center gap-2">
           <div className={`${coordBgClass} px-3 py-1.5 rounded-full text-xs font-mono border flex items-center gap-2`}>
              <span className="w-2 h-2 rounded-full bg-brand-primary animate-pulse"></span>
              {centerPosition[0].toFixed(6)}, {centerPosition[1].toFixed(6)}
           </div>
+          {accuracy !== null && (
+            <div className={`px-2 py-1.5 rounded-full text-[10px] font-medium border flex items-center ${
+              accuracy < 15 
+                ? (theme === 'dark' ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-green-50 text-green-700 border-green-200')
+                : (theme === 'dark' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-800' : 'bg-yellow-50 text-yellow-700 border-yellow-200')
+            }`}>
+              ±{Math.round(accuracy)}m
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3 w-full">
