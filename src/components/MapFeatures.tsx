@@ -187,9 +187,6 @@ const MapFeatures = ({ onLocationSelected, theme, defaultLayer = 'Satellite' }: 
     </>
   );
 };
-    </>
-  );
-};
 
 export default MapFeatures;
 // --- END: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---
