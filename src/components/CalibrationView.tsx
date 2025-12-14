@@ -1,10 +1,11 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
+import { Magnifier } from './Magnifier';
 // --- START: STANDARD REFERENCE OBJECTS INTEGRATION ---
 import { ReferenceObjectSelector } from './ReferenceObjectSelector';
 import { 
@@ -50,6 +51,9 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   // Standard Reference Objects Integration
   const [showObjectSelector, setShowObjectSelector] = useState(false);
   const [selectedObject, setSelectedObject] = useState<StandardReferenceObject | null>(null);
+  
+  // Magnifier State
+  const [magnifierState, setMagnifierState] = useState<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   // --- END: SURGICAL ADDITION ---
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,6 +64,28 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
       setShowInstructionToast(false);
     }
   }, [isPanelVisible]);
+
+  // --- MAGNIFIER HANDLERS ---
+  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!canSelectPoints || isPanelVisible) return;
+    
+    // Get coordinates
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    setMagnifierState({ show: true, x: clientX, y: clientY });
+  };
+
+  const handlePointerLeave = () => {
+    setMagnifierState(prev => ({ ...prev, show: false }));
+  };
+  // ---------------------------
 
   useEffect(() => {
     if (!calibFile) return;
@@ -190,11 +216,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
       console.log('[Calibration] Using manual distance entry');
       
       const r = parseFloat(realSize);
-      const D = parseFloat(distance);
+      const D_cm = parseFloat(distance); // Input is now in CM
       const w = Math.max(imageDimensions.w, imageDimensions.h);
-      const D_in_cm = D * 100;
       
-      cameraConstant = (r * w) / (pixelDistance * D_in_cm);
+      // Formula expects Distance in CM if Real Size is in CM
+      // Camera Constant = (Real Size * Image Width) / (Pixel Distance * Distance)
+      cameraConstant = (r * w) / (pixelDistance * D_cm);
     }
     // --- END: STANDARD REFERENCE OBJECTS ENHANCEMENT ---
     
@@ -246,7 +273,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
       // User chose standard object - pre-fill real size, hide distance input
       setSelectedObject(obj);
       setRealSize((obj.widthMM / 10).toString()); // Convert mm to cm
-      setDistance(obj.recommendedDistance.toString()); // Auto-set recommended distance
+      setDistance((obj.recommendedDistance * 100).toString()); // Convert m to cm for UI
       setInstruction(`${obj.name} selected! Upload photo and mark the object's width.`);
     }
   };
@@ -313,9 +340,24 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         )}
         <canvas 
           ref={canvasRef} 
-          onClick={canSelectPoints ? handleCanvasClick : undefined} 
+          onClick={canSelectPoints ? handleCanvasClick : undefined}
+          onMouseMove={handlePointerMove}
+          onTouchMove={handlePointerMove}
+          onTouchStart={handlePointerMove}
+          onMouseLeave={handlePointerLeave}
+          onTouchEnd={handlePointerLeave}
           className={`max-w-full max-h-full ${canSelectPoints && points.length < 2 && !isPanelVisible ? 'cursor-crosshair' : 'cursor-default'}`} 
         />
+        
+        {/* Magnifier Component */}
+        {magnifierState.show && canSelectPoints && !isPanelVisible && (
+          <Magnifier
+            x={magnifierState.x}
+            y={magnifierState.y}
+            imageSrc={calibImageSrc}
+            canvas={canvasRef.current}
+          />
+        )}
         
         {/* Floating Controls (Matches Main App Pattern) */}
         {points.length > 0 && !isPanelVisible && (
@@ -390,126 +432,170 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <p className="text-sm">{instruction}</p>
                 </div>
             </header>
-            <main className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-content-default mb-2">1. Calibration Photo</label>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10">
-                    <Upload className="w-5 h-5 text-content-subtle" />
-                    <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
-                  </button>
-                  <p className="text-xs text-content-subtle mt-2">Tip: For fastest setup, use "Quick Start" with a standard object (A4 paper, credit card, etc.)</p>
+            <main className="space-y-8">
+                {/* STEP 1: REFERENCE OBJECT */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-brand-primary font-semibold">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">1</span>
+                    <h3>Select Reference Object</h3>
+                  </div>
                   
-                  {/* --- START: STANDARD REFERENCE OBJECTS QUICK START --- */}
-                  {!selectedObject && (
+                  {!selectedObject ? (
                     <button
                       onClick={handleQuickStartWithObject}
-                      className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-accent/10 to-brand-primary/10 border-2 border-brand-accent/30 rounded-lg hover:from-brand-accent/20 hover:to-brand-primary/20 hover:border-brand-accent/50 transition-all duration-200 group"
-                      title="Skip manual entry with standard objects"
+                      className="w-full flex items-center justify-between p-4 bg-background-subtle border border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all group"
                     >
-                      <Sparkles className="w-5 h-5 text-brand-accent group-hover:scale-110 transition-transform" />
-                      <span className="text-brand-accent font-semibold">Quick Start with Standard Object</span>
-                    </button>
-                  )}
-                  
-                  {selectedObject && (
-                    <div className="mt-3 p-3 bg-brand-primary/10 border border-brand-primary/30 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-brand-primary" />
-                          <span className="text-sm font-semibold text-brand-primary">
-                            {selectedObject.name} ({selectedObject.widthMM}mm)
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-brand-primary/10 rounded-lg text-brand-primary group-hover:scale-110 transition-transform">
+                          <Sparkles size={20} />
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedObject(null);
-                            setRealSize('');
-                            setDistance('');
-                            setInstruction("Manual mode: Enter distance and object size below.");
-                          }}
-                          className="text-xs text-brand-primary hover:text-brand-primary-hover underline"
-                        >
-                          Change
-                        </button>
+                        <div className="text-left">
+                          <p className="font-medium text-content-default">Choose Standard Object</p>
+                          <p className="text-xs text-content-subtle">Credit Card, A4 Paper, etc.</p>
+                        </div>
                       </div>
+                      <div className="text-brand-primary">Select &rarr;</div>
+                    </button>
+                  ) : (
+                    <div className="p-4 bg-brand-primary/5 border border-brand-primary/20 rounded-xl relative">
+                      <button 
+                        onClick={() => {
+                          setSelectedObject(null);
+                          setRealSize('');
+                          setDistance('');
+                          setInstruction("Manual mode: Enter distance and object size below.");
+                        }}
+                        className="absolute top-3 right-3 text-xs text-brand-primary hover:underline"
+                      >
+                        Change
+                      </button>
+                      <div className="flex items-center gap-3 mb-2">
+                        <Sparkles className="w-5 h-5 text-brand-primary" />
+                        <span className="font-semibold text-content-default">{selectedObject.name}</span>
+                      </div>
+                      <p className="text-sm text-content-subtle">{selectedObject.description}</p>
+                      
+                      {/* Privacy Note */}
                       {selectedObject.id === 'card_iso' && (
-                        <div className="mt-2 pt-2 border-t border-brand-primary/20 text-xs text-content-subtle flex gap-2 items-start">
-                          <span className="text-brand-primary">ℹ️</span>
-                          <span>Privacy Tip: Use a loyalty card, library card, or the <strong>back</strong> of a credit card. We only need the shape!</span>
+                        <div className="mt-3 flex gap-2 items-start text-xs text-content-subtle bg-background-default p-2 rounded border border-stroke-default">
+                          <Info size={14} className="mt-0.5 text-brand-primary shrink-0" />
+                          <span><strong>Privacy Note:</strong> This image is processed locally and <strong>never stored</strong> on any server. For extra safety, you can cover your card details with a piece of paper or turn the card over. We only need the card's shape!</span>
                         </div>
                       )}
                     </div>
                   )}
-                  {/* --- END: STANDARD REFERENCE OBJECTS QUICK START --- */}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-default mb-2">
-                    2. Distance to Object (meters)
-                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled)</span>}
-                  </label>
-                  <input 
-                    type="number" 
-                    value={distance} 
-                    onChange={e => setDistance(e.target.value)} 
-                    placeholder={selectedObject ? `${selectedObject.recommendedDistance} (recommended)` : "e.g., 1.5"}
-                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" 
-                  />
-                  {selectedObject ? (
-                    <p className="text-xs text-content-subtle mt-1">
-                      <span className="font-semibold text-brand-primary">Recommended: {selectedObject.recommendedDistance}m</span>. 
-                      Adjust if you stood closer or farther.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-content-subtle mt-1">
-                      Distance from camera to the object
-                    </p>
-                  )}
+
+                {/* STEP 2: VISUAL GUIDE (Only if object selected) */}
+                {selectedObject && (
+                  <div className="space-y-3 animate-fade-in">
+                    <div className="flex items-center gap-2 text-brand-primary font-semibold">
+                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">2</span>
+                      <h3>How to Photograph</h3>
+                    </div>
+                    
+                    <div className="bg-background-subtle p-4 rounded-xl border border-stroke-default text-sm space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-primary mt-1.5 shrink-0" />
+                        <p>Place object on a flat surface (wall, table, or floor).</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-primary mt-1.5 shrink-0" />
+                        <p>Stand about <strong>{selectedObject.recommendedDistance * 100} cm</strong> away.</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-primary mt-1.5 shrink-0" />
+                        <p>Ensure the object is clearly visible.</p>
+                      </div>
+                      
+                      {/* CSS Visual Guide Shape */}
+                      <div className="mt-4 h-32 bg-background-default rounded-lg border border-dashed border-stroke-default flex items-center justify-center relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-10 bg-grid-pattern" />
+                        {/* Dynamic Shape based on object ratio */}
+                        <div 
+                          className="border-2 border-brand-primary bg-brand-primary/10 relative flex items-center justify-center"
+                          style={{
+                            width: selectedObject.widthMM > selectedObject.heightMM ? '120px' : '80px',
+                            height: selectedObject.widthMM > selectedObject.heightMM ? '75px' : '110px',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          <div className="absolute -bottom-6 w-full flex items-center justify-center gap-1 text-xs text-brand-primary font-mono">
+                            <div className="h-px w-4 bg-brand-primary" />
+                            <span>WIDTH</span>
+                            <div className="h-px w-4 bg-brand-primary" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3: UPLOAD */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-brand-primary font-semibold">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject ? '3' : '2'}</span>
+                    <h3>Upload Photo</h3>
+                  </div>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-4 bg-background-default border-2 border-dashed border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all">
+                    <Upload className="w-5 h-5 text-content-subtle" />
+                    <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
+                  </button>
+                </div>
+
+                {/* STEP 4: DETAILS */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-brand-primary font-semibold">
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject ? '4' : '3'}</span>
+                    <h3>Verify Details</h3>
+                  </div>
                   
-                  {/* AR Measurement Option - Prominent Button */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-content-subtle mb-1">
+                        Distance (cm)
+                      </label>
+                      <input 
+                        type="number" 
+                        value={distance} 
+                        onChange={e => setDistance(e.target.value)} 
+                        placeholder="e.g. 100"
+                        className="w-full text-base px-3 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-content-subtle mb-1">
+                        Object Width (cm)
+                      </label>
+                      <input 
+                        type="number" 
+                        value={realSize} 
+                        onChange={e => setRealSize(e.target.value)} 
+                        placeholder="e.g. 21"
+                        disabled={!!selectedObject}
+                        className="w-full text-base px-3 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* AR Measurement Option */}
                   <button 
                     onClick={() => setShowARDistanceMeasure(true)}
-                    className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-primary/10 to-brand-secondary/10 border-2 border-brand-primary/30 rounded-lg hover:from-brand-primary/20 hover:to-brand-secondary/20 hover:border-brand-primary/50 transition-all duration-200 group"
-                    title="Measure distance using AR"
+                    className="w-full flex items-center justify-center gap-2 py-2 text-sm text-brand-primary hover:bg-brand-primary/5 rounded-lg transition-colors"
                   >
-                    <Ruler className="w-5 h-5 text-brand-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-brand-primary font-semibold">
-                      {selectedObject ? 'Verify Distance with AR' : 'Measure with Camera (AR)'}
-                    </span>
+                    <Ruler size={16} />
+                    <span>Measure distance with AR</span>
                   </button>
-                  
-                  {!selectedObject && <ARLinks />}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-content-default mb-2">
-                    3. Object's Width (cm)
-                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled)</span>}
-                  </label>
-                  <input 
-                    type="number" 
-                    value={realSize} 
-                    onChange={e => setRealSize(e.target.value)} 
-                    placeholder={selectedObject ? `${selectedObject.widthMM / 10} (width)` : "e.g., 21 for A4 width"}
-                    disabled={!!selectedObject}
-                    className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed"
-                  />
-                  {selectedObject ? (
-                    <p className="text-xs text-content-subtle mt-1">
-                      You'll mark the <strong>WIDTH</strong> of your {selectedObject.name} in the photo
-                    </p>
-                  ) : (
-                    <p className="text-xs text-content-subtle mt-1">
-                      Measure the width (short edge) of your object
-                    </p>
-                  )}
-                </div>
+
                 <button 
                   onClick={handlePrepareCalibration} 
                   disabled={!canSelectPoints} 
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle transition-all"
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-primary text-content-on-brand rounded-xl font-bold text-lg hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle transition-all shadow-lg disabled:shadow-none mt-4"
                 >
                   <Zap className="w-5 h-5" />
-                  Start Calibration
+                  Start Marking
                 </button>
             </main>
         </div>
