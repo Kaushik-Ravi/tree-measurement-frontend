@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, TreePine, Check } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
 import { ImageCropper } from './ImageCropper';
+import { CO2ResultCard } from './CO2ResultCard';
 
 type IdentificationData = Omit<IdentificationResponse, 'remainingIdentificationRequests'> | null;
 
@@ -14,6 +15,7 @@ interface SpeciesIdentifierProps {
   mainImageSrc: string; // This will now be the original, unmodified image source
   analysisMode: 'session' | 'community';
   co2Value: number | null;
+  tolerance?: number | null;
   isCO2Loading: boolean;
 }
 
@@ -21,7 +23,7 @@ type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
 type Mode = 'idle' | 'uploading' | 'cropping';
 
 // --- START: SURGICAL REPLACEMENT (THEMING) ---
-export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, isCO2Loading }: SpeciesIdentifierProps) {
+export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,25 +125,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
         </div>
         
         {/* CO2 Sequestration Card */}
-        {isCO2Loading ? (
-          <div className="p-4 bg-background-subtle border border-stroke-default rounded-lg flex items-center justify-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin text-brand-primary" />
-            <span className="text-sm text-content-subtle">Calculating carbon impact...</span>
-          </div>
-        ) : co2Value !== null ? (
-          <div className="p-4 bg-brand-primary/5 border border-brand-primary/20 rounded-lg">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-brand-primary/10 rounded-lg">
-                <TreePine className="w-5 h-5 text-brand-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-brand-primary uppercase tracking-wide">Annual CO₂ Sequestration</p>
-                <p className="text-2xl font-bold text-content-default mt-1">{co2Value.toFixed(2)} <span className="text-sm font-normal text-content-subtle">kg/year</span></p>
-                <p className="text-xs text-content-subtle mt-1">Based on tree dimensions and species wood density</p>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <CO2ResultCard co2Value={co2Value} tolerance={tolerance} isLoading={isCO2Loading} />
       </div>
     );
   }

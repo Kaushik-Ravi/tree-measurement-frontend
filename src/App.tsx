@@ -268,6 +268,14 @@ function App() {
   const [confidenceInfo, setConfidenceInfo] = useState<{ label: string; color: string; margin: string } | null>(null);
   const [currentIdentification, setCurrentIdentification] = useState<IdentificationData>(null);
   const [currentCO2, setCurrentCO2] = useState<number | null>(null);
+  
+  // --- START: SENSITIVITY ANALYSIS STATE ---
+  const [heightTolerance, setHeightTolerance] = useState<number | null>(null);
+  const [canopyTolerance, setCanopyTolerance] = useState<number | null>(null);
+  const [dbhTolerance, setDbhTolerance] = useState<number | null>(null);
+  const [co2Tolerance, setCo2Tolerance] = useState<number | null>(null);
+  // --- END: SENSITIVITY ANALYSIS STATE ---
+
   const [isCO2Calculating, setIsCO2Calculating] = useState(false);
   const [additionalData, setAdditionalData] = useState<AdditionalData>(initialAdditionalData);
   const [isLocationPickerActive, setIsLocationPickerActive] = useState(false);
@@ -559,6 +567,47 @@ function App() {
     };
     triggerCO2Calculation();
   }, [currentMetrics, currentIdentification]);
+
+  // --- START: SENSITIVITY / TOLERANCE CALCULATION ---
+  useEffect(() => {
+    if (currentMetrics && scaleFactor) {
+      // 1. Calculate Input Sensitivities (1% distance error + 5px touch error)
+      // Scale factor is in mm/pixel
+      const metersPerPixel = scaleFactor / 1000;
+      const cmPerPixel = scaleFactor / 10;
+
+      // Formula: Tolerance = (Value * 0.01) + (UnitsPerPixel * 5)
+      const h_tol = (currentMetrics.height_m * 0.01) + (metersPerPixel * 5);
+      const c_tol = (currentMetrics.canopy_m * 0.01) + (metersPerPixel * 5);
+      const d_tol = (currentMetrics.dbh_cm * 0.01) + (cmPerPixel * 5);
+
+      setHeightTolerance(h_tol);
+      setCanopyTolerance(c_tol);
+      setDbhTolerance(d_tol);
+
+      // 2. Calculate CO2 Error Propagation
+      // Formula: Error_CO2% ≈ 0.976 * (Error_H% + 2 * Error_D%)
+      // Derived from Chave et al. (2014): AGB = p * (D^2 * H)^0.976
+      if (currentCO2) {
+        const rel_err_h = h_tol / currentMetrics.height_m;
+        const rel_err_d = d_tol / currentMetrics.dbh_cm;
+        
+        // Error propagation for power law
+        const rel_err_co2 = 0.976 * (rel_err_h + (2 * rel_err_d));
+        const co2_tol = currentCO2 * rel_err_co2;
+        
+        setCo2Tolerance(co2_tol);
+      } else {
+        setCo2Tolerance(null);
+      }
+    } else {
+      setHeightTolerance(null);
+      setCanopyTolerance(null);
+      setDbhTolerance(null);
+      setCo2Tolerance(null);
+    }
+  }, [currentMetrics, scaleFactor, currentCO2]);
+  // --- END: SENSITIVITY / TOLERANCE CALCULATION ---
 
   // --- PHASE: 3-TIER CALIBRATION INTEGRATION FOR PHOTO METHOD ---
   useEffect(() => {
@@ -2486,11 +2535,17 @@ function App() {
                       <div className="space-y-2">
                         <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
                           <label className="font-medium text-content-default">Height:</label>
-                          <span className="font-mono text-lg text-content-default">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span>
+                          <div className="text-right">
+                            <span className="font-mono text-lg text-content-default block">{currentMetrics?.height_m?.toFixed(2) ?? '--'} m</span>
+                            {heightTolerance && <span className="text-xs text-content-subtle">± {heightTolerance.toFixed(2)} m</span>}
+                          </div>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
                           <label className="font-medium text-content-default">Canopy:</label>
-                          <span className="font-mono text-lg text-content-default">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span>
+                          <div className="text-right">
+                            <span className="font-mono text-lg text-content-default block">{currentMetrics?.canopy_m?.toFixed(2) ?? '--'} m</span>
+                            {canopyTolerance && <span className="text-xs text-content-subtle">± {canopyTolerance.toFixed(2)} m</span>}
+                          </div>
                         </div>
                         <div className="flex justify-between items-start p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
                           <div className="flex items-start gap-2 flex-1">
@@ -2598,6 +2653,7 @@ function App() {
                         mainImageSrc={originalImageSrc} 
                         analysisMode={currentView === 'COMMUNITY_GROVE' ? 'community' : 'session'}
                         co2Value={currentCO2}
+                        tolerance={co2Tolerance}
                         isCO2Loading={isCO2Calculating}
                       />
                     </div>

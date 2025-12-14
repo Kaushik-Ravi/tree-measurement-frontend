@@ -4,10 +4,11 @@ import { Leaf } from 'lucide-react';
 
 interface CO2ResultCardProps {
   co2Value: number | null;
+  tolerance?: number | null;
   isLoading: boolean;
 }
 
-export function CO2ResultCard({ co2Value, isLoading }: CO2ResultCardProps) {
+export function CO2ResultCard({ co2Value, tolerance, isLoading }: CO2ResultCardProps) {
   if (isLoading) {
     return (
       <div className="p-4 bg-gray-50 border rounded-lg text-center">
@@ -26,13 +27,13 @@ export function CO2ResultCard({ co2Value, isLoading }: CO2ResultCardProps) {
         <Leaf className="w-6 h-6 text-sky-700 mt-1 flex-shrink-0" />
         <div>
           <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
-            Estimated Carbon Sequestration
+            Total Lifetime Sequestration
           </p>
           <p className="font-bold text-sky-900 text-lg">
-            {co2Value.toFixed(2)} kg CO₂e
+            {co2Value.toFixed(2)} {tolerance ? <span className="text-sm text-sky-700 font-normal">± {tolerance.toFixed(2)}</span> : ''} kg CO₂e
           </p>
           <p className="text-xs text-gray-500 mt-1">
-            This is an estimate of the total carbon dioxide equivalent sequestered over the tree's lifetime.
+            This is an estimate of the total carbon dioxide equivalent sequestered over the tree's lifetime (not per year).
           </p>
         </div>
       </div>
