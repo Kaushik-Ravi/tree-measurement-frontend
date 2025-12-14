@@ -12,6 +12,7 @@ interface MapFeaturesProps {
   // --- START: SURGICAL ADDITION (THEME PROP) ---
   theme: 'light' | 'dark';
   // --- END: SURGICAL ADDITION (THEME PROP) ---
+  defaultLayer?: 'Light' | 'Dark' | 'Satellite' | 'Street';
 }
 
 // This custom hook delays updating a value until a certain amount of time has passed
@@ -35,7 +36,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // --- START: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---
-const MapFeatures = ({ onLocationSelected, theme }: MapFeaturesProps) => {
+const MapFeatures = ({ onLocationSelected, theme, defaultLayer }: MapFeaturesProps) => {
   const map = useMap();
   const provider = useRef(new OpenStreetMapProvider());
   const [query, setQuery] = useState('');
@@ -79,21 +80,21 @@ const MapFeatures = ({ onLocationSelected, theme }: MapFeaturesProps) => {
   return (
     <>
       <LayersControl position="topright">
-        <LayersControl.BaseLayer checked={theme === 'light'} name="Light">
+        <LayersControl.BaseLayer checked={defaultLayer === 'Light' || (!defaultLayer && theme === 'light')} name="Light">
           <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer checked={theme === 'dark'} name="Dark">
+        <LayersControl.BaseLayer checked={defaultLayer === 'Dark' || (!defaultLayer && theme === 'dark')} name="Dark">
           <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Satellite">
+        <LayersControl.BaseLayer checked={defaultLayer === 'Satellite'} name="Satellite">
           <TileLayer attribution='Tiles © Esri' url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' />
         </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Street">
+        <LayersControl.BaseLayer checked={defaultLayer === 'Street'} name="Street">
           <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         </LayersControl.BaseLayer>
       </LayersControl>
       
-      <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
+      <div className="absolute top-4 left-4 right-14 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
         <div className="relative w-full">
           <div className="bg-background-default shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-brand-secondary transition-all">
               <div className="pl-3 pr-2 text-content-subtle">
