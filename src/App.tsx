@@ -2563,7 +2563,10 @@ function App() {
                               <span className="text-xs text-content-subtle">(DBH)</span>
                             </div>
                           </div>
-                          <span className="font-mono text-lg text-content-default ml-2">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
+                          <div className="text-right">
+                            <span className="font-mono text-lg text-content-default block">{currentMetrics?.dbh_cm?.toFixed(2) ?? '--'} cm</span>
+                            {dbhTolerance && <span className="text-xs text-content-subtle">± {dbhTolerance.toFixed(2)} cm</span>}
+                          </div>
                         </div>
                       </div>
                       

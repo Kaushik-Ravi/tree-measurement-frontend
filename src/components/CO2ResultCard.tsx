@@ -22,17 +22,17 @@ export function CO2ResultCard({ co2Value, tolerance, isLoading }: CO2ResultCardP
   }
 
   return (
-    <div className="p-4 bg-sky-50 border-l-4 border-sky-500 rounded-lg">
+    <div className="p-4 bg-sky-50 dark:bg-sky-900/20 border-l-4 border-sky-500 dark:border-sky-400 rounded-lg transition-colors">
       <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-3">
-        <Leaf className="w-6 h-6 text-sky-700 mt-1 flex-shrink-0" />
+        <Leaf className="w-6 h-6 text-sky-700 dark:text-sky-400 mt-1 flex-shrink-0" />
         <div>
-          <p className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
+          <p className="text-xs font-semibold text-sky-800 dark:text-sky-300 uppercase tracking-wide">
             Total Lifetime Sequestration
           </p>
-          <p className="font-bold text-sky-900 text-lg">
-            {co2Value.toFixed(2)} {tolerance ? <span className="text-sm text-sky-700 font-normal">± {tolerance.toFixed(2)}</span> : ''} kg CO₂e
+          <p className="font-bold text-sky-900 dark:text-sky-100 text-lg">
+            {co2Value.toFixed(2)} {tolerance ? <span className="text-sm text-gray-600 dark:text-gray-400 font-normal">± {tolerance.toFixed(2)}</span> : ''} kg CO₂e
           </p>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             This is an estimate of the total carbon dioxide equivalent sequestered over the tree's lifetime (not per year).
           </p>
         </div>
