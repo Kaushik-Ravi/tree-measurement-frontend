@@ -131,84 +131,77 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
             position={[tree.latitude!, tree.longitude!]}
             icon={createTreeIcon(tree.status)}
           >
-            <Popup className="tree-popup compact-popup" minWidth={220} maxWidth={280}>
-              <div className="compact-tree-card">
-                {/* Thumbnail - CRITICAL FIX: Use small thumbnail instead of full image */}
-                {/* Before: Loading 1-2 MB full image for 280px popup */}
-                {/* After: Loading ~20 KB optimized thumbnail (99% bandwidth savings) */}
+            <Popup minWidth={260} maxWidth={280} closeButton={false} className="!m-0">
+              <div className="bg-background-default rounded-lg overflow-hidden shadow-sm border border-stroke-default font-sans text-left -m-[13px] w-[260px]">
+                {/* Thumbnail */}
                 {tree.image_url && (
-                  <img 
-                    src={getOptimizedImageUrl(tree.image_url, 'small')}
-                    alt={tree.file_name}
-                    className="popup-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  <div className="relative h-32 w-full bg-gray-100 dark:bg-gray-800">
+                    <img 
+                      src={getOptimizedImageUrl(tree.image_url, 'small')}
+                      alt={tree.file_name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div className="absolute top-2 right-2">
+                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white shadow-sm ${
+                        tree.status === 'COMPLETE' ? 'bg-green-500' :
+                        tree.status === 'VERIFIED' ? 'bg-indigo-500' :
+                        tree.status === 'PENDING_ANALYSIS' ? 'bg-amber-500' :
+                        'bg-blue-500'
+                       }`}>
+                         {tree.status === 'PENDING_ANALYSIS' ? 'PENDING' : tree.status}
+                       </span>
+                    </div>
+                  </div>
                 )}
                 
-                {/* Species Info - More Compact */}
-                <div className="popup-header">
-                  <h3 className="popup-scientific-name">
-                    {tree.species?.scientificName || 'Unidentified'}
-                  </h3>
-                  {tree.species?.commonNames && tree.species.commonNames.length > 0 && (
-                    <p className="popup-common-name">
-                      {tree.species.commonNames[0]}
-                    </p>
-                  )}
-                </div>
-                
-                {/* Compact Metrics Grid */}
-                <div className="popup-metrics">
-                  <div className="metric-item">
-                    <span className="metric-label">Height</span>
-                    <span className="metric-value">{tree.metrics?.height_m?.toFixed(1) ?? '--'} m</span>
-                  </div>
-                  <div className="metric-item">
-                    <span className="metric-label">Canopy</span>
-                    <span className="metric-value">{tree.metrics?.canopy_m?.toFixed(1) ?? '--'} m</span>
-                  </div>
-                  <div className="metric-item">
-                    <span className="metric-label">DBH</span>
-                    <span className="metric-value">{tree.metrics?.dbh_cm?.toFixed(1) ?? '--'} cm</span>
-                  </div>
-                </div>
-                
-                {/* Compact Footer */}
-                <div className="popup-footer">
-                  <span className={`status-badge ${
-                    tree.status === 'COMPLETE' 
-                      ? 'status-complete'
-                      : tree.status === 'VERIFIED'
-                      ? 'status-verified'
-                      : tree.status === 'PENDING_ANALYSIS'
-                      ? 'status-pending'
-                      : tree.status === 'ANALYSIS_IN_PROGRESS'
-                      ? 'status-progress'
-                      : 'status-unknown'
-                  }`}>
-                    {tree.status || 'UNKNOWN'}
-                  </span>
-                </div>
-                
-                {/* Action Buttons - Separate Row */}
-                <div className="popup-actions">
-                  {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
-                    <button
-                      onClick={() => onAnalyzeTree(tree.id)}
-                      className="analyze-btn-full"
-                    >
-                      <FlaskConical className="w-3.5 h-3.5" />
-                      Pending Analysis
-                    </button>
-                  )}
-                  <button
-                    onClick={() => onTreeClick(tree)}
-                    className="view-details-btn-full"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    View Details
-                  </button>
+                <div className="p-3 space-y-3">
+                    {/* Header */}
+                    <div>
+                        <h3 className="font-bold text-content-default text-sm leading-tight truncate">
+                            {tree.species?.scientificName || 'Unidentified Species'}
+                        </h3>
+                        <p className="text-xs text-content-subtle mt-0.5 truncate">
+                            {tree.species?.commonNames?.[0] || 'No common name'}
+                        </p>
+                    </div>
+
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-stroke-subtle">
+                        <div className="text-center">
+                            <p className="text-[10px] text-content-subtle uppercase">Height</p>
+                            <p className="text-xs font-mono font-semibold text-content-default">{tree.metrics?.height_m?.toFixed(1) ?? '--'}m</p>
+                        </div>
+                        <div className="text-center border-l border-stroke-subtle">
+                            <p className="text-[10px] text-content-subtle uppercase">Canopy</p>
+                            <p className="text-xs font-mono font-semibold text-content-default">{tree.metrics?.canopy_m?.toFixed(1) ?? '--'}m</p>
+                        </div>
+                        <div className="text-center border-l border-stroke-subtle">
+                            <p className="text-[10px] text-content-subtle uppercase">DBH</p>
+                            <p className="text-xs font-mono font-semibold text-content-default">{tree.metrics?.dbh_cm?.toFixed(0) ?? '--'}cm</p>
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                        {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                            <button
+                                onClick={() => onAnalyzeTree(tree.id)}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-brand-secondary/10 text-brand-secondary hover:bg-brand-secondary/20 rounded-md text-xs font-semibold transition-colors"
+                            >
+                                <FlaskConical className="w-3 h-3" />
+                                Analyze
+                            </button>
+                        )}
+                        <button
+                            onClick={() => onTreeClick(tree)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover rounded-md text-xs font-semibold transition-colors shadow-sm"
+                        >
+                            <Eye className="w-3 h-3" />
+                            Details
+                        </button>
+                    </div>
                 </div>
               </div>
             </Popup>

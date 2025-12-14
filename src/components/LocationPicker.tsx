@@ -46,14 +46,14 @@ function LocateControl() {
   };
 
   return (
-    <div className="absolute top-20 right-4 z-[1000]">
+    <div className="absolute top-4 right-4 z-[1000]">
        <button
         onClick={handleLocateMe}
-        className="p-3 bg-background-default rounded-full shadow-lg hover:bg-background-inset transition-colors border border-stroke-default"
+        className="p-3 bg-background-default rounded-lg shadow-lg hover:bg-background-inset transition-colors border border-stroke-default text-brand-primary"
         title="Find my location"
         aria-label="Find my location"
       >
-        <Crosshair className="w-5 h-5 text-content-default" />
+        <Crosshair className="w-6 h-6" />
       </button>
     </div>
   );
@@ -72,38 +72,47 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
   };
 
   return (
-    <div className="w-full h-full bg-background-inset rounded-lg shadow-inner relative overflow-hidden">
-      <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }} zoomControl={true}>
-        <MapFeatures onLocationSelected={handleLocationSelect} theme={theme} />
-        <MapEventsHandler setPinnedPosition={setPinnedPosition} />
-        
-        <LocateControl />
-        
-        {pinnedPosition && (
-          <Marker position={pinnedPosition}>
-            <Popup>Tree Location</Popup>
-          </Marker>
-        )}
-      </MapContainer>
+    <div className="w-full h-full bg-background-inset relative overflow-hidden flex flex-col">
+      <div className="flex-grow relative">
+        <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+          <MapFeatures onLocationSelected={handleLocationSelect} theme={theme} />
+          <MapEventsHandler setPinnedPosition={setPinnedPosition} />
+          
+          <LocateControl />
+          
+          {pinnedPosition && (
+            <Marker position={pinnedPosition}>
+              <Popup>Tree Location</Popup>
+            </Marker>
+          )}
+        </MapContainer>
+      </div>
       
-      <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col items-center z-[1000] pointer-events-none gap-3">
-        <p className="bg-background-default/90 backdrop-blur-sm p-3 rounded-lg shadow-lg text-sm text-content-subtle pointer-events-auto w-full text-center border border-stroke-default">
-            {pinnedPosition ? `Selected: ${pinnedPosition[0].toFixed(4)}, ${pinnedPosition[1].toFixed(4)}` : "Click on the map or use search"}
-        </p>
-        <div className="bg-background-default/90 backdrop-blur-sm p-2 rounded-lg shadow-lg flex flex-col sm:flex-row items-center gap-2 pointer-events-auto w-full border border-stroke-default">
-            <button
-                onClick={onCancel}
-                className="w-full sm:w-auto flex-1 px-4 py-3 bg-background-inset text-content-default font-medium rounded-md hover:opacity-80 text-sm"
-            >
-                Cancel
-            </button>
-            <button
-                onClick={() => { if(pinnedPosition) onConfirm({ lat: pinnedPosition[0], lng: pinnedPosition[1] }) }}
-                disabled={!pinnedPosition}
-                className="w-full sm:w-auto flex-1 px-6 py-3 bg-brand-primary text-content-on-brand font-medium rounded-md hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed text-sm"
-            >
-                Confirm Location
-            </button>
+      {/* Mobile-Optimized Bottom Panel with Safe Area Support */}
+      <div className="bg-background-default border-t border-stroke-default p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-[1000]">
+        <div className="max-w-md mx-auto space-y-3">
+            <div className="flex items-center justify-between bg-background-subtle px-3 py-2 rounded-lg border border-stroke-subtle">
+                <span className="text-xs font-medium text-content-subtle uppercase tracking-wide">Selected Location</span>
+                <span className="text-sm font-mono text-content-default">
+                    {pinnedPosition ? `${pinnedPosition[0].toFixed(5)}, ${pinnedPosition[1].toFixed(5)}` : "Tap map to select"}
+                </span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+                <button
+                    onClick={onCancel}
+                    className="px-4 py-3 bg-background-inset text-content-default font-medium rounded-lg hover:bg-background-subtle border border-stroke-default transition-colors active:scale-95"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={() => { if(pinnedPosition) onConfirm({ lat: pinnedPosition[0], lng: pinnedPosition[1] }) }}
+                    disabled={!pinnedPosition}
+                    className="px-4 py-3 bg-brand-primary text-content-on-brand font-bold rounded-lg hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle disabled:cursor-not-allowed shadow-md shadow-brand-primary/20 transition-all active:scale-95"
+                >
+                    Confirm
+                </button>
+            </div>
         </div>
       </div>
     </div>
