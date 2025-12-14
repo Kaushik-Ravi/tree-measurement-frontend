@@ -94,33 +94,33 @@ const MapFeatures = ({ onLocationSelected, theme, defaultLayer }: MapFeaturesPro
         </LayersControl.BaseLayer>
       </LayersControl>
       
-      <div className="absolute top-4 left-4 right-14 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
+      <div className="absolute top-4 left-4 right-[60px] md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
         <div className="relative w-full">
-          <div className="bg-background-default shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-brand-secondary transition-all">
-              <div className="pl-3 pr-2 text-content-subtle">
+          <div className={`shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-brand-secondary transition-all ${theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-background-default text-content-default'}`}>
+              <div className={`pl-3 pr-2 ${theme === 'dark' ? 'text-gray-400' : 'text-content-subtle'}`}>
                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
               </div>
               <input
                   ref={searchInputRef}
                   type="text"
                   placeholder="Search for a location..."
-                  className="h-12 pr-10 border-none text-sm placeholder:text-content-subtle w-full md:w-80 bg-transparent outline-none text-content-default"
+                  className={`h-12 pr-10 border-none text-sm placeholder:text-content-subtle w-full md:w-80 bg-transparent outline-none ${theme === 'dark' ? 'text-white placeholder:text-gray-500' : 'text-content-default'}`}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
               />
               {query && (
-                  <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-content-subtle hover:bg-background-inset">
+                  <button onClick={clearSearch} className={`absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-background-inset ${theme === 'dark' ? 'text-gray-400 hover:bg-gray-800' : 'text-content-subtle'}`}>
                       <X size={16} />
                   </button>
               )}
           </div>
 
           {results.length > 0 && (
-              <div className="absolute top-full mt-1 w-full bg-background-default shadow-lg rounded-md border border-stroke-default z-[1000] max-h-60 overflow-y-auto">
+              <div className={`absolute top-full mt-1 w-full shadow-lg rounded-md border border-stroke-default z-[1000] max-h-60 overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-background-default'}`}>
                   {results.map((result) => (
                       <div
                           key={result.raw.place_id}
-                          className="text-sm px-4 py-2 border-b border-stroke-subtle cursor-pointer hover:bg-brand-secondary hover:text-white text-content-default"
+                          className={`text-sm px-4 py-2 border-b cursor-pointer hover:bg-brand-secondary hover:text-white ${theme === 'dark' ? 'border-gray-800 text-gray-200' : 'border-stroke-subtle text-content-default'}`}
                           onClick={() => handleSelectResult(result)}
                       >
                           {result.label}

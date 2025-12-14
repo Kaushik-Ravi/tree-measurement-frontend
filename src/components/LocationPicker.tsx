@@ -1,7 +1,7 @@
 // src/components/LocationPicker.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, useMap, useMapEvents } from 'react-leaflet';
-import { MapPin, Navigation } from 'lucide-react';
+import { MapPin, Crosshair, Loader2 } from 'lucide-react';
 import MapFeatures from './MapFeatures';
 
 interface LocationPickerProps {
@@ -17,10 +17,14 @@ const LOCATED_ZOOM = 18;
 
 function MapCenterUpdater({ 
   setCenterPosition, 
-  isLocating 
+  isLocating,
+  onLocationFound,
+  onLocationError
 }: { 
   setCenterPosition: (pos: [number, number]) => void;
   isLocating: boolean;
+  onLocationFound: () => void;
+  onLocationError: () => void;
 }) {
   const map = useMap();
   const isFirstLoad = useRef(true);
@@ -36,10 +40,15 @@ function MapCenterUpdater({
     locationfound(e) {
       map.flyTo(e.latlng, LOCATED_ZOOM);
       setCenterPosition([e.latlng.lat, e.latlng.lng]);
+      onLocationFound();
     },
     locationerror(e) {
       console.error("Location error:", e.message);
-      alert('Could not access your location. Please check browser settings.');
+      // Only alert if it's a genuine error, not just a timeout/interrupt
+      if (e.code !== 3) { // 3 is timeout
+         alert('Could not access your location. Please check browser settings.');
+      }
+      onLocationError();
     },
   });
 
@@ -53,7 +62,7 @@ function MapCenterUpdater({
 
   useEffect(() => {
     if (isLocating) {
-      map.locate();
+      map.locate({ enableHighAccuracy: true, timeout: 10000 });
     }
   }, [isLocating, map]);
 
@@ -70,13 +79,28 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
   const initialZoom = initialLocation ? LOCATED_ZOOM : DEFAULT_ZOOM;
 
   const handleLocateMe = () => {
+    if (isLocating) return; // Prevent double clicks
     setIsLocating(true);
-    setTimeout(() => setIsLocating(false), 100);
+  };
+
+  const handleLocationFound = () => {
+    setIsLocating(false);
+  };
+
+  const handleLocationError = () => {
+    setIsLocating(false);
   };
 
   const handleLocationSelectFromSearch = (location: {lat: number, lng: number}) => {
     // MapFeatures handles flyTo
   };
+
+  // Theme classes
+  const bgClass = theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200';
+  const textClass = theme === 'dark' ? 'text-gray-100' : 'text-gray-700';
+  const subTextClass = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
+  const buttonBgClass = theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-100' : 'bg-gray-100 hover:bg-gray-200 text-gray-700';
+  const coordBgClass = theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-600';
 
   return (
     <div className="fixed inset-0 z-[50] bg-black flex flex-col h-[100dvh] w-screen">
@@ -96,6 +120,8 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
           <MapCenterUpdater 
             setCenterPosition={setCenterPosition} 
             isLocating={isLocating}
+            onLocationFound={handleLocationFound}
+            onLocationError={handleLocationError}
           />
         </MapContainer>
 
@@ -112,16 +138,17 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
 
         <button
           onClick={handleLocateMe}
-          className="absolute bottom-6 right-4 z-[1000] p-3 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors border border-gray-200 text-gray-700"
+          disabled={isLocating}
+          className={`absolute bottom-6 right-4 z-[1000] p-3 rounded-full shadow-lg transition-colors border ${bgClass} ${textClass} ${isLocating ? 'opacity-80 cursor-wait' : ''}`}
           title="Find my location"
         >
-          <Navigation className="w-6 h-6" />
+          {isLocating ? <Loader2 className="w-6 h-6 animate-spin" /> : <Crosshair className="w-6 h-6" />}
         </button>
       </div>
       
-      <div className="bg-white border-t border-gray-200 p-4 pb-[env(safe-area-inset-bottom,20px)] flex flex-col gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-[1001]">
+      <div className={`${bgClass} border-t p-4 pb-[env(safe-area-inset-bottom,20px)] flex flex-col gap-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-[1001]`}>
         <div className="flex items-center justify-center">
-          <div className="bg-gray-100 px-3 py-1.5 rounded-full text-xs font-mono text-gray-600 border border-gray-200 flex items-center gap-2">
+          <div className={`${coordBgClass} px-3 py-1.5 rounded-full text-xs font-mono border flex items-center gap-2`}>
              <span className="w-2 h-2 rounded-full bg-brand-primary animate-pulse"></span>
              {centerPosition[0].toFixed(6)}, {centerPosition[1].toFixed(6)}
           </div>
@@ -130,7 +157,7 @@ export function LocationPicker({ onCancel, onConfirm, initialLocation, theme }: 
         <div className="flex gap-3 w-full">
             <button
                 onClick={onCancel}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors text-sm active:scale-95 transform"
+                className={`flex-1 px-4 py-3 font-semibold rounded-lg transition-colors text-sm active:scale-95 transform ${buttonBgClass}`}
             >
                 Cancel
             </button>
