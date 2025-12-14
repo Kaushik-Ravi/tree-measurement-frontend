@@ -20,6 +20,7 @@ export interface StandardReferenceObject {
   description: string;     // User-friendly description
   commonRegions: string[]; // Geographic regions where this is standard
   instructionText: string; // Specific instruction for marking
+  recommendedDistance: number; // Recommended distance in meters for best accuracy
 }
 
 /**
@@ -28,6 +29,17 @@ export interface StandardReferenceObject {
  */
 export const STANDARD_OBJECTS: StandardReferenceObject[] = [
   {
+    id: 'card_iso',
+    name: 'Standard Card (Loyalty/ID)',
+    widthMM: 85.60,
+    heightMM: 53.98,
+    iconName: 'CreditCard',
+    description: 'Loyalty card, ID, or Bank card (ISO 7810)',
+    commonRegions: ['Global'],
+    instructionText: 'Mark the WIDTH (long edge: 85.6mm) of the card',
+    recommendedDistance: 0.3 // 30cm - Close up for small object
+  },
+  {
     id: 'a4_paper',
     name: 'A4 Paper',
     widthMM: 210,
@@ -35,7 +47,8 @@ export const STANDARD_OBJECTS: StandardReferenceObject[] = [
     iconName: 'FileText',
     description: 'Standard A4 office paper (210mm × 297mm)',
     commonRegions: ['Europe', 'Asia', 'Oceania', 'Africa', 'South America'],
-    instructionText: 'Mark the WIDTH (short edge: 210mm) of the A4 paper'
+    instructionText: 'Mark the WIDTH (short edge: 210mm) of the A4 paper',
+    recommendedDistance: 0.6 // 60cm - Medium distance
   },
   {
     id: 'us_letter',
@@ -45,47 +58,8 @@ export const STANDARD_OBJECTS: StandardReferenceObject[] = [
     iconName: 'FileText',
     description: 'US Letter paper (8.5" × 11")',
     commonRegions: ['North America', 'Central America'],
-    instructionText: 'Mark the WIDTH (short edge: 8.5 inches) of the Letter paper'
-  },
-  {
-    id: 'credit_card',
-    name: 'Credit/Debit Card',
-    widthMM: 85.60,
-    heightMM: 53.98,
-    iconName: 'CreditCard',
-    description: 'ISO/IEC 7810 ID-1 standard card',
-    commonRegions: ['Global'],
-    instructionText: 'Mark the WIDTH (long edge: 85.6mm) of the card'
-  },
-  {
-    id: 'business_card',
-    name: 'Business Card (US)',
-    widthMM: 88.9,
-    heightMM: 50.8,
-    iconName: 'CreditCard',
-    description: 'Standard US business card (3.5" × 2")',
-    commonRegions: ['North America'],
-    instructionText: 'Mark the WIDTH (long edge: 3.5 inches) of the card'
-  },
-  {
-    id: 'sticky_note',
-    name: 'Post-it Note (3×3)',
-    widthMM: 76.2,
-    heightMM: 76.2,
-    iconName: 'StickyNote',
-    description: 'Standard 3" × 3" sticky note',
-    commonRegions: ['Global'],
-    instructionText: 'Mark one SIDE (76mm or 3 inches) of the square note'
-  },
-  {
-    id: 'smartphone',
-    name: 'Smartphone (Average)',
-    widthMM: 71,
-    heightMM: 150,
-    iconName: 'Smartphone',
-    description: 'Average modern smartphone (~6 inch screen)',
-    commonRegions: ['Global'],
-    instructionText: 'Mark the WIDTH (short edge: ~71mm) of the phone'
+    instructionText: 'Mark the WIDTH (short edge: 8.5 inches) of the Letter paper',
+    recommendedDistance: 0.6 // 60cm - Medium distance
   }
 ];
 

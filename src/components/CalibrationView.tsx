@@ -246,16 +246,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
       // User chose standard object - pre-fill real size, hide distance input
       setSelectedObject(obj);
       setRealSize((obj.widthMM / 10).toString()); // Convert mm to cm
-      setDistance(DEFAULT_CALIBRATION_DISTANCE.toString()); // Auto-set default distance
+      setDistance(obj.recommendedDistance.toString()); // Auto-set recommended distance
       setInstruction(`${obj.name} selected! Upload photo and mark the object's width.`);
     }
   };
 
   const handleQuickStartWithObject = () => {
-    if (!calibFile) {
-      alert('Please upload a calibration photo first');
-      return;
-    }
     setShowObjectSelector(true);
   };
   // --- END: SURGICAL ADDITION ---
@@ -267,9 +263,52 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
         
       <div id="display-panel" className="flex-1 bg-background-inset flex items-center justify-center relative">
         {!calibFile && (
-          <div className="hidden md:flex flex-col items-center text-content-subtle">
-            <Settings size={64}/>
-            <p className="mt-4 text-lg">Upload a photo to calibrate</p>
+          <div className="hidden md:flex flex-col items-center text-content-subtle p-8 text-center max-w-md">
+            <Settings size={64} className="mb-6 text-brand-primary/50"/>
+            <h3 className="text-xl font-semibold text-content-default mb-2">Camera Calibration</h3>
+            <p className="text-content-subtle mb-8">
+              To measure trees accurately, we need to calibrate your camera first.
+            </p>
+            
+            {!selectedObject ? (
+              <div className="w-full space-y-4">
+                <p className="text-sm font-medium text-content-default">Choose a standard object you have with you:</p>
+                <button
+                  onClick={handleQuickStartWithObject}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-brand-primary text-content-on-brand rounded-xl font-semibold shadow-lg hover:bg-brand-primary-hover hover:scale-[1.02] transition-all"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Select Reference Object
+                </button>
+                <p className="text-xs text-content-subtle">
+                  (Credit Card, ID Card, A4 Paper, etc.)
+                </p>
+              </div>
+            ) : (
+              <div className="w-full p-6 bg-brand-primary/5 border border-brand-primary/20 rounded-xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-brand-primary/10 rounded-lg">
+                    <Sparkles className="w-6 h-6 text-brand-primary" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-content-default">{selectedObject.name}</p>
+                    <p className="text-xs text-content-subtle">Selected Reference</p>
+                  </div>
+                </div>
+                <div className="text-left text-sm text-content-default space-y-2 mb-6">
+                  <p>1. Place your <strong>{selectedObject.name}</strong> on a wall or tree.</p>
+                  <p>2. Stand about <strong>{selectedObject.recommendedDistance} meters</strong> away.</p>
+                  <p>3. Take a photo showing the object clearly.</p>
+                </div>
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover transition-colors"
+                >
+                  <Upload className="w-5 h-5" />
+                  Upload Photo
+                </button>
+              </div>
+            )}
           </div>
         )}
         <canvas 
@@ -362,7 +401,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   <p className="text-xs text-content-subtle mt-2">Tip: For fastest setup, use "Quick Start" with a standard object (A4 paper, credit card, etc.)</p>
                   
                   {/* --- START: STANDARD REFERENCE OBJECTS QUICK START --- */}
-                  {calibFile && !selectedObject && (
+                  {!selectedObject && (
                     <button
                       onClick={handleQuickStartWithObject}
                       className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-3 bg-gradient-to-r from-brand-accent/10 to-brand-primary/10 border-2 border-brand-accent/30 rounded-lg hover:from-brand-accent/20 hover:to-brand-primary/20 hover:border-brand-accent/50 transition-all duration-200 group"
@@ -394,6 +433,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                           Change
                         </button>
                       </div>
+                      {selectedObject.id === 'card_iso' && (
+                        <div className="mt-2 pt-2 border-t border-brand-primary/20 text-xs text-content-subtle flex gap-2 items-start">
+                          <span className="text-brand-primary">ℹ️</span>
+                          <span>Privacy Tip: Use a loyalty card, library card, or the <strong>back</strong> of a credit card. We only need the shape!</span>
+                        </div>
+                      )}
                     </div>
                   )}
                   {/* --- END: STANDARD REFERENCE OBJECTS QUICK START --- */}
@@ -401,18 +446,23 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 <div>
                   <label className="block text-sm font-medium text-content-default mb-2">
                     2. Distance to Object (meters)
-                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled - you can change)</span>}
+                    {selectedObject && <span className="ml-2 text-xs text-brand-primary">(Auto-filled)</span>}
                   </label>
                   <input 
                     type="number" 
                     value={distance} 
                     onChange={e => setDistance(e.target.value)} 
-                    placeholder={selectedObject ? "1.0 (recommended)" : "e.g., 1.5"}
+                    placeholder={selectedObject ? `${selectedObject.recommendedDistance} (recommended)` : "e.g., 1.5"}
                     className="w-full text-base px-4 py-3 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary" 
                   />
-                  {selectedObject && (
+                  {selectedObject ? (
                     <p className="text-xs text-content-subtle mt-1">
-                      Default: 1 meter. Change if your object is closer or farther.
+                      <span className="font-semibold text-brand-primary">Recommended: {selectedObject.recommendedDistance}m</span>. 
+                      Adjust if you stood closer or farther.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-content-subtle mt-1">
+                      Distance from camera to the object
                     </p>
                   )}
                   
