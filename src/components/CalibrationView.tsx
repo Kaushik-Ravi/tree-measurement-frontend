@@ -52,6 +52,19 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
   const [showObjectSelector, setShowObjectSelector] = useState(false);
   const [selectedObject, setSelectedObject] = useState<StandardReferenceObject | null>(null);
   
+  // Custom Object Definition
+  const CUSTOM_OBJECT: StandardReferenceObject = {
+    id: 'custom',
+    name: 'Custom Object',
+    widthMM: 0,
+    heightMM: 0,
+    iconName: 'Settings',
+    description: 'Manual measurement entry',
+    commonRegions: [],
+    instructionText: 'Enter the distance and width of your object.',
+    recommendedDistance: 1.0
+  };
+
   // Magnifier State
   const [magnifierState, setMagnifierState] = useState<{ show: boolean; x: number; y: number }>({ show: false, x: 0, y: 0 });
   const [isInteracting, setIsInteracting] = useState(false);
@@ -487,10 +500,8 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                       
                       <button
                         onClick={() => {
-                          setSelectedObject(null);
+                          setSelectedObject(CUSTOM_OBJECT);
                           setInstruction("Manual mode: Enter distance and object size below.");
-                          // Scroll to upload section
-                          fileInputRef.current?.click();
                         }}
                         className="w-full flex items-center justify-between p-4 bg-background-subtle border border-stroke-default rounded-xl hover:border-brand-secondary hover:bg-brand-secondary/5 transition-all group"
                       >
@@ -520,7 +531,11 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                         Change
                       </button>
                       <div className="flex items-center gap-3 mb-2">
-                        <Sparkles className="w-5 h-5 text-brand-primary" />
+                        {selectedObject.id === 'custom' ? (
+                          <Settings className="w-5 h-5 text-brand-secondary" />
+                        ) : (
+                          <Sparkles className="w-5 h-5 text-brand-primary" />
+                        )}
                         <span className="font-semibold text-content-default">{selectedObject.name}</span>
                       </div>
                       <p className="text-sm text-content-subtle">{selectedObject.description}</p>
@@ -536,8 +551,8 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   )}
                 </div>
 
-                {/* STEP 2: VISUAL GUIDE (Only if object selected) */}
-                {selectedObject && (
+                {/* STEP 2: VISUAL GUIDE (Only if object selected AND NOT CUSTOM) */}
+                {selectedObject && selectedObject.id !== 'custom' && (
                   <div className="space-y-3 animate-fade-in">
                     <div className="flex items-center gap-2 text-brand-primary font-semibold">
                       <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">2</span>
@@ -584,7 +599,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 {/* STEP 3: UPLOAD */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-brand-primary font-semibold">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject ? '3' : '2'}</span>
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject && selectedObject.id !== 'custom' ? '3' : '2'}</span>
                     <h3>Upload Photo</h3>
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
@@ -597,7 +612,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 {/* STEP 4: DETAILS */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-brand-primary font-semibold">
-                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject ? '4' : '3'}</span>
+                    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject && selectedObject.id !== 'custom' ? '4' : '3'}</span>
                     <h3>Verify Details</h3>
                   </div>
                   
@@ -623,7 +638,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                         value={realSize} 
                         onChange={e => setRealSize(e.target.value)} 
                         placeholder="e.g. 21"
-                        disabled={!!selectedObject}
+                        disabled={!!selectedObject && selectedObject.id !== 'custom'}
                         className="w-full text-base px-3 py-2 border border-stroke-default bg-background-default rounded-lg focus:ring-2 focus:ring-brand-primary disabled:bg-background-inset disabled:text-content-subtle"
                       />
                     </div>
