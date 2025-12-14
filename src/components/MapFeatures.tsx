@@ -1,14 +1,17 @@
 // src/components/MapFeatures.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useMap } from 'react-leaflet';
+import { useMap, LayersControl, TileLayer } from 'react-leaflet';
 import type { SearchResult } from 'leaflet-geosearch/dist/providers/provider.js';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
-import { Search, Loader2, X } from 'lucide-react';
+import { Search, X, Loader2 } from 'lucide-react';
 
 import 'leaflet-geosearch/dist/geosearch.css';
 
 interface MapFeaturesProps {
   onLocationSelected: (location: { lat: number, lng: number }) => void;
+  // --- START: SURGICAL ADDITION (THEME PROP) ---
+  theme: 'light' | 'dark';
+  // --- END: SURGICAL ADDITION (THEME PROP) ---
 }
 
 // This custom hook delays updating a value until a certain amount of time has passed
@@ -31,7 +34,8 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
+// --- START: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---
+const MapFeatures = ({ onLocationSelected, theme }: MapFeaturesProps) => {
   const map = useMap();
   const provider = useRef(new OpenStreetMapProvider());
   const [query, setQuery] = useState('');
@@ -61,7 +65,7 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
     onLocationSelected({ lat: result.y, lng: result.x });
     setQuery(result.label);
     setResults([]);
-    map.flyTo([result.y, result.x], 18); // Zoom in closer for precise placement
+    map.flyTo([result.y, result.x], 16);
   };
 
   const clearSearch = () => {
@@ -73,46 +77,51 @@ const MapFeatures = ({ onLocationSelected }: MapFeaturesProps) => {
   };
 
   return (
-    <div className="absolute top-[calc(env(safe-area-inset-top)+1rem)] left-4 right-4 z-[1000]">
-        <div className="relative w-full max-w-md mx-auto">
-          <div className="bg-background-default shadow-xl rounded-full flex items-center border border-stroke-default focus-within:border-brand-primary transition-all overflow-hidden">
-              <div className="pl-4 pr-2 text-content-subtle">
+    <>
+      <LayersControl position="topright">
+        <LayersControl.BaseLayer checked={theme === 'light'} name="Light">
+          <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer checked={theme === 'dark'} name="Dark">
+          <TileLayer attribution='© <a href="https://Carto.com/attributions">CARTO</a>' url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Satellite">
+          <TileLayer attribution='Tiles © Esri' url='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' />
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Street">
+          <TileLayer attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        </LayersControl.BaseLayer>
+      </LayersControl>
+      
+      <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:right-auto md:w-auto z-[1000]">
+        <div className="relative w-full">
+          <div className="bg-background-default shadow-lg rounded-lg flex items-center border-2 border-transparent focus-within:border-brand-secondary transition-all">
+              <div className="pl-3 pr-2 text-content-subtle">
                   {isSearching ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
               </div>
               <input
                   ref={searchInputRef}
                   type="text"
+                  placeholder="Search for a location..."
+                  className="h-12 pr-10 border-none text-sm placeholder:text-content-subtle w-full md:w-80 bg-transparent outline-none text-content-default"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search for a location..."
-                  className="w-full py-3 bg-transparent border-none focus:ring-0 text-sm text-content-default placeholder:text-content-subtle outline-none"
               />
               {query && (
-                  <button onClick={clearSearch} className="p-2 text-content-subtle hover:text-content-default">
+                  <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-content-subtle hover:bg-background-inset">
                       <X size={16} />
                   </button>
               )}
           </div>
 
           {results.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-background-default rounded-xl shadow-xl border border-stroke-default max-h-60 overflow-y-auto divide-y divide-stroke-subtle">
+              <div className="absolute top-full mt-1 w-full bg-background-default shadow-lg rounded-md border border-stroke-default z-[1000] max-h-60 overflow-y-auto">
                   {results.map((result) => (
-                      <button
-                          key={result.x + result.y}
+                      <div
+                          key={result.raw.place_id}
+                          className="text-sm px-4 py-2 border-b border-stroke-subtle cursor-pointer hover:bg-brand-secondary hover:text-white text-content-default"
                           onClick={() => handleSelectResult(result)}
-                          className="w-full text-left px-4 py-3 hover:bg-background-subtle transition-colors text-sm text-content-default truncate"
                       >
-                          {result.label}
-                      </button>
-                  ))}
-              </div>
-          )}
-        </div>
-    </div>
-  );
-};
-
-export default MapFeatures;                      >
                           {result.label}
                       </div>
                   ))}
@@ -125,3 +134,4 @@ export default MapFeatures;                      >
 };
 
 export default MapFeatures;
+// --- END: SURGICAL REPLACEMENT (THEMING & DYNAMIC LAYERS) ---
