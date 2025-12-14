@@ -30,6 +30,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
   const [showPlaceButton, setShowPlaceButton] = useState(false);
   const [showUndoButton, setShowUndoButton] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
+  const [trackingQuality, setTrackingQuality] = useState<'GOOD' | 'POOR'>('POOR'); // Phase 3: Coaching State
   const [arSessionActive, setArSessionActive] = useState(false);
   const arButtonRef = useRef<HTMLElement | null>(null);
 
@@ -402,7 +403,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
 
         if (!hitTestSourceRequested) {
           session.requestReferenceSpace('viewer').then(viewerSpace => {
-            session.requestHitTestSource?.({ space: viewerSpace })?.then(source => { hitTestSource = source; });
+            // Phase 2 Refinement: Explicitly request planes first, then points
+            // This ensures we lock onto the road/ground surface whenever possible
+            session.requestHitTestSource?.({ 
+                space: viewerSpace,
+                entityTypes: ['plane', 'point'] 
+            })?.then(source => { hitTestSource = source; });
           });
           session.addEventListener('end', () => { hitTestSourceRequested = false; hitTestSource = null; });
           hitTestSourceRequested = true;
@@ -421,6 +427,9 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 reticle.visible = true;
                 reticle.matrix.fromArray(pose.transform.matrix);
                 
+                // Phase 3: Update tracking quality state
+                setTrackingQuality('GOOD');
+
                 if (!surfaceFound) {
                     surfaceFound = true;
                     if (arStateRef.current === 'SCANNING') {
@@ -445,6 +454,9 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
             reticle.visible = false;
             latestHitRef.current = null; // Clear if no hit
             (reticleRing.material as THREE.MeshBasicMaterial).opacity = 0.5;
+            
+            // Phase 3: Update tracking quality state
+            setTrackingQuality('POOR');
           }
         }
       }
@@ -772,6 +784,12 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-content-default">{instruction}</p>
+                  {/* Phase 3: Coaching Overlay Message */}
+                  {trackingQuality === 'POOR' && !isScanning && !showConfirmButtons && (
+                    <p className="text-xs text-status-warning mt-1 animate-pulse">
+                      Move device slowly to find surface...
+                    </p>
+                  )}
                   {showConfirmButtons && uiDistance !== null && (
                     <div className="mt-2 text-3xl font-bold text-brand-primary">
                       {uiDistance.toFixed(2)} m
