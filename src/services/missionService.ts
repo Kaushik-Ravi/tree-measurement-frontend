@@ -56,6 +56,86 @@ export const missionService = {
     return { data: { ...squad, members: 1 }, error: null }; // Simplified member count for now
   },
 
+  async getSquadMembers(squadId: string) {
+    const { data, error } = await supabase
+      .from('squad_members')
+      .select(`
+        user_id,
+        role,
+        users:user_id (
+          email
+        )
+      `)
+      .eq('squad_id', squadId);
+      
+    return { data, error };
+  },
+
+  // --- CHAT & ASSIGNMENTS ---
+
+  async sendChatMessage(squadId: string, userId: string, message: string, relatedSegmentId?: string, location?: {lat: number, lng: number}) {
+    const payload: any = {
+      squad_id: squadId,
+      sender_id: userId,
+      message
+    };
+    if (relatedSegmentId) payload.related_segment_id = relatedSegmentId;
+    if (location) {
+      payload.location_lat = location.lat;
+      payload.location_lng = location.lng;
+    }
+
+    return await supabase.from('squad_chat').insert([payload]);
+  },
+
+  async getChatMessages(squadId: string) {
+    return await supabase
+      .from('squad_chat')
+      .select(`
+        *,
+        sender:sender_id (email)
+      `)
+      .eq('squad_id', squadId)
+      .order('created_at', { ascending: true })
+      .limit(50);
+  },
+
+  async assignSegment(squadId: string, segmentId: string, assigneeId: string, assignerId: string) {
+    // 1. Create assignment
+    const { data, error } = await supabase.from('assignments').insert([{
+      squad_id: squadId,
+      segment_id: segmentId,
+      assignee_id: assigneeId,
+      assigned_by: assignerId,
+      status: 'pending'
+    }]).select().single();
+
+    if (error) return { error };
+
+    // 2. Create notification for assignee
+    await supabase.from('notifications').insert([{
+      user_id: assigneeId,
+      type: 'assignment',
+      payload: {
+        assignment_id: data.id,
+        segment_id: segmentId,
+        message: 'You have been assigned a new street segment.'
+      }
+    }]);
+
+    return { data, error: null };
+  },
+
+  async updateUserLocation(userId: string, squadId: string, lat: number, lng: number) {
+    return await supabase.from('user_locations').upsert({
+      user_id: userId,
+      squad_id: squadId,
+      lat,
+      lng,
+      last_updated: new Date().toISOString()
+    });
+  },
+
   // --- STREETS (DEMO GENERATOR) ---
   
   // Generates fake streets around a center point for testing

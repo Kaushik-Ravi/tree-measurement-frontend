@@ -1734,6 +1734,26 @@ function App() {
 
       await saveResult(newResultPayload, session.access_token);
       
+      // --- LIVE MAP SYNC ---
+      // Push to Supabase for real-time visualization on the Mission Map
+      if (currentLocation?.lat && currentLocation?.lng && user?.id) {
+        try {
+          await supabase.from('mapped_trees').insert({
+            user_id: user.id,
+            lat: currentLocation.lat,
+            lng: currentLocation.lng,
+            species_name: currentIdentification?.bestMatch?.scientificName || 'Unknown',
+            height_m: currentMetrics.height_m,
+            dbh_cm: currentMetrics.dbh_cm,
+            status: 'verified'
+          });
+        } catch (err) {
+          console.error("Failed to sync to live map:", err);
+          // Non-blocking error
+        }
+      }
+      // ---------------------
+
       const updatedResults = await getResults(session.access_token);
       setAllResults(updatedResults);
       softReset();

@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
 import { Crosshair } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -113,6 +114,61 @@ const ThemeController = ({ activeLayer }: { activeLayer: string }) => {
       L.DomUtil.removeClass(container, 'dark-theme-map');
     }
   }, [map, activeLayer]);
+  return null;
+};
+
+// Live Tree Layer - Visualizes trees in real-time
+const LiveTreeLayer = () => {
+  const map = useMap();
+  const markersRef = useRef<L.LayerGroup>(new L.LayerGroup());
+
+  useEffect(() => {
+    markersRef.current.addTo(map);
+
+    // Initial Fetch
+    const fetchTrees = async () => {
+      const { data } = await supabase.from('mapped_trees').select('*');
+      if (data) {
+        data.forEach(tree => addTreeMarker(tree));
+      }
+    };
+    fetchTrees();
+
+    // Realtime Subscription
+    const channel = supabase
+      .channel('live_trees')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mapped_trees' }, (payload) => {
+        addTreeMarker(payload.new);
+      })
+      .subscribe();
+
+    return () => {
+      markersRef.current.clearLayers();
+      supabase.removeChannel(channel);
+    };
+  }, [map]);
+
+  const addTreeMarker = (tree: any) => {
+    const marker = L.circleMarker([tree.lat, tree.lng], {
+      radius: 6,
+      fillColor: '#10b981', // Green
+      color: '#fff',
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.8
+    });
+    
+    marker.bindPopup(`
+      <div class="text-sm font-sans">
+        <strong class="text-green-700">${tree.species_name || 'Tree'}</strong><br/>
+        <span class="text-gray-600">Height:</span> ${tree.height_m?.toFixed(1)}m<br/>
+        <span class="text-gray-600">DBH:</span> ${tree.dbh_cm?.toFixed(1)}cm
+      </div>
+    `);
+    
+    markersRef.current.addLayer(marker);
+  };
+
   return null;
 };
 
@@ -319,6 +375,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
         <ScaleControl position="bottomleft" />
         <SearchControl />
         <LocateControl />
+        <LiveTreeLayer />
         
         {segments && (
           <StreetLayer 
