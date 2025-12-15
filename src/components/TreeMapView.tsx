@@ -1,11 +1,13 @@
 // src/components/TreeMapView.tsx
-import { MapContainer, Marker, Popup, TileLayer, LayersControl, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, LayersControl, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { DivIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import { TreeResult } from '../apiService';
-import { MapPin, Eye, FlaskConical, Locate } from 'lucide-react';
-import { useMemo } from 'react';
+import { MapPin, Eye, FlaskConical, Locate, Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import { TreePine } from 'lucide-react';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
@@ -20,21 +22,38 @@ interface TreeMapViewProps {
 // Component to handle "Locate Me" functionality
 function LocateControl() {
   const map = useMap();
+  const [isLocating, setIsLocating] = useState(false);
 
   const handleLocate = () => {
+    setIsLocating(true);
     map.locate({ setView: true, maxZoom: 18 });
   };
+
+  useMapEvents({
+    locationfound(e) {
+      setIsLocating(false);
+    },
+    locationerror(e) {
+      setIsLocating(false);
+      console.error("Location access denied or unavailable:", e.message);
+      // Optional: Show a toast or alert here
+    }
+  });
 
   return (
     <div className="leaflet-bottom leaflet-right">
       <div className="leaflet-control leaflet-bar">
         <button
           onClick={handleLocate}
-          className="bg-white p-2 hover:bg-gray-100 cursor-pointer flex items-center justify-center w-[34px] h-[34px]"
+          className="bg-background-default p-2 hover:bg-background-subtle cursor-pointer flex items-center justify-center w-[34px] h-[34px] border border-stroke-default rounded-sm shadow-sm"
           title="Locate Me"
-          style={{ border: 'none' }}
+          disabled={isLocating}
         >
-          <Locate className="w-5 h-5 text-gray-700" />
+          {isLocating ? (
+            <Loader2 className="w-5 h-5 text-brand-accent animate-spin" />
+          ) : (
+            <Locate className="w-5 h-5 text-content-default" />
+          )}
         </button>
       </div>
     </div>
@@ -147,7 +166,7 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
         maxZoom={22} // Increased max zoom for better separation
       >
         <LayersControl position="topright">
-          <LayersControl.BaseLayer checked name="Street Map (Carto)">
+          <LayersControl.BaseLayer name="Street Map (Carto)">
             <TileLayer
               attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
               url={tileLayerUrl}
@@ -156,7 +175,7 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
             />
           </LayersControl.BaseLayer>
           
-          <LayersControl.BaseLayer name="Satellite (Esri)">
+          <LayersControl.BaseLayer checked name="Satellite (Esri)">
             <TileLayer
               attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -273,20 +292,20 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
       </MapContainer>
       
       {/* Simple Legend Overlay */}
-      <div className="absolute bottom-5 left-5 bg-white/90 p-3 rounded-md shadow-md text-xs z-[1000] border border-gray-200 backdrop-blur-sm">
-        <h4 className="font-bold mb-2 text-gray-700">Tree Status</h4>
+      <div className="absolute bottom-5 left-5 bg-background-default/90 p-3 rounded-md shadow-md text-xs z-[1000] border border-stroke-default backdrop-blur-sm">
+        <h4 className="font-bold mb-2 text-content-default">Tree Status</h4>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#10b981] border border-gray-300"></div>
-            <span>Complete</span>
+            <div className="w-3 h-3 rounded-full bg-[#10b981] border border-stroke-default"></div>
+            <span className="text-content-default">Complete</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#f59e0b] border border-gray-300"></div>
-            <span>Pending Analysis</span>
+            <div className="w-3 h-3 rounded-full bg-[#f59e0b] border border-stroke-default"></div>
+            <span className="text-content-default">Pending Analysis</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#6366f1] border border-gray-300"></div>
-            <span>Verified</span>
+            <div className="w-3 h-3 rounded-full bg-[#6366f1] border border-stroke-default"></div>
+            <span className="text-content-default">Verified</span>
           </div>
         </div>
       </div>
