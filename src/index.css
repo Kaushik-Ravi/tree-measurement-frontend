@@ -595,3 +595,85 @@ canvas {
 /* --- END: WEBXR AR VIEWPORT FIX --- */
 
 
+
+/* Leaflet Geocoder Dark Mode Overrides */
+.dark-theme-map .leaflet-control-geocoder {
+  background-color: #1f2937; /* gray-800 */
+  border-color: #374151; /* gray-700 */
+  color: #f3f4f6; /* gray-100 */
+}
+
+.dark-theme-map .leaflet-control-geocoder-form input {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  border: 1px solid #374151;
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives li {
+  border-bottom: 1px solid #374151;
+  color: #d1d5db; /* gray-300 */
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives li:hover,
+.dark-theme-map .leaflet-control-geocoder-selected {
+  background-color: #374151; /* gray-700 */
+  color: white;
+}
+
+.dark-theme-map .leaflet-control-geocoder-icon {
+  background-color: #1f2937;
+  border-radius: 4px;
+  /* Invert icon color if it is an image, or set color if it is a font */
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Reset filter for the input/form so text is not inverted */
+.dark-theme-map .leaflet-control-geocoder-form {
+  filter: none;
+}
+
+
+/* Leaflet Geocoder Dark Mode Overrides */
+.dark-theme-map .leaflet-control-geocoder {
+  background-color: #1f2937; /* gray-800 */
+  border-color: #374151; /* gray-700 */
+  color: #f3f4f6; /* gray-100 */
+}
+
+.dark-theme-map .leaflet-control-geocoder-form input {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  border: 1px solid #374151;
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives li {
+  border-bottom: 1px solid #374151;
+  color: #d1d5db; /* gray-300 */
+}
+
+.dark-theme-map .leaflet-control-geocoder-alternatives li:hover,
+.dark-theme-map .leaflet-control-geocoder-selected {
+  background-color: #374151; /* gray-700 */
+  color: white;
+}
+
+.dark-theme-map .leaflet-control-geocoder-icon {
+  background-color: #1f2937;
+  border-radius: 4px;
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.dark-theme-map .leaflet-control-geocoder-form {
+  filter: none;
+}
+

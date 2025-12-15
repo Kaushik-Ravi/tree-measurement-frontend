@@ -83,7 +83,7 @@ const LocateControl = () => {
   });
 
   return (
-    <div className="leaflet-top leaflet-right" style={{ marginTop: '80px', marginRight: '10px' }}>
+    <div className="leaflet-bottom leaflet-right" style={{ marginBottom: '20px', marginRight: '10px', pointerEvents: 'auto' }}>
       <div className="leaflet-control">
         <button
           onClick={(e) => {
@@ -100,6 +100,20 @@ const LocateControl = () => {
       </div>
     </div>
   );
+};
+
+// Theme Controller to handle Dark/Light mode classes on the map container
+const ThemeController = ({ activeLayer }: { activeLayer: string }) => {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    if (activeLayer === 'Dark Mode') {
+      L.DomUtil.addClass(container, 'dark-theme-map');
+    } else {
+      L.DomUtil.removeClass(container, 'dark-theme-map');
+    }
+  }, [map, activeLayer]);
+  return null;
 };
 
 // Optimized Layer Component that handles updates without full re-renders
@@ -319,6 +333,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
           onBoundsChange={onBoundsChange} 
           onLayerChange={setActiveLayer}
         />
+        <ThemeController activeLayer={activeLayer} />
       </MapContainer>
     </div>
   );
