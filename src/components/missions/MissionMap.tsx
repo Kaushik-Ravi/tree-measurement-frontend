@@ -83,7 +83,7 @@ const LocateControl = () => {
   });
 
   return (
-    <div className="leaflet-bottom leaflet-right" style={{ marginBottom: '20px', marginRight: '10px', pointerEvents: 'auto' }}>
+    <div className="leaflet-top leaflet-left" style={{ marginTop: '80px', marginLeft: '10px', pointerEvents: 'auto' }}>
       <div className="leaflet-control">
         <button
           onClick={(e) => {
