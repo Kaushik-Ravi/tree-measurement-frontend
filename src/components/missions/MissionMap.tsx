@@ -96,9 +96,13 @@ const LocateControl = () => {
 };
 
 // Optimized Layer Component that handles updates without full re-renders
-const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegmentSelect: (s: any) => void, activeLayer: string }) => {
+const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: { data: any, onSegmentSelect: (s: any) => void, activeLayer: string, selectedSegments: any[] }) => {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
+
+  // Custom renderer with high tolerance for "fat finger" touch issues
+  // tolerance: 20 increases the hit area significantly
+  const myRenderer = useRef(L.canvas({ padding: 0.5, tolerance: 20 })).current;
 
   useEffect(() => {
     if (!data) return;
@@ -106,7 +110,16 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegm
     // Style function
     const getStyle = (feature: any) => {
       const status = feature.properties.status;
+      const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
       
+      if (isSelected) {
+        return {
+          color: '#f59e0b', // Orange
+          weight: 12, // Thicker for selected
+          opacity: 1
+        };
+      }
+
       // Dynamic color based on base layer
       let defaultColor = '#ffffff'; // Default white for Dark/Satellite
       if (activeLayer === 'OpenStreetMap') {
@@ -128,12 +141,15 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegm
     // Interaction handlers
     const onEachFeature = (feature: any, layer: L.Layer) => {
       layer.on({
-        click: () => {
-          (layer as L.Path).setStyle({ color: '#f59e0b', weight: 10, opacity: 1 });
-          onSegmentSelect(feature);
+        click: L.DomEvent.stop, // Prevent map click
+        mousedown: () => {
+           onSegmentSelect(feature);
         },
         mouseover: () => {
-          (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
+          const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
+          if (!isSelected) {
+            (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
+          }
         },
         mouseout: () => {
           // Re-apply base style on mouseout
@@ -147,7 +163,9 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegm
       // Initialize layer
       layerRef.current = L.geoJSON(data, {
         style: getStyle,
-        onEachFeature: onEachFeature
+        onEachFeature: onEachFeature,
+        // @ts-ignore
+        renderer: myRenderer
       }).addTo(map);
     } else {
       // Update data efficiently
@@ -164,7 +182,7 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegm
         layerRef.current = null;
       }
     };
-  }, [data, map, onSegmentSelect, activeLayer]);
+  }, [data, map, onSegmentSelect, activeLayer, selectedSegments]);
 
   return null;
 };
@@ -174,6 +192,7 @@ interface MissionMapProps {
   segments?: any; // Optional dynamic segments
   onBoundsChange?: (bounds: any) => void;
   isLoading?: boolean;
+  selectedSegments?: any[];
 }
 
 const MapController = ({ onBoundsChange, onLayerChange }: { onBoundsChange?: (bounds: any) => void, onLayerChange: (name: string) => void }) => {
@@ -201,7 +220,7 @@ const MapController = ({ onBoundsChange, onLayerChange }: { onBoundsChange?: (bo
   return null;
 };
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange, isLoading }) => {
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange, isLoading, selectedSegments = [] }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
   const [activeLayer, setActiveLayer] = React.useState('Dark Mode');
@@ -266,6 +285,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
             data={segments} 
             onSegmentSelect={onSegmentSelect}
             activeLayer={activeLayer}
+            selectedSegments={selectedSegments}
           />
         )}
         

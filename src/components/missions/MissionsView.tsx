@@ -13,11 +13,22 @@ interface MissionsViewProps {
 
 export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const { user } = useAuth();
-  const [selectedSegment, setSelectedSegment] = useState<any>(null);
+  const [selectedSegments, setSelectedSegments] = useState<any[]>([]);
   const [currentSquad, setCurrentSquad] = useState<any>(null);
   const [showSquadPanel, setShowSquadPanel] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [demoSegments, setDemoSegments] = useState<any>(null);
+
+  const handleSegmentSelect = (segment: any) => {
+    setSelectedSegments(prev => {
+      const exists = prev.find(s => s.properties.id === segment.properties.id);
+      if (exists) {
+        return prev.filter(s => s.properties.id !== segment.properties.id);
+      } else {
+        return [...prev, segment];
+      }
+    });
+  };
 
   // Load real data from Supabase based on bounds
   const fetchSegmentsInBounds = useCallback(async (bounds: any) => {
@@ -119,10 +130,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         {/* Map takes full space */}
         <div className="flex-1 relative z-0">
            <MissionMap 
-             onSegmentSelect={setSelectedSegment} 
+             onSegmentSelect={handleSegmentSelect} 
              segments={demoSegments} // Pass dynamic segments
              onBoundsChange={fetchSegmentsInBounds}
              isLoading={isLoading}
+             selectedSegments={selectedSegments}
            />
         </div>
 
@@ -168,11 +180,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         )}
 
         {/* Control Panel (Overlay on mobile, Sidebar on desktop) */}
-        {selectedSegment && !showSquadPanel && (
+        {selectedSegments.length > 0 && !showSquadPanel && (
           <div className="absolute bottom-0 left-0 right-0 md:relative md:w-96 md:border-l border-stroke-default bg-background-default shadow-xl z-10 max-h-[50vh] md:max-h-full overflow-y-auto transition-transform duration-300 animate-slide-up">
             <MissionControlPanel 
-              segment={selectedSegment} 
-              onClose={() => setSelectedSegment(null)} 
+              segments={selectedSegments} 
+              onClose={() => setSelectedSegments([])}
               currentSquad={currentSquad}
             />
           </div>
