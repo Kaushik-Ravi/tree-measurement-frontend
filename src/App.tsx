@@ -2387,6 +2387,8 @@ function App() {
 
                 {/* --- START: AR RULER WITH PLATFORM DETECTION --- */}
                 
+                <h3 className="text-lg font-bold text-content-default mb-4">Distance from Camera to Tree Base</h3>
+
                 {/* Platform-specific compatibility notes */}
                 {(() => {
                   const ua = navigator.userAgent;
@@ -2475,7 +2477,7 @@ function App() {
                 
                 <div className="space-y-2">
                     <label htmlFor="distance-input" className="block text-sm font-bold text-content-default">
-                        Distance from Camera to Tree Base
+                        Enter Distance (meters)
                     </label>
                     <div className="relative">
                         <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" />
