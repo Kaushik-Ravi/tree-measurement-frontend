@@ -28,18 +28,26 @@ const MOCK_SEGMENTS = {
 
 interface MissionMapProps {
   onSegmentSelect: (segment: any) => void;
+  segments?: any; // Optional dynamic segments
 }
 
-const MapController = () => {
+const MapController = ({ center }: { center?: [number, number] }) => {
   const map = useMap();
   useEffect(() => {
     map.invalidateSize();
-  }, [map]);
+    if (center) {
+      map.setView(center, 16);
+    }
+  }, [map, center]);
   return null;
 };
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect }) => {
-  
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments }) => {
+  // Calculate center from first segment if available
+  const center: [number, number] = segments?.features?.[0]?.geometry?.coordinates?.[0] 
+    ? [segments.features[0].geometry.coordinates[0][1], segments.features[0].geometry.coordinates[0][0]]
+    : [40.7829, -73.9654];
+
   const onEachFeature = (feature: any, layer: any) => {
     // Style based on status
     const status = feature.properties.status;
@@ -80,11 +88,14 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect }) => {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
-      <GeoJSON 
-        data={MOCK_SEGMENTS as any} 
-        onEachFeature={onEachFeature} 
-      />
-      <MapController />
+      {segments && (
+        <GeoJSON 
+          key={JSON.stringify(segments)} // Force re-render when data changes
+          data={segments} 
+          onEachFeature={onEachFeature} 
+        />
+      )}
+      <MapController center={center} />
     </MapContainer>
   );
 };

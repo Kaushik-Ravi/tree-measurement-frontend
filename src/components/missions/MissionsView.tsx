@@ -1,33 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MissionMap } from './MissionMap';
 import { MissionControlPanel } from './MissionControlPanel';
-import { SquadControl, MOCK_SQUADS } from './SquadControl';
-import { ArrowLeft, Users, Map as MapIcon } from 'lucide-react';
+import { SquadControl } from './SquadControl';
+import { ArrowLeft, Users, Map as MapIcon, X, Loader2 } from 'lucide-react';
+import { missionService } from '../../services/missionService';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MissionsViewProps {
   onBack: () => void;
 }
 
 export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
+  const { user } = useAuth();
   const [selectedSegment, setSelectedSegment] = useState<any>(null);
   const [currentSquad, setCurrentSquad] = useState<any>(null);
   const [showSquadPanel, setShowSquadPanel] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [demoSegments, setDemoSegments] = useState<any>(null);
 
-  // Mock Squad Actions
-  const handleJoinSquad = (code: string) => {
-    const squad = MOCK_SQUADS.find(s => s.code === code);
-    if (squad) {
-      setCurrentSquad(squad);
-      alert(`Joined ${squad.name}!`);
+  // Load demo data on mount
+  useEffect(() => {
+    // Simulate fetching local data
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const data = missionService.generateDemoSegments(pos.coords.latitude, pos.coords.longitude);
+        setDemoSegments(data);
+      }, () => {
+        // Fallback to NYC if no location
+        const data = missionService.generateDemoSegments(40.7829, -73.9654);
+        setDemoSegments(data);
+      });
+    }
+  }, []);
+
+  const handleJoinSquad = async (code: string) => {
+    if (!user) return;
+    setIsLoading(true);
+    const { data, error } = await missionService.joinSquad(code, user.id);
+    setIsLoading(false);
+    
+    if (error) {
+      alert('Error joining squad: ' + (error.message || error));
     } else {
-      alert('Invalid Squad Code');
+      setCurrentSquad(data);
+      alert(`Joined ${data?.name}!`);
     }
   };
 
-  const handleCreateSquad = (name: string) => {
-    const newSquad = { id: `s${Date.now()}`, name, code: `SQ-${Math.floor(Math.random()*1000)}`, members: 1 };
-    setCurrentSquad(newSquad);
-    alert(`Created ${name}! Share code: ${newSquad.code}`);
+  const handleCreateSquad = async (name: string) => {
+    if (!user) return;
+    setIsLoading(true);
+    const { data, error } = await missionService.createSquad(name, user.id);
+    setIsLoading(false);
+
+    if (error) {
+      alert('Error creating squad: ' + (error.message || error));
+    } else {
+      setCurrentSquad(data);
+      alert(`Created ${data?.name}! Share code: ${data?.code}`);
+    }
   };
 
   return (
@@ -45,7 +76,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         </div>
         
         <button 
-          onClick={() => setShowSquadPanel(!showSquadPanel)}
+          onClick={() => setShowSquadPanel(true)}
           className={`p-2 rounded-lg transition-colors ${showSquadPanel ? 'bg-brand-primary text-white' : 'hover:bg-background-subtle text-content-default'}`}
         >
           <Users size={24} />
@@ -56,31 +87,49 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
       <div className="flex-1 flex relative overflow-hidden">
         {/* Map takes full space */}
         <div className="flex-1 relative z-0">
-           <MissionMap onSegmentSelect={setSelectedSegment} />
+           <MissionMap 
+             onSegmentSelect={setSelectedSegment} 
+             segments={demoSegments} // Pass dynamic segments
+           />
         </div>
 
-        {/* Squad Panel (Sidebar) */}
+        {/* Squad Panel (Modal / Bottom Sheet) */}
         {showSquadPanel && (
-          <div className="absolute top-0 right-0 bottom-0 w-80 bg-background-default border-l border-stroke-default shadow-xl z-20 p-4 animate-slide-left overflow-y-auto">
-            <h2 className="text-lg font-bold text-content-default mb-4">Squad Management</h2>
-            <SquadControl 
-              currentSquad={currentSquad}
-              onJoinSquad={handleJoinSquad}
-              onCreateSquad={handleCreateSquad}
-              onLeaveSquad={() => setCurrentSquad(null)}
-            />
-            
-            {/* Manager Assignment Simulation */}
-            <div className="mt-8 pt-6 border-t border-stroke-default">
-              <h3 className="font-bold text-content-default mb-2">Manager Tools</h3>
-              <p className="text-xs text-content-subtle mb-4">Simulate assigning tasks to your squad.</p>
-              <button 
-                disabled={!currentSquad}
-                className="w-full py-2 bg-background-subtle border border-stroke-default rounded-lg text-sm font-medium hover:bg-background-inset disabled:opacity-50"
-                onClick={() => alert('Manager Mode: Select streets on the map to assign to ' + currentSquad.name)}
-              >
-                Assign Streets to Squad
-              </button>
+          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in">
+            <div className="bg-background-default w-full md:w-[400px] md:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
+              <div className="p-4 border-b border-stroke-default flex items-center justify-between">
+                <h2 className="text-lg font-bold text-content-default">Squad Management</h2>
+                <button onClick={() => setShowSquadPanel(false)} className="p-2 hover:bg-background-subtle rounded-full">
+                  <X size={20} className="text-content-subtle" />
+                </button>
+              </div>
+              
+              <div className="p-4 overflow-y-auto">
+                <SquadControl 
+                  currentSquad={currentSquad}
+                  onJoinSquad={handleJoinSquad}
+                  onCreateSquad={handleCreateSquad}
+                  onLeaveSquad={() => setCurrentSquad(null)}
+                  isLoading={isLoading}
+                />
+                
+                {/* Manager Assignment Simulation */}
+                <div className="mt-6 pt-6 border-t border-stroke-default">
+                  <h3 className="font-bold text-content-default mb-2">Manager Tools</h3>
+                  <p className="text-xs text-content-subtle mb-4">Simulate assigning tasks to your squad.</p>
+                  <button 
+                    disabled={!currentSquad}
+                    className="w-full py-3 bg-background-subtle border border-stroke-default rounded-lg text-sm font-medium hover:bg-background-inset disabled:opacity-50 flex items-center justify-center gap-2"
+                    onClick={() => {
+                      setShowSquadPanel(false);
+                      alert('Manager Mode Active: Tap any street to assign it to ' + currentSquad.name);
+                    }}
+                  >
+                    <MapIcon size={16} />
+                    Assign Streets to Squad
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

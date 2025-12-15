@@ -1,20 +1,15 @@
 import React, { useState } from 'react';
-import { Users, UserPlus, LogOut, Shield, Copy, Check } from 'lucide-react';
-
-// Mock Data for simulation
-export const MOCK_SQUADS = [
-  { id: 's1', name: 'Green Team Alpha', code: 'GTA-2025', members: 4 },
-  { id: 's2', name: 'Urban Rangers', code: 'URB-99', members: 2 }
-];
+import { Users, UserPlus, LogOut, Shield, Copy, Check, Loader2 } from 'lucide-react';
 
 interface SquadControlProps {
   currentSquad: any | null;
-  onJoinSquad: (code: string) => void;
-  onCreateSquad: (name: string) => void;
+  onJoinSquad: (code: string) => Promise<void>;
+  onCreateSquad: (name: string) => Promise<void>;
   onLeaveSquad: () => void;
+  isLoading?: boolean;
 }
 
-export const SquadControl: React.FC<SquadControlProps> = ({ currentSquad, onJoinSquad, onCreateSquad, onLeaveSquad }) => {
+export const SquadControl: React.FC<SquadControlProps> = ({ currentSquad, onJoinSquad, onCreateSquad, onLeaveSquad, isLoading = false }) => {
   const [mode, setMode] = useState<'VIEW' | 'JOIN' | 'CREATE'>('VIEW');
   const [inputVal, setInputVal] = useState('');
   const [copied, setCopied] = useState(false);
@@ -25,6 +20,14 @@ export const SquadControl: React.FC<SquadControlProps> = ({ currentSquad, onJoin
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleAction = async () => {
+    if (!inputVal) return;
+    if (mode === 'JOIN') await onJoinSquad(inputVal);
+    if (mode === 'CREATE') await onCreateSquad(inputVal);
+    setInputVal('');
+    setMode('VIEW');
   };
 
   if (currentSquad) {
@@ -83,12 +86,12 @@ export const SquadControl: React.FC<SquadControlProps> = ({ currentSquad, onJoin
         </div>
       )}
 
-      {mode === 'JOIN' && (
+      {(mode === 'JOIN' || mode === 'CREATE') && (
         <div className="space-y-3 animate-fade-in">
-          <h3 className="font-bold text-content-default text-sm">Join a Squad</h3>
+          <h3 className="font-bold text-content-default text-sm">{mode === 'JOIN' ? 'Join a Squad' : 'Create New Squad'}</h3>
           <input 
             type="text" 
-            placeholder="Enter Squad Code"
+            placeholder={mode === 'JOIN' ? "Enter Squad Code" : "Squad Name (e.g. Tree Huggers)"}
             className="w-full p-2 bg-background-default border border-stroke-default rounded-lg text-sm"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
@@ -96,34 +99,11 @@ export const SquadControl: React.FC<SquadControlProps> = ({ currentSquad, onJoin
           <div className="flex gap-2">
             <button onClick={() => setMode('VIEW')} className="flex-1 py-2 text-xs font-medium text-content-subtle hover:bg-background-inset rounded-lg">Cancel</button>
             <button 
-              onClick={() => onJoinSquad(inputVal)}
-              disabled={!inputVal}
-              className="flex-1 py-2 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary-hover disabled:opacity-50"
+              onClick={handleAction}
+              disabled={!inputVal || isLoading}
+              className="flex-1 py-2 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary-hover disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              Join
-            </button>
-          </div>
-        </div>
-      )}
-
-      {mode === 'CREATE' && (
-        <div className="space-y-3 animate-fade-in">
-          <h3 className="font-bold text-content-default text-sm">Create New Squad</h3>
-          <input 
-            type="text" 
-            placeholder="Squad Name (e.g. Tree Huggers)"
-            className="w-full p-2 bg-background-default border border-stroke-default rounded-lg text-sm"
-            value={inputVal}
-            onChange={(e) => setInputVal(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <button onClick={() => setMode('VIEW')} className="flex-1 py-2 text-xs font-medium text-content-subtle hover:bg-background-inset rounded-lg">Cancel</button>
-            <button 
-              onClick={() => onCreateSquad(inputVal)}
-              disabled={!inputVal}
-              className="flex-1 py-2 bg-brand-primary text-white rounded-lg text-xs font-bold hover:bg-brand-primary-hover disabled:opacity-50"
-            >
-              Create
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : (mode === 'JOIN' ? 'Join' : 'Create')}
             </button>
           </div>
         </div>
