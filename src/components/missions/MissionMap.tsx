@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
+import { Crosshair } from 'lucide-react';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -55,41 +56,47 @@ const SearchControl = () => {
 // Locate Me Control Component
 const LocateControl = () => {
   const map = useMap();
+  const [isLocating, setIsLocating] = React.useState(false);
 
   const handleLocate = () => {
-    map.locate({ setView: true, maxZoom: 16 });
+    setIsLocating(true);
+    // Don't set view automatically, we'll handle it in locationfound
+    map.locate({ setView: false, watch: false, enableHighAccuracy: true });
   };
 
+  useMapEvents({
+    locationfound(e) {
+      setIsLocating(false);
+      // Fly to location at high zoom (18)
+      map.flyTo(e.latlng, 18, {
+        animate: true,
+        duration: 1.5
+      });
+      
+      // Add a marker or circle
+      L.circle(e.latlng, { radius: e.accuracy / 2 }).addTo(map);
+    },
+    locationerror(e) {
+      setIsLocating(false);
+      alert("Could not access location: " + e.message);
+    }
+  });
+
   return (
-    <div className="leaflet-bottom leaflet-right">
-      <div className="leaflet-control leaflet-bar">
-        <a 
-          href="#" 
-          role="button" 
-          title="Locate me"
+    <div className="leaflet-top leaflet-right" style={{ marginTop: '80px', marginRight: '10px' }}>
+      <div className="leaflet-control">
+        <button
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             handleLocate();
           }}
-          style={{ 
-            width: '30px', 
-            height: '30px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            backgroundColor: 'white',
-            cursor: 'pointer'
-          }}
+          className="bg-white hover:bg-gray-100 text-gray-800 p-2 rounded-lg shadow-md border border-gray-300 flex items-center justify-center transition-colors"
+          title="Locate Me"
+          style={{ width: '34px', height: '34px' }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="3" />
-            <line x1="12" y1="2" x2="12" y2="5" />
-            <line x1="12" y1="19" x2="12" y2="22" />
-            <line x1="2" y1="12" x2="5" y2="12" />
-            <line x1="19" y1="12" x2="22" y2="12" />
-          </svg>
-        </a>
+          <Crosshair className={`w-5 h-5 ${isLocating ? 'animate-spin text-blue-600' : ''}`} />
+        </button>
       </div>
     </div>
   );
@@ -106,6 +113,18 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
 
   useEffect(() => {
     if (!data) return;
+
+    // SORTING FIX: Sort features by length (descending)
+    // This ensures longer streets are drawn FIRST (at the bottom)
+    // and shorter streets are drawn LAST (on top).
+    // This allows small connector streets to be clickable even when between two large selected streets.
+    const sortedFeatures = [...data.features].sort((a: any, b: any) => {
+      const lenA = a.properties.length_meters || 0;
+      const lenB = b.properties.length_meters || 0;
+      return lenB - lenA; // Descending order
+    });
+
+    const sortedData = { ...data, features: sortedFeatures };
 
     // Style function
     const getStyle = (feature: any) => {
@@ -149,6 +168,13 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
           const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
           if (!isSelected) {
             (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
+            // Bring to front on hover to help with selection
+            if (L.Browser.canvas) {
+                // Canvas doesn't support bringToFront for individual paths easily without full redraw
+                // But since we sorted them, the small ones are already on top.
+            } else {
+                (layer as L.Path).bringToFront();
+            }
           }
         },
         mouseout: () => {
@@ -161,7 +187,7 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
 
     if (!layerRef.current) {
       // Initialize layer
-      layerRef.current = L.geoJSON(data, {
+      layerRef.current = L.geoJSON(sortedData, {
         style: getStyle,
         onEachFeature: onEachFeature,
         // @ts-ignore
@@ -170,7 +196,7 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
     } else {
       // Update data efficiently
       layerRef.current.clearLayers();
-      layerRef.current.addData(data);
+      layerRef.current.addData(sortedData);
       // Force style update when layer changes
       layerRef.current.setStyle(getStyle);
     }
