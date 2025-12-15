@@ -9,10 +9,11 @@ interface CommunityGroveViewProps {
   isLoading: boolean;
   onClaimTree: (treeId: string) => void;
   onBack: () => void;
+  currentUserId?: string;
 }
 
 // --- START: SURGICAL REPLACEMENT (THEMING & STYLING) ---
-const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: string) => void; }) => {
+const TreeCard = ({ tree, onClaimTree, isOwnTree }: { tree: PendingTree; onClaimTree: (id: string) => void; isOwnTree: boolean; }) => {
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageError, setImageError] = useState(false);
 
@@ -47,7 +48,7 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
     const isNearComplete = verificationProgress >= 60; // 3+ analyses
 
     return (
-        <div className="bg-background-default border border-stroke-default rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
+        <div className={`bg-background-default border ${isOwnTree ? 'border-brand-primary ring-1 ring-brand-primary' : 'border-stroke-default'} rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow`}>
             <div className="relative bg-background-inset h-40">
                 {/* Loading Spinner */}
                 {!imageLoaded && !imageError && (
@@ -82,6 +83,13 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
                     <Users size={12} />
                     <span>{tree.analysis_count}</span>
                 </div>
+
+                {/* Own Tree Badge */}
+                {isOwnTree && (
+                    <div className="absolute top-2 left-2 bg-brand-primary text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                        <span>My Tree</span>
+                    </div>
+                )}
             </div>
             
             <div className="p-3 flex-grow flex flex-col space-y-2.5">
@@ -123,24 +131,32 @@ const TreeCard = ({ tree, onClaimTree }: { tree: PendingTree; onClaimTree: (id: 
                 <button
                     onClick={() => onClaimTree(tree.id)}
                     className={`w-full mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${
-                        isNearComplete
-                            ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
-                            : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover'
+                        isOwnTree 
+                            ? 'bg-brand-secondary text-content-on-brand hover:bg-brand-secondary-hover'
+                            : isNearComplete
+                                ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
+                                : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover'
                     }`}
                 >
                     <GitMerge size={16} />
-                    {isNearComplete ? 'Complete Verification' : 'Analyze'}
+                    {isOwnTree ? 'Complete Analysis' : (isNearComplete ? 'Complete Verification' : 'Analyze')}
                 </button>
             </div>
         </div>
     );
 };
 
-export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBack }: CommunityGroveViewProps) {
+export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBack, currentUserId }: CommunityGroveViewProps) {
+    const [showMyPendingOnly, setShowMyPendingOnly] = useState(false);
+
+    const filteredTrees = showMyPendingOnly && currentUserId
+        ? pendingTrees.filter(tree => tree.user_id === currentUserId)
+        : pendingTrees;
+
     return (
         <div className="w-full h-full flex flex-col bg-background-subtle">
             <header className="flex-shrink-0 p-4 border-b border-stroke-default bg-background-default/80 backdrop-blur-sm sticky top-0 z-10">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="flex items-center gap-3">
                          <ListTree className="w-7 h-7 text-brand-secondary" />
                          <div>
@@ -148,9 +164,25 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                             <p className="text-xs text-content-subtle">Help verify pending tree measurements.</p>
                          </div>
                     </div>
-                    <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-secondary hover:bg-brand-secondary/10 p-2 rounded-lg">
-                        <ArrowLeft size={16} /> Back to Homepage
-                    </button>
+                    
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        {currentUserId && (
+                            <button 
+                                onClick={() => setShowMyPendingOnly(!showMyPendingOnly)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                    showMyPendingOnly 
+                                        ? 'bg-brand-primary text-content-on-brand' 
+                                        : 'bg-background-inset text-content-default hover:bg-background-subtle border border-stroke-default'
+                                }`}
+                            >
+                                <Users size={16} />
+                                {showMyPendingOnly ? 'Showing My Trees' : 'My Pending Trees'}
+                            </button>
+                        )}
+                        <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-brand-secondary hover:bg-brand-secondary/10 p-2 rounded-lg ml-auto md:ml-0">
+                            <ArrowLeft size={16} /> Back
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -160,17 +192,26 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                         <Loader2 className="w-8 h-8 text-content-subtle animate-spin" />
                         <span className="ml-2 text-content-subtle">Loading Grove...</span>
                     </div>
-                ) : pendingTrees.length === 0 ? (
+                ) : filteredTrees.length === 0 ? (
                     <div className="text-center py-16 px-4">
-                        <h2 className="text-lg font-semibold text-content-default">All Saplings Analyzed!</h2>
+                        <h2 className="text-lg font-semibold text-content-default">
+                            {showMyPendingOnly ? "No Pending Trees Found" : "All Saplings Analyzed!"}
+                        </h2>
                         <p className="text-content-subtle mt-2 max-w-md mx-auto">
-                            There are currently no pending trees in the grove. Check back later, or contribute a new one using the "Quick Capture" mode.
+                            {showMyPendingOnly 
+                                ? "You don't have any pending trees waiting for analysis." 
+                                : "There are currently no pending trees in the grove. Check back later, or contribute a new one using the \"Quick Capture\" mode."}
                         </p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {pendingTrees.map(tree => (
-                            <TreeCard key={tree.id} tree={tree} onClaimTree={onClaimTree} />
+                        {filteredTrees.map(tree => (
+                            <TreeCard 
+                                key={tree.id} 
+                                tree={tree} 
+                                onClaimTree={onClaimTree} 
+                                isOwnTree={currentUserId === tree.user_id}
+                            />
                         ))}
                     </div>
                 )}

@@ -70,6 +70,7 @@ export interface CommunityAnalysisPayload {
   condition?: string;
   ownership?: string;
   remarks?: string;
+  force_complete?: boolean; // Flag to indicate if the owner is completing the analysis
   // --- END: SURGICAL ADDITION ---
 }
 // --- END NEW BLOCK ---

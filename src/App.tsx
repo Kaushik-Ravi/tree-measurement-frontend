@@ -1891,12 +1891,24 @@ function App() {
     if (!claimedTree || !currentMetrics || !session?.access_token) return;
     setAppStatus('ANALYSIS_SAVING');
     try {
+      const isOwner = user?.id === claimedTree.user_id;
       const payload: CommunityAnalysisPayload = {
         metrics: currentMetrics,
         species: currentIdentification?.bestMatch,
         ...additionalData,
+        force_complete: isOwner, // If owner, request immediate completion
       };
       await submitCommunityAnalysis(claimedTree.id, payload, session.access_token);
+      
+      if (isOwner) {
+          setInstructionText("✅ Analysis complete! Your tree has been updated.");
+          // Refresh results so it appears in "Your Mapped Trees" immediately
+          const updatedResults = await getResults(session.access_token);
+          setAllResults(updatedResults);
+      } else {
+          setInstructionText("✅ Analysis submitted! Thank you for contributing.");
+      }
+      
       softReset();
     } catch(e: any) {
       setErrorMessage(e.message);
@@ -2123,7 +2135,7 @@ function App() {
   
   if (currentView === 'CALIBRATION') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
-  if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'COMMUNITY_GROVE_LOADING' || appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} /> }
+  if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'COMMUNITY_GROVE_LOADING' || appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} currentUserId={user?.id} /> }
 
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
   const isBusy = ['ANALYSIS_PROCESSING', 'ANALYSIS_SAVING', 'SESSION_PROCESSING_PHOTO', 'COMMUNITY_GROVE_LOADING'].includes(appStatus) || isCO2Calculating || isHistoryLoading;
