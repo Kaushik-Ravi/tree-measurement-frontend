@@ -650,6 +650,7 @@ function App() {
             console.log('[Photo Calibration] 🎉 Tier 1 calibration complete - focal length:', focalLengthValue, 'mm');
             console.log('[Photo Calibration] Proceeding to distance entry...');
             setAppStatus('SESSION_AWAITING_DISTANCE'); 
+            setIsPanelOpen(true);
             setInstructionText("Great! Now, please enter the distance to the tree's base.");
           } else {
             // Tier 1 FAILED - Check for existing calibration or proceed to manual
@@ -1510,6 +1511,7 @@ function App() {
       // Skip 'SESSION_PROCESSING_PHOTO' to avoid re-triggering EXIF check loop.
       // We have calibration now, so go straight to distance entry.
       setAppStatus('SESSION_AWAITING_DISTANCE');
+      setIsPanelOpen(true); // Ensure panel is open so user sees the distance input
       setInstructionText("Calibration saved! Now enter the distance to the tree.");
       // --- END: SURGICAL FIX ---
     } else {
@@ -2484,7 +2486,7 @@ function App() {
                 </button>
 
                 <button 
-                  onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setInstructionText("Using standard settings. Please enter the distance."); }}
+                  onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setIsPanelOpen(true); setInstructionText("Using standard settings. Please enter the distance."); }}
                   className="w-full text-left p-4 bg-background-subtle text-content-default rounded-lg hover:bg-background-inset transition-all flex items-center gap-4 border border-stroke-default"
                 >
                   <ShieldCheck className="w-6 h-6 flex-shrink-0 text-content-subtle" />
