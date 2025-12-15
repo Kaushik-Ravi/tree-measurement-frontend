@@ -63,38 +63,41 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
             <div className="flex justify-end mb-2">
               <button 
                 onClick={() => window.open(slide.src, '_blank')}
-                className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium"
               >
                 <Maximize2 className="w-4 h-4" /> Open Fullscreen
               </button>
             </div>
-            <iframe 
+            {/* Use embed for better mobile support than iframe */}
+            <embed 
               src={slide.src} 
-              className="w-full flex-1 rounded-lg border border-gray-200 shadow-inner bg-gray-50"
-              title="PDF Viewer"
+              type="application/pdf"
+              className="w-full flex-1 rounded-lg border border-gray-200 dark:border-gray-700 shadow-inner bg-gray-50 dark:bg-gray-800"
             />
             <p className="text-xs text-gray-400 mt-2 text-center">
-              Tip: Rotate your phone to landscape for better reading.
+              Tip: If the PDF doesn't load, click "Open Fullscreen" to view it in your browser.
             </p>
           </div>
         );
 
       case 'video':
         return (
-          <div className="w-full aspect-video rounded-xl overflow-hidden shadow-lg bg-black">
-            <iframe 
-              src={slide.src} 
-              className="w-full h-full"
-              title="Video Player"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-              allowFullScreen
-            />
+          <div className="w-full h-full flex flex-col justify-center">
+             <div className="w-full aspect-video rounded-xl overflow-hidden shadow-lg bg-black">
+              <iframe 
+                src={slide.src} 
+                className="w-full h-full"
+                title="Video Player"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+              />
+            </div>
           </div>
         );
 
       case 'image':
         return (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 rounded-xl p-2 border border-gray-100">
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 rounded-xl p-2 border border-gray-100 dark:border-gray-800">
             <img 
               src={slide.src} 
               alt={slide.title} 
@@ -102,7 +105,7 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
             />
             <button 
               onClick={() => window.open(slide.src, '_blank')}
-              className="mt-2 text-xs text-emerald-600 flex items-center gap-1"
+              className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
             >
               <Maximize2 className="w-3 h-3" /> Tap to zoom
             </button>
@@ -118,10 +121,10 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
                 onClick={() => toggleCheck(item)}
                 className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-3
                   ${checkedItems.has(item) 
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900' 
-                    : 'border-gray-200 hover:border-emerald-200 text-gray-700'}`}
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-100' 
+                    : 'border-gray-200 dark:border-gray-700 hover:border-emerald-200 dark:hover:border-emerald-800 text-gray-700 dark:text-gray-300'}`}
               >
-                <div className={`mt-0.5 shrink-0 ${checkedItems.has(item) ? 'text-emerald-600' : 'text-gray-300'}`}>
+                <div className={`mt-0.5 shrink-0 ${checkedItems.has(item) ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-300 dark:text-gray-600'}`}>
                   {checkedItems.has(item) ? <CheckSquare className="w-6 h-6" /> : <Square className="w-6 h-6" />}
                 </div>
                 <span className="font-medium leading-relaxed">{item}</span>
@@ -132,7 +135,7 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
 
       default: // text
         return (
-          <div className="text-gray-600 leading-relaxed whitespace-pre-line text-lg max-w-prose">
+          <div className="text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-line text-lg max-w-prose">
             {slide.content}
           </div>
         );
@@ -141,22 +144,22 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-      <div className={`bg-white w-full ${slide.type === 'pdf' || slide.type === 'image' ? 'max-w-4xl h-[85vh]' : 'max-w-lg max-h-[90vh]'} rounded-2xl overflow-hidden shadow-2xl flex flex-col transition-all duration-300`}>
+      <div className={`bg-white dark:bg-gray-900 w-full ${slide.type === 'pdf' || slide.type === 'image' ? 'max-w-4xl h-[85vh]' : 'max-w-lg max-h-[90vh]'} rounded-2xl overflow-hidden shadow-2xl flex flex-col transition-all duration-300`}>
         
         {/* Header */}
-        <div className="p-4 border-b flex items-center justify-between bg-emerald-50 shrink-0">
+        <div className="p-4 border-b dark:border-gray-800 flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-emerald-800 uppercase tracking-wider">
+            <span className="text-sm font-bold text-emerald-800 dark:text-emerald-200 uppercase tracking-wider">
               {chapter.title}
             </span>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-emerald-100 rounded-full transition-colors">
-            <X className="w-5 h-5 text-emerald-700" />
+          <button onClick={onClose} className="p-2 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-full transition-colors">
+            <X className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
           </button>
         </div>
 
         {/* Progress Bar */}
-        <div className="h-1 bg-gray-100 w-full shrink-0">
+        <div className="h-1 bg-gray-100 dark:bg-gray-800 w-full shrink-0">
           <div 
             className="h-full bg-emerald-500 transition-all duration-300 ease-out"
             style={{ width: `${progress}%` }}
@@ -168,14 +171,14 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
           {/* Icon & Title (Only show for non-media slides to save space) */}
           {slide.type !== 'pdf' && slide.type !== 'image' && (
             <>
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 shrink-0">
-                {Icon && <Icon className="w-8 h-8 text-emerald-600" />}
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-4 shrink-0">
+                {Icon && <Icon className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />}
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2 text-center">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2 text-center">
                 {slide.title}
               </h2>
               {slide.content && slide.type !== 'text' && (
-                <p className="text-gray-500 text-center mb-6 max-w-md">
+                <p className="text-gray-500 dark:text-gray-400 text-center mb-6 max-w-md">
                   {slide.content}
                 </p>
               )}
@@ -187,20 +190,20 @@ export const TrainingChapter: React.FC<TrainingChapterProps> = ({ chapter, onClo
         </div>
 
         {/* Footer / Navigation */}
-        <div className="p-6 border-t bg-gray-50 flex items-center justify-between shrink-0">
+        <div className="p-6 border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-between shrink-0">
           <button 
             onClick={handlePrev}
             disabled={currentSlide === 0}
             className={`flex items-center gap-1 px-4 py-2 rounded-lg font-medium transition-colors
               ${currentSlide === 0 
-                ? 'text-gray-300 cursor-not-allowed' 
-                : 'text-gray-600 hover:bg-gray-200'}`}
+                ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
           >
             <ChevronLeft className="w-5 h-5" />
             Back
           </button>
 
-          <div className="text-sm text-gray-400 font-medium">
+          <div className="text-sm text-gray-400 dark:text-gray-500 font-medium">
             {currentSlide + 1} / {totalSlides}
           </div>
 

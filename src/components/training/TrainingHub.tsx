@@ -39,9 +39,9 @@ export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Header */}
-      <div className="bg-emerald-600 text-white p-6 shadow-lg">
+      <div className="bg-emerald-600 dark:bg-emerald-800 text-white p-6 shadow-lg">
         <button 
           onClick={onBack}
           className="flex items-center gap-2 text-emerald-100 hover:text-white mb-4 transition-colors"
@@ -74,11 +74,11 @@ export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
         
         {/* Progress Overview */}
         <div className="mb-8">
-          <div className="flex justify-between text-sm font-medium text-gray-600 mb-2">
+          <div className="flex justify-between text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
             <span>Your Progress</span>
             <span>{Math.round((completedChapters.length / trainingModules.length) * 100)}%</span>
           </div>
-          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div 
               className="h-full bg-emerald-500 transition-all duration-500"
               style={{ width: `${(completedChapters.length / trainingModules.length) * 100}%` }}
@@ -98,27 +98,27 @@ export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
                 key={module.id}
                 onClick={() => !isLocked && setActiveChapterId(module.id)}
                 disabled={isLocked}
-                className={`w-full text-left bg-white p-6 rounded-xl shadow-sm border-2 transition-all
+                className={`w-full text-left bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border-2 transition-all
                   ${isLocked 
-                    ? 'border-gray-100 opacity-60 cursor-not-allowed' 
-                    : 'border-transparent hover:border-emerald-500 hover:shadow-md cursor-pointer'}
-                  ${isCompleted ? 'bg-emerald-50/50' : ''}
+                    ? 'border-gray-100 dark:border-gray-700 opacity-60 cursor-not-allowed' 
+                    : 'border-transparent hover:border-emerald-500 dark:hover:border-emerald-500 hover:shadow-md cursor-pointer'}
+                  ${isCompleted ? 'bg-emerald-50/50 dark:bg-emerald-900/20' : ''}
                 `}
               >
                 <div className="flex items-start gap-4">
-                  <div className={`p-3 rounded-lg shrink-0 ${isCompleted ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                  <div className={`p-3 rounded-lg shrink-0 ${isCompleted ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                     {isCompleted ? <CheckCircle className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
                   </div>
                   
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      <h3 className={`font-bold text-lg ${isCompleted ? 'text-emerald-800' : 'text-gray-800'}`}>
+                      <h3 className={`font-bold text-lg ${isCompleted ? 'text-emerald-800 dark:text-emerald-300' : 'text-gray-800 dark:text-white'}`}>
                         {module.title}
                       </h3>
-                      {isLocked && <Lock className="w-4 h-4 text-gray-400" />}
+                      {isLocked && <Lock className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
                       {!isLocked && !isCompleted && <PlayCircle className="w-5 h-5 text-emerald-500" />}
                     </div>
-                    <p className="text-gray-600 text-sm leading-relaxed">
+                    <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
                       {module.description}
                     </p>
                   </div>
@@ -130,14 +130,14 @@ export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
 
         {/* Footer Message */}
         {allComplete ? (
-          <div className="mt-8 p-6 bg-yellow-50 border border-yellow-200 rounded-xl text-center">
-            <h3 className="text-xl font-bold text-yellow-800 mb-2">🎉 Congratulations!</h3>
-            <p className="text-yellow-700">
+          <div className="mt-8 p-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl text-center">
+            <h3 className="text-xl font-bold text-yellow-800 dark:text-yellow-200 mb-2">🎉 Congratulations!</h3>
+            <p className="text-yellow-700 dark:text-yellow-300">
               You have completed all training modules. You are now ready to contribute scientific data to the Community Grove.
             </p>
           </div>
         ) : (
-          <div className="mt-8 text-center text-gray-400 text-sm">
+          <div className="mt-8 text-center text-gray-400 dark:text-gray-500 text-sm">
             Complete all chapters to unlock your badge.
           </div>
         )}
