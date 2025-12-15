@@ -23,11 +23,12 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   useEffect(() => {
     const fetchSegments = async () => {
       // 1. Try to fetch real segments from Supabase first
+      // Note: Loading all 57k segments at once will crash the browser. 
+      // We limit to 10,000 for performance. Ideally, we should load by viewport (BBOX).
       const { data, error } = await supabase
         .from('street_segments')
         .select('*')
-        .eq('status', 'available') // Just fetch available for now to test
-        .limit(500); // Safety limit
+        .limit(10000); // Increased limit to show more of Pune
 
       if (data && data.length > 0) {
         console.log('Loaded real segments from Supabase:', data.length);
