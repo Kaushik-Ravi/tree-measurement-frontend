@@ -272,7 +272,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, onAnalyzeT
                         aria-label="Complete analysis"
                       >
                         <FlaskConical className="w-3 h-3" />
-                        Analyze
+                        Complete Analysis
                       </button>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); onEditResult(result); }} className="p-2 text-content-subtle hover:text-brand-secondary" aria-label="Edit result"><Edit className="w-5 h-5" /></button>

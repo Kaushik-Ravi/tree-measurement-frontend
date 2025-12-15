@@ -1,9 +1,10 @@
 // src/components/TreeMapView.tsx
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer, LayersControl, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import { DivIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { TreeResult } from '../apiService';
-import { MapPin, Eye, FlaskConical } from 'lucide-react';
+import { MapPin, Eye, FlaskConical, Locate } from 'lucide-react';
 import { useMemo } from 'react';
 import { renderToString } from 'react-dom/server';
 import { TreePine } from 'lucide-react';
@@ -14,6 +15,30 @@ interface TreeMapViewProps {
   onTreeClick: (tree: TreeResult) => void;
   onAnalyzeTree?: (treeId: string) => void; // NEW: Optional callback for analyzing pending trees
   theme?: 'light' | 'dark';
+}
+
+// Component to handle "Locate Me" functionality
+function LocateControl() {
+  const map = useMap();
+
+  const handleLocate = () => {
+    map.locate({ setView: true, maxZoom: 18 });
+  };
+
+  return (
+    <div className="leaflet-bottom leaflet-right">
+      <div className="leaflet-control leaflet-bar">
+        <button
+          onClick={handleLocate}
+          className="bg-white p-2 hover:bg-gray-100 cursor-pointer flex items-center justify-center w-[34px] h-[34px]"
+          title="Locate Me"
+          style={{ border: 'none' }}
+        >
+          <Locate className="w-5 h-5 text-gray-700" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // Custom tree marker icons by status using Tree icon from lucide-react
@@ -113,108 +138,158 @@ export function TreeMapView({ trees, onTreeClick, onAnalyzeTree, theme = 'light'
   }
 
   return (
-    <div className="h-[400px] sm:h-[600px] rounded-lg overflow-hidden border border-stroke-default shadow-md">
+    <div className="h-[400px] sm:h-[600px] rounded-lg overflow-hidden border border-stroke-default shadow-md relative">
       <MapContainer
         center={mapCenter}
         zoom={defaultZoom}
         className="h-full w-full"
         scrollWheelZoom={true}
+        maxZoom={22} // Increased max zoom for better separation
       >
-        <TileLayer
-          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url={tileLayerUrl}
-        />
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Street Map (Carto)">
+            <TileLayer
+              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url={tileLayerUrl}
+              maxNativeZoom={19}
+              maxZoom={22}
+            />
+          </LayersControl.BaseLayer>
+          
+          <LayersControl.BaseLayer name="Satellite (Esri)">
+            <TileLayer
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxNativeZoom={19}
+              maxZoom={22}
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.BaseLayer name="OpenStreetMap">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxNativeZoom={19}
+              maxZoom={22}
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+
+        <LocateControl />
         
-        {validTrees.map((tree) => (
-          <Marker
-            key={tree.id}
-            position={[tree.latitude!, tree.longitude!]}
-            icon={createTreeIcon(tree.status)}
-          >
-            <Popup className="tree-popup compact-popup" minWidth={220} maxWidth={280}>
-              <div className="compact-tree-card">
-                {/* Thumbnail - CRITICAL FIX: Use small thumbnail instead of full image */}
-                {/* Before: Loading 1-2 MB full image for 280px popup */}
-                {/* After: Loading ~20 KB optimized thumbnail (99% bandwidth savings) */}
-                {tree.image_url && (
-                  <img 
-                    src={getOptimizedImageUrl(tree.image_url, 'small')}
-                    alt={tree.file_name}
-                    className="popup-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                )}
-                
-                {/* Species Info - More Compact */}
-                <div className="popup-header">
-                  <h3 className="popup-scientific-name">
-                    {tree.species?.scientificName || 'Unidentified'}
-                  </h3>
-                  {tree.species?.commonNames && tree.species.commonNames.length > 0 && (
-                    <p className="popup-common-name">
-                      {tree.species.commonNames[0]}
-                    </p>
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={40} // Tighter clusters
+          spiderfyOnMaxZoom={true} // Explode clusters when zoomed in max
+        >
+          {validTrees.map((tree) => (
+            <Marker
+              key={tree.id}
+              position={[tree.latitude!, tree.longitude!]}
+              icon={createTreeIcon(tree.status)}
+            >
+              <Popup className="tree-popup compact-popup" minWidth={220} maxWidth={280}>
+                <div className="compact-tree-card">
+                  {/* Thumbnail - CRITICAL FIX: Use small thumbnail instead of full image */}
+                  {tree.image_url && (
+                    <img 
+                      src={getOptimizedImageUrl(tree.image_url, 'small')}
+                      alt={tree.file_name}
+                      className="popup-image"
+                      loading="lazy"
+                      decoding="async"
+                    />
                   )}
-                </div>
-                
-                {/* Compact Metrics Grid */}
-                <div className="popup-metrics">
-                  <div className="metric-item">
-                    <span className="metric-label">Height</span>
-                    <span className="metric-value">{tree.metrics?.height_m?.toFixed(1) ?? '--'} m</span>
+                  
+                  {/* Species Info - More Compact */}
+                  <div className="popup-header">
+                    <h3 className="popup-scientific-name">
+                      {tree.species?.scientificName || 'Unidentified'}
+                    </h3>
+                    {tree.species?.commonNames && tree.species.commonNames.length > 0 && (
+                      <p className="popup-common-name">
+                        {tree.species.commonNames[0]}
+                      </p>
+                    )}
                   </div>
-                  <div className="metric-item">
-                    <span className="metric-label">Canopy</span>
-                    <span className="metric-value">{tree.metrics?.canopy_m?.toFixed(1) ?? '--'} m</span>
+                  
+                  {/* Compact Metrics Grid */}
+                  <div className="popup-metrics">
+                    <div className="metric-item">
+                      <span className="metric-label">Height</span>
+                      <span className="metric-value">{tree.metrics?.height_m?.toFixed(1) ?? '--'} m</span>
+                    </div>
+                    <div className="metric-item">
+                      <span className="metric-label">Canopy</span>
+                      <span className="metric-value">{tree.metrics?.canopy_m?.toFixed(1) ?? '--'} m</span>
+                    </div>
+                    <div className="metric-item">
+                      <span className="metric-label">DBH</span>
+                      <span className="metric-value">{tree.metrics?.dbh_cm?.toFixed(1) ?? '--'} cm</span>
+                    </div>
                   </div>
-                  <div className="metric-item">
-                    <span className="metric-label">DBH</span>
-                    <span className="metric-value">{tree.metrics?.dbh_cm?.toFixed(1) ?? '--'} cm</span>
+                  
+                  {/* Compact Footer */}
+                  <div className="popup-footer">
+                    <span className={`status-badge ${
+                      tree.status === 'COMPLETE' 
+                        ? 'status-complete'
+                        : tree.status === 'VERIFIED'
+                        ? 'status-verified'
+                        : tree.status === 'PENDING_ANALYSIS'
+                        ? 'status-pending'
+                        : tree.status === 'ANALYSIS_IN_PROGRESS'
+                        ? 'status-progress'
+                        : 'status-unknown'
+                    }`}>
+                      {tree.status || 'UNKNOWN'}
+                    </span>
                   </div>
-                </div>
-                
-                {/* Compact Footer */}
-                <div className="popup-footer">
-                  <span className={`status-badge ${
-                    tree.status === 'COMPLETE' 
-                      ? 'status-complete'
-                      : tree.status === 'VERIFIED'
-                      ? 'status-verified'
-                      : tree.status === 'PENDING_ANALYSIS'
-                      ? 'status-pending'
-                      : tree.status === 'ANALYSIS_IN_PROGRESS'
-                      ? 'status-progress'
-                      : 'status-unknown'
-                  }`}>
-                    {tree.status || 'UNKNOWN'}
-                  </span>
-                </div>
-                
-                {/* Action Buttons - Separate Row */}
-                <div className="popup-actions">
-                  {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                  
+                  {/* Action Buttons - Separate Row */}
+                  <div className="popup-actions">
+                    {tree.status === 'PENDING_ANALYSIS' && onAnalyzeTree && (
+                      <button
+                        onClick={() => onAnalyzeTree(tree.id)}
+                        className="analyze-btn-full bg-brand-accent hover:bg-brand-accent/90 text-white" // Enhanced visibility
+                      >
+                        <FlaskConical className="w-3.5 h-3.5" />
+                        Complete Analysis
+                      </button>
+                    )}
                     <button
-                      onClick={() => onAnalyzeTree(tree.id)}
-                      className="analyze-btn-full"
+                      onClick={() => onTreeClick(tree)}
+                      className="view-details-btn-full"
                     >
-                      <FlaskConical className="w-3.5 h-3.5" />
-                      Pending Analysis
+                      <Eye className="w-3.5 h-3.5" />
+                      View Details
                     </button>
-                  )}
-                  <button
-                    onClick={() => onTreeClick(tree)}
-                    className="view-details-btn-full"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    View Details
-                  </button>
+                  </div>
                 </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+              </Popup>
+            </Marker>
+          ))}
+        </MarkerClusterGroup>
       </MapContainer>
+      
+      {/* Simple Legend Overlay */}
+      <div className="absolute bottom-5 left-5 bg-white/90 p-3 rounded-md shadow-md text-xs z-[1000] border border-gray-200 backdrop-blur-sm">
+        <h4 className="font-bold mb-2 text-gray-700">Tree Status</h4>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#10b981] border border-gray-300"></div>
+            <span>Complete</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#f59e0b] border border-gray-300"></div>
+            <span>Pending Analysis</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-[#6366f1] border border-gray-300"></div>
+            <span>Verified</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
