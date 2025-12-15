@@ -1,7 +1,7 @@
 // src/components/CommunityGroveView.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PendingTree } from '../apiService';
-import { Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock } from 'lucide-react';
+import { Users, GitMerge, Loader2, ListTree, ArrowLeft, Clock, Timer } from 'lucide-react';
 import { getOptimizedImageUrl } from '../utils/imageOptimization';
 
 interface CommunityGroveViewProps {
@@ -12,10 +12,45 @@ interface CommunityGroveViewProps {
   currentUserId?: string;
 }
 
+const CountdownTimer = ({ expiresAt }: { expiresAt: string }) => {
+    const [timeLeft, setTimeLeft] = useState('');
+    const [isExpired, setIsExpired] = useState(false);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const now = new Date().getTime();
+            const expiry = new Date(expiresAt).getTime();
+            const distance = expiry - now;
+
+            if (distance < 0) {
+                clearInterval(interval);
+                setTimeLeft("Expired");
+                setIsExpired(true);
+            } else {
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+                setTimeLeft(`${minutes}m ${seconds}s`);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [expiresAt]);
+
+    return (
+        <div className={`flex items-center gap-1.5 text-xs font-bold px-2 py-1 rounded-full ${isExpired ? 'bg-status-error/10 text-status-error' : 'bg-brand-accent/10 text-brand-accent'}`}>
+            <Timer size={12} />
+            <span>{timeLeft}</span>
+        </div>
+    );
+};
+
 // --- START: SURGICAL REPLACEMENT (THEMING & STYLING) ---
-const TreeCard = ({ tree, onClaimTree, isOwnTree }: { tree: PendingTree; onClaimTree: (id: string) => void; isOwnTree: boolean; }) => {
+const TreeCard = ({ tree, onClaimTree, isOwnTree, currentUserId }: { tree: PendingTree; onClaimTree: (id: string) => void; isOwnTree: boolean; currentUserId?: string; }) => {
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageError, setImageError] = useState(false);
+
+    // Check if this tree is currently claimed by the user (Active Session)
+    const isClaimedByMe = tree.status === 'ANALYSIS_IN_PROGRESS' && tree.claimed_by_user_id === currentUserId;
 
     // Calculate time since upload (relative format)
     const getTimeAgo = (createdAt: string) => {
@@ -48,7 +83,7 @@ const TreeCard = ({ tree, onClaimTree, isOwnTree }: { tree: PendingTree; onClaim
     const isNearComplete = verificationProgress >= 60; // 3+ analyses
 
     return (
-        <div className={`bg-background-default border ${isOwnTree ? 'border-brand-primary ring-1 ring-brand-primary' : 'border-stroke-default'} rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow`}>
+        <div className={`bg-background-default border ${isClaimedByMe ? 'border-brand-accent ring-2 ring-brand-accent' : isOwnTree ? 'border-brand-primary ring-1 ring-brand-primary' : 'border-stroke-default'} rounded-lg shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow`}>
             <div className="relative bg-background-inset h-40">
                 {/* Loading Spinner */}
                 {!imageLoaded && !imageError && (
@@ -84,62 +119,85 @@ const TreeCard = ({ tree, onClaimTree, isOwnTree }: { tree: PendingTree; onClaim
                     <span>{tree.analysis_count}</span>
                 </div>
 
-                {/* Own Tree Badge */}
-                {isOwnTree && (
-                    <div className="absolute top-2 left-2 bg-brand-primary text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                        <span>My Tree</span>
-                    </div>
-                )}
+                {/* Badges */}
+                <div className="absolute top-2 left-2 flex flex-col gap-1">
+                    {isClaimedByMe && (
+                        <div className="bg-brand-accent text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
+                            <span>Analysis In Progress</span>
+                        </div>
+                    )}
+                    {isOwnTree && (
+                        <div className="bg-brand-primary text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                            <span>My Tree</span>
+                        </div>
+                    )}
+                </div>
             </div>
             
             <div className="p-3 flex-grow flex flex-col space-y-2.5">
                 {/* Time Since Upload */}
                 {tree.created_at && (
-                    <div className="flex items-center gap-1.5 text-xs text-content-subtle">
-                        <Clock size={12} className="flex-shrink-0" />
-                        <span>{getTimeAgo(tree.created_at)}</span>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs text-content-subtle">
+                            <Clock size={12} className="flex-shrink-0" />
+                            <span>{getTimeAgo(tree.created_at)}</span>
+                        </div>
+                        {isClaimedByMe && tree.claim_expires_at && (
+                            <CountdownTimer expiresAt={tree.claim_expires_at} />
+                        )}
                     </div>
                 )}
                 
-                {/* Auto-Verification Progress */}
-                <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                        <span className={`font-medium ${isNearComplete ? 'text-status-success' : 'text-content-subtle'}`}>
-                            {verificationProgress}% to auto-verify
-                        </span>
-                        <span className="text-content-subtle/70">
-                            {tree.analysis_count}/5
-                        </span>
+                {/* Auto-Verification Progress - HIDDEN FOR OWN TREES */}
+                {!isOwnTree && (
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className={`font-medium ${isNearComplete ? 'text-status-success' : 'text-content-subtle'}`}>
+                                {verificationProgress}% to auto-verify
+                            </span>
+                            <span className="text-content-subtle/70">
+                                {tree.analysis_count}/5
+                            </span>
+                        </div>
+                        <div className="w-full bg-background-inset rounded-full h-1.5 overflow-hidden">
+                            <div 
+                                className={`h-full transition-all duration-500 rounded-full ${
+                                    verificationProgress === 100 
+                                        ? 'bg-status-success' 
+                                        : isNearComplete 
+                                            ? 'bg-brand-accent' 
+                                            : 'bg-brand-primary'
+                                }`}
+                                style={{ width: `${verificationProgress}%` }}
+                            />
+                        </div>
                     </div>
-                    <div className="w-full bg-background-inset rounded-full h-1.5 overflow-hidden">
-                        <div 
-                            className={`h-full transition-all duration-500 rounded-full ${
-                                verificationProgress === 100 
-                                    ? 'bg-status-success' 
-                                    : isNearComplete 
-                                        ? 'bg-brand-accent' 
-                                        : 'bg-brand-primary'
-                            }`}
-                            style={{ width: `${verificationProgress}%` }}
-                        />
-                    </div>
-                </div>
+                )}
                 
-                <div className="flex-grow" />
+                {/* Spacer if progress bar is hidden */}
+                {isOwnTree && <div className="flex-grow" />}
+                {!isOwnTree && <div className="flex-grow" />}
                 
                 {/* Analyze Button */}
                 <button
                     onClick={() => onClaimTree(tree.id)}
                     className={`w-full mt-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all text-sm ${
-                        isOwnTree 
-                            ? 'bg-brand-secondary text-content-on-brand hover:bg-brand-secondary-hover'
-                            : isNearComplete
-                                ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
-                                : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover'
+                        isClaimedByMe
+                            ? 'bg-brand-accent text-white hover:bg-brand-accent-hover shadow-md'
+                            : isOwnTree 
+                                ? 'bg-brand-secondary text-content-on-brand hover:bg-brand-secondary-hover'
+                                : isNearComplete
+                                    ? 'bg-brand-accent text-white hover:bg-brand-accent-hover'
+                                    : 'bg-brand-primary text-content-on-brand hover:bg-brand-primary-hover'
                     }`}
                 >
                     <GitMerge size={16} />
-                    {isOwnTree ? 'Complete Analysis' : (isNearComplete ? 'Complete Verification' : 'Analyze')}
+                    {isClaimedByMe 
+                        ? 'Continue Analysis' 
+                        : isOwnTree 
+                            ? 'Complete Analysis' 
+                            : (isNearComplete ? 'Complete Verification' : 'Analyze')
+                    }
                 </button>
             </div>
         </div>
@@ -149,9 +207,24 @@ const TreeCard = ({ tree, onClaimTree, isOwnTree }: { tree: PendingTree; onClaim
 export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBack, currentUserId }: CommunityGroveViewProps) {
     const [showMyPendingOnly, setShowMyPendingOnly] = useState(false);
 
+    // Sort: Active Claims first, then Own Trees, then others
+    const sortedTrees = [...pendingTrees].sort((a, b) => {
+        const aIsClaimed = a.status === 'ANALYSIS_IN_PROGRESS' && a.claimed_by_user_id === currentUserId;
+        const bIsClaimed = b.status === 'ANALYSIS_IN_PROGRESS' && b.claimed_by_user_id === currentUserId;
+        if (aIsClaimed && !bIsClaimed) return -1;
+        if (!aIsClaimed && bIsClaimed) return 1;
+        
+        const aIsOwn = a.user_id === currentUserId;
+        const bIsOwn = b.user_id === currentUserId;
+        if (aIsOwn && !bIsOwn) return -1;
+        if (!aIsOwn && bIsOwn) return 1;
+        
+        return 0;
+    });
+
     const filteredTrees = showMyPendingOnly && currentUserId
-        ? pendingTrees.filter(tree => tree.user_id === currentUserId)
-        : pendingTrees;
+        ? sortedTrees.filter(tree => tree.user_id === currentUserId)
+        : sortedTrees;
 
     return (
         <div className="w-full h-full flex flex-col bg-background-subtle">
@@ -211,6 +284,7 @@ export function CommunityGroveView({ pendingTrees, isLoading, onClaimTree, onBac
                                 tree={tree} 
                                 onClaimTree={onClaimTree} 
                                 isOwnTree={currentUserId === tree.user_id}
+                                currentUserId={currentUserId}
                             />
                         ))}
                     </div>

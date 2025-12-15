@@ -30,6 +30,8 @@ export interface TreeResult {
   device_heading?: number;
   status?: 'PENDING_ANALYSIS' | 'COMPLETE' | 'ANALYSIS_IN_PROGRESS' | 'VERIFIED'; // More specific status
   confidence?: any; // To hold the consensus data
+  claimed_by_user_id?: string;
+  claim_expires_at?: string;
 }
 
 export interface PendingTree extends TreeResult {
