@@ -23,14 +23,18 @@ const SearchControl = () => {
   const map = useMap();
 
   useEffect(() => {
+    // Use Photon for better autocomplete/suggestions
     // @ts-ignore
-    const geocoder = L.Control.Geocoder.nominatim();
+    const geocoder = L.Control.Geocoder.photon();
+    
     // @ts-ignore
     L.Control.geocoder({
       query: "",
-      placeholder: "Search address...",
+      placeholder: "Search location (e.g. City, Hospital)...",
       defaultMarkGeocode: false,
-      geocoder
+      geocoder,
+      suggestMinLength: 3, // Start suggesting after 3 chars
+      suggestTimeout: 250 // Wait 250ms after typing stops
     })
     .on('markgeocode', function(e: any) {
       const bbox = e.geocode.bbox;
@@ -92,7 +96,7 @@ const LocateControl = () => {
 };
 
 // Optimized Layer Component that handles updates without full re-renders
-const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s: any) => void }) => {
+const StreetLayer = ({ data, onSegmentSelect, activeLayer }: { data: any, onSegmentSelect: (s: any) => void, activeLayer: string }) => {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
 
@@ -102,7 +106,14 @@ const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s
     // Style function
     const getStyle = (feature: any) => {
       const status = feature.properties.status;
-      let color = '#ffffff'; // Default white
+      
+      // Dynamic color based on base layer
+      let defaultColor = '#ffffff'; // Default white for Dark/Satellite
+      if (activeLayer === 'OpenStreetMap') {
+        defaultColor = '#2563eb'; // Blue for Light map
+      }
+
+      let color = defaultColor;
       if (status === 'locked') color = '#94a3b8'; // Grey
       if (status === 'completed') color = '#10b981'; // Green
       if (status === 'assigned') color = '#3b82f6'; // Blue
@@ -118,8 +129,6 @@ const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s
     const onEachFeature = (feature: any, layer: L.Layer) => {
       layer.on({
         click: () => {
-          // Reset styles for all layers (if we had a reference to them)
-          // For now, just highlight the clicked one
           (layer as L.Path).setStyle({ color: '#f59e0b', weight: 10, opacity: 1 });
           onSegmentSelect(feature);
         },
@@ -127,7 +136,9 @@ const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s
           (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
         },
         mouseout: () => {
-          (layer as L.Path).setStyle({ weight: 8, opacity: 0.7 });
+          // Re-apply base style on mouseout
+          const style = getStyle(feature);
+          (layer as L.Path).setStyle(style);
         }
       });
     };
@@ -142,6 +153,8 @@ const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s
       // Update data efficiently
       layerRef.current.clearLayers();
       layerRef.current.addData(data);
+      // Force style update when layer changes
+      layerRef.current.setStyle(getStyle);
     }
 
     // Cleanup
@@ -151,7 +164,7 @@ const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s
         layerRef.current = null;
       }
     };
-  }, [data, map, onSegmentSelect]);
+  }, [data, map, onSegmentSelect, activeLayer]);
 
   return null;
 };
@@ -160,9 +173,10 @@ interface MissionMapProps {
   onSegmentSelect: (segment: any) => void;
   segments?: any; // Optional dynamic segments
   onBoundsChange?: (bounds: any) => void;
+  isLoading?: boolean;
 }
 
-const MapController = ({ onBoundsChange }: { onBoundsChange?: (bounds: any) => void }) => {
+const MapController = ({ onBoundsChange, onLayerChange }: { onBoundsChange?: (bounds: any) => void, onLayerChange: (name: string) => void }) => {
   const map = useMap();
   
   useMapEvents({
@@ -170,6 +184,9 @@ const MapController = ({ onBoundsChange }: { onBoundsChange?: (bounds: any) => v
       if (onBoundsChange) {
         onBoundsChange(map.getBounds());
       }
+    },
+    baselayerchange: (e: any) => {
+      onLayerChange(e.name);
     }
   });
 
@@ -184,52 +201,79 @@ const MapController = ({ onBoundsChange }: { onBoundsChange?: (bounds: any) => v
   return null;
 };
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange }) => {
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange, isLoading }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
+  const [activeLayer, setActiveLayer] = React.useState('Dark Mode');
 
   return (
-    <MapContainer 
-      center={defaultCenter} 
-      zoom={15} 
-      style={{ height: '100%', width: '100%', background: '#1e293b' }}
-      preferCanvas={true} // CRITICAL: Use Canvas renderer for performance with many paths
-    >
-      <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Dark Mode">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          />
-        </LayersControl.BaseLayer>
-        
-        <LayersControl.BaseLayer name="Satellite (Esri)">
-          <TileLayer
-            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          />
-        </LayersControl.BaseLayer>
-
-        <LayersControl.BaseLayer name="OpenStreetMap">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-        </LayersControl.BaseLayer>
-      </LayersControl>
-
-      <ScaleControl position="bottomleft" />
-      <SearchControl />
-      <LocateControl />
-      
-      {segments && (
-        <StreetLayer 
-          data={segments} 
-          onSegmentSelect={onSegmentSelect} 
-        />
+    <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+      {isLoading && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1000,
+          background: 'rgba(0,0,0,0.7)',
+          color: 'white',
+          padding: '10px 20px',
+          borderRadius: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          <span>Loading Streets...</span>
+        </div>
       )}
       
-      <MapController onBoundsChange={onBoundsChange} />
-    </MapContainer>
+      <MapContainer 
+        center={defaultCenter} 
+        zoom={15} 
+        style={{ height: '100%', width: '100%', background: '#1e293b' }}
+        preferCanvas={true} // CRITICAL: Use Canvas renderer for performance with many paths
+      >
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Dark Mode">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            />
+          </LayersControl.BaseLayer>
+          
+          <LayersControl.BaseLayer name="Satellite (Esri)">
+            <TileLayer
+              attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+
+          <LayersControl.BaseLayer name="OpenStreetMap">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+
+        <ScaleControl position="bottomleft" />
+        <SearchControl />
+        <LocateControl />
+        
+        {segments && (
+          <StreetLayer 
+            data={segments} 
+            onSegmentSelect={onSegmentSelect}
+            activeLayer={activeLayer}
+          />
+        )}
+        
+        <MapController 
+          onBoundsChange={onBoundsChange} 
+          onLayerChange={setActiveLayer}
+        />
+      </MapContainer>
+    </div>
   );
 };

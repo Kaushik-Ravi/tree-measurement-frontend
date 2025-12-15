@@ -23,6 +23,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const fetchSegmentsInBounds = useCallback(async (bounds: any) => {
     if (!bounds) return;
     
+    setIsLoading(true); // Start loading
     const { _southWest, _northEast } = bounds;
     const minLat = _southWest.lat;
     const maxLat = _northEast.lat;
@@ -54,6 +55,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
       }));
       setDemoSegments({ type: "FeatureCollection", features });
     }
+    setIsLoading(false); // Stop loading
   }, []);
 
   // Initial load (optional, or rely on map move)
@@ -120,6 +122,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
              onSegmentSelect={setSelectedSegment} 
              segments={demoSegments} // Pass dynamic segments
              onBoundsChange={fetchSegmentsInBounds}
+             isLoading={isLoading}
            />
         </div>
 
