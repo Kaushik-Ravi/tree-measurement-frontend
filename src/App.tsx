@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown, User, ArrowRight, TreeDeciduous, Sparkles } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown, User, ArrowRight, TreeDeciduous, Sparkles, GraduationCap } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -10,6 +10,7 @@ import { FeatureFlags } from './config/featureFlags';
 import { Magnifier } from './components/Magnifier';
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 // --- END: LIVE AR INTEGRATION ---
+import { TrainingHub } from './components/training/TrainingHub';
 import ExifReader from 'exifreader';
 import { 
   samRefineWithPoints, manualGetDbhRectangle, manualCalculation, calculateCO2, 
@@ -56,7 +57,7 @@ const calculateCorrectedDistance = (rawDistance: number): number => {
 
 // --- END: DISTANCE CORRECTION HELPERS ---
 
-type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION';
+type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION' | 'TRAINING';
 
 type AppStatus = 
   'IDLE' | 
@@ -2135,6 +2136,7 @@ function App() {
   
   if (currentView === 'CALIBRATION') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
+  if (currentView === 'TRAINING') { return <TrainingHub onBack={() => setCurrentView('HUB')} />; }
   if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'COMMUNITY_GROVE_LOADING' || appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} currentUserId={user?.id} /> }
 
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
@@ -2827,14 +2829,18 @@ function App() {
                 </button>
               </div>
 
-              <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
                   <button onClick={handleNavigateToGrove} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-secondary/50 hover:shadow-xl transition-all hover:-translate-y-1">
-                      <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">The Community Grove</h3></div>
+                      <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">Community Grove</h3></div>
                       <p className="text-sm text-content-subtle mt-2">Can't do a full measurement? Help our community by analyzing trees that others have submitted.</p>
                   </button>
                   <button onClick={() => setCurrentView('LEADERBOARD')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-accent/50 hover:shadow-xl transition-all hover:-translate-y-1">
                       <div className="flex items-center gap-3"><BarChart2 className="w-7 h-7 text-brand-accent"/> <h3 className="text-lg font-semibold text-content-default">Leaderboard</h3></div>
                       <p className="text-sm text-content-subtle mt-2">See how your contributions rank. Earn Sapling Points for each tree you map and analyze.</p>
+                  </button>
+                  <button onClick={() => setCurrentView('TRAINING')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-emerald-500/50 hover:shadow-xl transition-all hover:-translate-y-1">
+                      <div className="flex items-center gap-3"><GraduationCap className="w-7 h-7 text-emerald-600"/> <h3 className="text-lg font-semibold text-content-default">Training Academy</h3></div>
+                      <p className="text-sm text-content-subtle mt-2">Become a Certified Ranger. Learn the best practices for accurate tree measurement.</p>
                   </button>
               </div>
               
