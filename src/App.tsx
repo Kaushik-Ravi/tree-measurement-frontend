@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown, User, ArrowRight, TreeDeciduous, Sparkles } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -2402,39 +2402,56 @@ function App() {
                   
                   if (isIOS) {
                     return (
-                      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <div className="flex gap-2 items-start">
-                          <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-xs text-blue-700 dark:text-blue-300">
-                            <p className="font-semibold mb-1">iOS Detected</p>
-                            <p>WebXR is limited on iOS Safari. For best results:</p>
-                            <ol className="mt-1 ml-4 list-decimal space-y-0.5">
-                              <li>Open iPhone's built-in <strong>Measure</strong> app</li>
-                              <li>Place first marker at tree's base</li>
-                              <li>Place second marker at your feet</li>
-                              <li>Note the distance shown</li>
-                              <li>Return here and enter it manually below</li>
-                            </ol>
-                            <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
-                              Accuracy: ±1-2cm (LiDAR) / ±2-5cm (standard)
-                            </p>
-                          </div>
+                      <div className="mb-6 space-y-4">
+                        <div className="flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                           {/* Visual Diagram */}
+                           <div className="flex items-center gap-4 text-blue-800 dark:text-blue-200">
+                              <User className="w-8 h-8" />
+                              <div className="flex flex-col items-center">
+                                <ArrowRight className="w-6 h-6" />
+                                <span className="text-xs font-mono font-bold">DISTANCE</span>
+                              </div>
+                              <TreeDeciduous className="w-8 h-8" />
+                           </div>
                         </div>
+                        
+                        <div className="p-4 bg-background-subtle rounded-lg border border-stroke-subtle">
+                           <h4 className="font-semibold text-content-default mb-2 flex items-center gap-2">
+                             <Info className="w-4 h-4 text-brand-primary" />
+                             How to Measure
+                           </h4>
+                           <ol className="text-sm text-content-default space-y-2 list-decimal ml-4">
+                             <li>Open the <strong>Measure</strong> app on your iPhone.</li>
+                             <li>Tap points at your feet and the tree's base.</li>
+                             <li>Enter the number below.</li>
+                           </ol>
+                        </div>
+
+                        <a 
+                          href="https://apps.apple.com/us/app/measure/id1383426740" 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-content-default text-background-default rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                        >
+                          <Ruler className="w-5 h-5" />
+                          Open iPhone Measure App
+                        </a>
                       </div>
                     );
                   } else if (isAndroid) {
                     return (
-                      <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                        <div className="flex gap-2 items-start">
-                          <Check className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                          <div className="text-xs text-green-700 dark:text-green-300">
-                            <p className="font-semibold mb-1">Android Chrome Detected</p>
-                            <p>AR Ruler uses WebXR for in-browser measurement.</p>
-                            <p className="mt-1 text-green-600 dark:text-green-400 font-medium">
-                              Accuracy: ±10-15cm • Auto-returns distance to app
-                            </p>
-                          </div>
-                        </div>
+                      <div className="mb-6 space-y-4">
+                         {/* Android AR Button */}
+                         <button 
+                            onClick={() => setIsArModeActive(true)}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-brand-accent text-white rounded-xl font-bold text-lg hover:bg-brand-accent-hover shadow-lg transition-all"
+                         >
+                            <Sparkles className="w-5 h-5" />
+                            Measure with AR (Beta)
+                         </button>
+                         <p className="text-xs text-center text-content-subtle">
+                           Uses WebXR. Auto-fills distance upon completion.
+                         </p>
                       </div>
                     );
                   }
@@ -2442,16 +2459,34 @@ function App() {
                 })()}
                 {/* --- END: AR RULER WITH PLATFORM DETECTION --- */}
 
-                <div className="relative my-4 flex items-center">
-                    <div className="flex-grow border-t border-stroke-default"></div>
-                    <span className="flex-shrink mx-4 text-content-subtle text-sm">OR</span>
-                    <div className="flex-grow border-t border-stroke-default"></div>
+                <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                        <div className="w-full border-t border-stroke-default"></div>
+                    </div>
+                    <div className="relative flex justify-center">
+                        <span className="px-2 bg-background-default text-sm text-content-subtle">OR ENTER MANUALLY</span>
+                    </div>
                 </div>
                 
-                <label htmlFor="distance-input" className="block text-sm font-medium text-content-default mb-2">Manually Enter Distance (meters)</label>
-                <div className="relative">
-                  <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" />
-                  <input type="number" id="distance-input" placeholder="e.g., 10.5" value={distance} onChange={(e) => setDistance(e.target.value)} className="w-full pl-10 pr-4 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary" />
+                <div className="space-y-2">
+                    <label htmlFor="distance-input" className="block text-sm font-bold text-content-default">
+                        Distance from Camera to Tree Base
+                    </label>
+                    <div className="relative">
+                        <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-content-subtle" />
+                        <input 
+                            type="number" 
+                            id="distance-input" 
+                            placeholder="e.g., 10.5" 
+                            value={distance} 
+                            onChange={(e) => setDistance(e.target.value)} 
+                            className="w-full pl-10 pr-12 py-3 border rounded-lg bg-background-default border-stroke-default focus:ring-2 focus:ring-brand-primary font-mono text-lg" 
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-content-subtle font-medium">meters</span>
+                    </div>
+                    <p className="text-xs text-content-subtle">
+                        Measure from where you are standing to the trunk of the tree.
+                    </p>
                 </div>
                 <ARLinks />
                 <button onClick={() => handleDistanceEntered()} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
