@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // Mock Data (Replace with fetch from Supabase or JSON)
@@ -29,10 +29,20 @@ const MOCK_SEGMENTS = {
 interface MissionMapProps {
   onSegmentSelect: (segment: any) => void;
   segments?: any; // Optional dynamic segments
+  onBoundsChange?: (bounds: any) => void;
 }
 
-const MapController = ({ center }: { center?: [number, number] }) => {
+const MapController = ({ center, onBoundsChange }: { center?: [number, number], onBoundsChange?: (bounds: any) => void }) => {
   const map = useMap();
+  
+  useMapEvents({
+    moveend: () => {
+      if (onBoundsChange) {
+        onBoundsChange(map.getBounds());
+      }
+    }
+  });
+
   useEffect(() => {
     map.invalidateSize();
     if (center) {
@@ -42,11 +52,11 @@ const MapController = ({ center }: { center?: [number, number] }) => {
   return null;
 };
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments }) => {
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange }) => {
   // Calculate center from first segment if available
   const center: [number, number] = segments?.features?.[0]?.geometry?.coordinates?.[0] 
     ? [segments.features[0].geometry.coordinates[0][1], segments.features[0].geometry.coordinates[0][0]]
-    : [40.7829, -73.9654];
+    : [18.5204, 73.8567]; // Default to Pune
 
   const onEachFeature = (feature: any, layer: any) => {
     // Style based on status
@@ -95,7 +105,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
           onEachFeature={onEachFeature} 
         />
       )}
-      <MapController center={center} />
+      <MapController center={center} onBoundsChange={onBoundsChange} />
     </MapContainer>
   );
 };

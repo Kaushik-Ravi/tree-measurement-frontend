@@ -49,12 +49,19 @@ def generate_segments(place_name):
         if isinstance(name, list):
             name = " / ".join(name)
             
+        # Calculate centroid for spatial indexing
+        # Simple average of all points in the segment
+        avg_lng = sum(c[0] for c in coords) / len(coords)
+        avg_lat = sum(c[1] for c in coords) / len(coords)
+
         segment = {
             "type": "Feature",
             "properties": {
                 "name": name,
                 "length_meters": round(length, 1),
-                "osmid": str(data.get('osmid', 0))
+                "osmid": str(data.get('osmid', 0)),
+                "lat": avg_lat,
+                "lng": avg_lng
             },
             "geometry": {
                 "type": "LineString",

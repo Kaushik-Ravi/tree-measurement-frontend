@@ -19,47 +19,47 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [demoSegments, setDemoSegments] = useState<any>(null);
 
-  // Load real data from Supabase
+  // Load real data from Supabase based on bounds
+  const fetchSegmentsInBounds = async (bounds: any) => {
+    if (!bounds) return;
+    
+    const { _southWest, _northEast } = bounds;
+    const minLat = _southWest.lat;
+    const maxLat = _northEast.lat;
+    const minLng = _southWest.lng;
+    const maxLng = _northEast.lng;
+
+    console.log('Fetching segments in bounds:', minLat, maxLat, minLng, maxLng);
+
+    const { data, error } = await supabase
+      .from('street_segments')
+      .select('*')
+      .gte('lat', minLat)
+      .lte('lat', maxLat)
+      .gte('lng', minLng)
+      .lte('lng', maxLng)
+      .limit(2000); // Fetch up to 2000 segments in the current view
+
+    if (data && data.length > 0) {
+      console.log('Loaded segments:', data.length);
+      const features = data.map(seg => ({
+        type: "Feature",
+        properties: {
+          id: seg.id,
+          name: seg.name,
+          length_meters: seg.length_meters,
+          status: seg.status
+        },
+        geometry: seg.geometry
+      }));
+      setDemoSegments({ type: "FeatureCollection", features });
+    }
+  };
+
+  // Initial load (optional, or rely on map move)
   useEffect(() => {
-    const fetchSegments = async () => {
-      // 1. Try to fetch real segments from Supabase first
-      // Note: Loading all 57k segments at once will crash the browser. 
-      // We limit to 10,000 for performance. Ideally, we should load by viewport (BBOX).
-      const { data, error } = await supabase
-        .from('street_segments')
-        .select('*')
-        .limit(10000); // Increased limit to show more of Pune
-
-      if (data && data.length > 0) {
-        console.log('Loaded real segments from Supabase:', data.length);
-        // Convert to GeoJSON format expected by the map
-        const features = data.map(seg => ({
-          type: "Feature",
-          properties: {
-            id: seg.id,
-            name: seg.name,
-            length_meters: seg.length_meters,
-            status: seg.status
-          },
-          geometry: seg.geometry
-        }));
-        setDemoSegments({ type: "FeatureCollection", features });
-      } else {
-        // 2. Fallback to Demo Data if no real data found
-        console.log('No real data found, falling back to demo generator');
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition((pos) => {
-            const data = missionService.generateDemoSegments(pos.coords.latitude, pos.coords.longitude);
-            setDemoSegments(data);
-          }, () => {
-            const data = missionService.generateDemoSegments(40.7829, -73.9654);
-            setDemoSegments(data);
-          });
-        }
-      }
-    };
-
-    fetchSegments();
+    // We can trigger an initial fetch if we have a default location, 
+    // but the map's onMoveEnd will trigger shortly after mount anyway.
   }, []);
 
   const handleJoinSquad = async (code: string) => {
@@ -119,6 +119,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
            <MissionMap 
              onSegmentSelect={setSelectedSegment} 
              segments={demoSegments} // Pass dynamic segments
+             onBoundsChange={fetchSegmentsInBounds}
            />
         </div>
 

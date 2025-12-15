@@ -56,6 +56,8 @@ def upload_data():
             "campaign_id": campaign_id,
             "name": props.get('name', 'Unnamed Street'),
             "length_meters": props.get('length_meters', 0),
+            "lat": props.get('lat', 0),
+            "lng": props.get('lng', 0),
             "geometry": geom, # PostGIS/Supabase handles JSONB geometry if set up, or we might need to cast. 
                               # For this schema, we used 'jsonb' for geometry column, so passing the dict is correct.
             "status": "available"
