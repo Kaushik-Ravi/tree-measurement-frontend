@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MissionMap } from './MissionMap';
 import { MissionControlPanel } from './MissionControlPanel';
 import { SquadControl } from './SquadControl';
@@ -20,7 +20,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const [demoSegments, setDemoSegments] = useState<any>(null);
 
   // Load real data from Supabase based on bounds
-  const fetchSegmentsInBounds = async (bounds: any) => {
+  const fetchSegmentsInBounds = useCallback(async (bounds: any) => {
     if (!bounds) return;
     
     const { _southWest, _northEast } = bounds;
@@ -54,7 +54,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
       }));
       setDemoSegments({ type: "FeatureCollection", features });
     }
-  };
+  }, []);
 
   // Initial load (optional, or rely on map move)
   useEffect(() => {

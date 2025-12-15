@@ -1,29 +1,71 @@
-import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMap, useMapEvents } from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Mock Data (Replace with fetch from Supabase or JSON)
-// Note: GeoJSON coordinates are [lon, lat], Leaflet uses [lat, lon]. 
-// React-Leaflet's GeoJSON component handles the conversion automatically if data is standard GeoJSON.
-const MOCK_SEGMENTS = {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "id": "1", "name": "Main St (North)", "length_meters": 150, "status": "available" },
-      "geometry": { "type": "LineString", "coordinates": [[-73.9654, 40.7829], [-73.9660, 40.7850]] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "id": "2", "name": "Main St (South)", "length_meters": 120, "status": "locked" },
-      "geometry": { "type": "LineString", "coordinates": [[-73.9654, 40.7810], [-73.9654, 40.7829]] }
-    },
-     {
-      "type": "Feature",
-      "properties": { "id": "3", "name": "5th Ave", "length_meters": 300, "status": "completed" },
-      "geometry": { "type": "LineString", "coordinates": [[-73.9680, 40.7810], [-73.9680, 40.7850]] }
+// Optimized Layer Component that handles updates without full re-renders
+const StreetLayer = ({ data, onSegmentSelect }: { data: any, onSegmentSelect: (s: any) => void }) => {
+  const map = useMap();
+  const layerRef = useRef<L.GeoJSON | null>(null);
+
+  useEffect(() => {
+    if (!data) return;
+
+    // Style function
+    const getStyle = (feature: any) => {
+      const status = feature.properties.status;
+      let color = '#ffffff'; // Default white
+      if (status === 'locked') color = '#94a3b8'; // Grey
+      if (status === 'completed') color = '#10b981'; // Green
+      if (status === 'assigned') color = '#3b82f6'; // Blue
+
+      return {
+        color: color,
+        weight: 8,
+        opacity: 0.7
+      };
+    };
+
+    // Interaction handlers
+    const onEachFeature = (feature: any, layer: L.Layer) => {
+      layer.on({
+        click: () => {
+          // Reset styles for all layers (if we had a reference to them)
+          // For now, just highlight the clicked one
+          (layer as L.Path).setStyle({ color: '#f59e0b', weight: 10, opacity: 1 });
+          onSegmentSelect(feature);
+        },
+        mouseover: () => {
+          (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
+        },
+        mouseout: () => {
+          (layer as L.Path).setStyle({ weight: 8, opacity: 0.7 });
+        }
+      });
+    };
+
+    if (!layerRef.current) {
+      // Initialize layer
+      layerRef.current = L.geoJSON(data, {
+        style: getStyle,
+        onEachFeature: onEachFeature
+      }).addTo(map);
+    } else {
+      // Update data efficiently
+      layerRef.current.clearLayers();
+      layerRef.current.addData(data);
     }
-  ]
+
+    // Cleanup
+    return () => {
+      if (layerRef.current) {
+        layerRef.current.remove();
+        layerRef.current = null;
+      }
+    };
+  }, [data, map, onSegmentSelect]);
+
+  return null;
 };
 
 interface MissionMapProps {
@@ -32,7 +74,7 @@ interface MissionMapProps {
   onBoundsChange?: (bounds: any) => void;
 }
 
-const MapController = ({ center, onBoundsChange }: { center?: [number, number], onBoundsChange?: (bounds: any) => void }) => {
+const MapController = ({ onBoundsChange }: { onBoundsChange?: (bounds: any) => void }) => {
   const map = useMap();
   
   useMapEvents({
@@ -43,69 +85,41 @@ const MapController = ({ center, onBoundsChange }: { center?: [number, number], 
     }
   });
 
+  // Initial bounds check
   useEffect(() => {
     map.invalidateSize();
-    if (center) {
-      map.setView(center, 16);
+    if (onBoundsChange) {
+      onBoundsChange(map.getBounds());
     }
-  }, [map, center]);
+  }, [map]); // Run once on mount
+
   return null;
 };
 
 export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange }) => {
-  // Calculate center from first segment if available
-  const center: [number, number] = segments?.features?.[0]?.geometry?.coordinates?.[0] 
-    ? [segments.features[0].geometry.coordinates[0][1], segments.features[0].geometry.coordinates[0][0]]
-    : [18.5204, 73.8567]; // Default to Pune
-
-  const onEachFeature = (feature: any, layer: any) => {
-    // Style based on status
-    const status = feature.properties.status;
-    let color = '#ffffff'; // Default white
-    if (status === 'locked') color = '#94a3b8'; // Grey
-    if (status === 'completed') color = '#10b981'; // Green
-    if (status === 'assigned') color = '#3b82f6'; // Blue
-
-    layer.setStyle({
-      color: color,
-      weight: 8,
-      opacity: 0.7
-    });
-
-    layer.on({
-      click: (e) => {
-        // Reset all styles (simplified approach - ideally manage state)
-        // For now, just highlight the clicked one
-        layer.setStyle({ color: '#f59e0b', weight: 10, opacity: 1 }); // Amber highlight
-        onSegmentSelect(feature);
-      },
-      mouseover: () => {
-        layer.setStyle({ weight: 10, opacity: 1 });
-      },
-      mouseout: () => {
-        layer.setStyle({ weight: 8, opacity: 0.7 });
-      }
-    });
-  };
+  // Default center (Pune) - We do NOT update this based on segments to prevent jitter
+  const defaultCenter: [number, number] = [18.5204, 73.8567];
 
   return (
     <MapContainer 
-      center={[40.7829, -73.9654]} 
+      center={defaultCenter} 
       zoom={15} 
       style={{ height: '100%', width: '100%', background: '#1e293b' }}
+      preferCanvas={true} // CRITICAL: Use Canvas renderer for performance with many paths
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
+      
       {segments && (
-        <GeoJSON 
-          key={JSON.stringify(segments)} // Force re-render when data changes
+        <StreetLayer 
           data={segments} 
-          onEachFeature={onEachFeature} 
+          onSegmentSelect={onSegmentSelect} 
         />
       )}
-      <MapController center={center} onBoundsChange={onBoundsChange} />
+      
+      <MapController onBoundsChange={onBoundsChange} />
     </MapContainer>
   );
 };
