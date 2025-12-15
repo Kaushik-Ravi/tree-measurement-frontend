@@ -2386,13 +2386,6 @@ function App() {
                 {/* --- END: LIVE AR MODE BUTTON --- */}
 
                 {/* --- START: AR RULER WITH PLATFORM DETECTION --- */}
-                <button 
-                  onClick={() => setIsArModeActive(true)} 
-                  className="w-full mb-2 flex items-center justify-center gap-2 px-6 py-3 bg-brand-secondary text-white font-semibold rounded-lg hover:bg-brand-secondary-hover"
-                >
-                  <Move className="w-5 h-5" />
-                  Measure with AR Ruler
-                </button>
                 
                 {/* Platform-specific compatibility notes */}
                 {(() => {
@@ -2441,6 +2434,18 @@ function App() {
                   } else if (isAndroid) {
                     return (
                       <div className="mb-6 space-y-4">
+                         <div className="flex items-center justify-center p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800">
+                           {/* Visual Diagram */}
+                           <div className="flex items-center gap-4 text-green-800 dark:text-green-200">
+                              <User className="w-8 h-8" />
+                              <div className="flex flex-col items-center">
+                                <ArrowRight className="w-6 h-6" />
+                                <span className="text-xs font-mono font-bold">DISTANCE</span>
+                              </div>
+                              <TreeDeciduous className="w-8 h-8" />
+                           </div>
+                        </div>
+
                          {/* Android AR Button */}
                          <button 
                             onClick={() => setIsArModeActive(true)}
