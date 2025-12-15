@@ -5,6 +5,7 @@ import { SquadControl } from './SquadControl';
 import { ArrowLeft, Users, Map as MapIcon, X, Loader2 } from 'lucide-react';
 import { missionService } from '../../services/missionService';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../supabaseClient';
 
 interface MissionsViewProps {
   onBack: () => void;
@@ -18,19 +19,46 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [demoSegments, setDemoSegments] = useState<any>(null);
 
-  // Load demo data on mount
+  // Load real data from Supabase
   useEffect(() => {
-    // Simulate fetching local data
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const data = missionService.generateDemoSegments(pos.coords.latitude, pos.coords.longitude);
-        setDemoSegments(data);
-      }, () => {
-        // Fallback to NYC if no location
-        const data = missionService.generateDemoSegments(40.7829, -73.9654);
-        setDemoSegments(data);
-      });
-    }
+    const fetchSegments = async () => {
+      // 1. Try to fetch real segments from Supabase first
+      const { data, error } = await supabase
+        .from('street_segments')
+        .select('*')
+        .eq('status', 'available') // Just fetch available for now to test
+        .limit(500); // Safety limit
+
+      if (data && data.length > 0) {
+        console.log('Loaded real segments from Supabase:', data.length);
+        // Convert to GeoJSON format expected by the map
+        const features = data.map(seg => ({
+          type: "Feature",
+          properties: {
+            id: seg.id,
+            name: seg.name,
+            length_meters: seg.length_meters,
+            status: seg.status
+          },
+          geometry: seg.geometry
+        }));
+        setDemoSegments({ type: "FeatureCollection", features });
+      } else {
+        // 2. Fallback to Demo Data if no real data found
+        console.log('No real data found, falling back to demo generator');
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            const data = missionService.generateDemoSegments(pos.coords.latitude, pos.coords.longitude);
+            setDemoSegments(data);
+          }, () => {
+            const data = missionService.generateDemoSegments(40.7829, -73.9654);
+            setDemoSegments(data);
+          });
+        }
+      }
+    };
+
+    fetchSegments();
   }, []);
 
   const handleJoinSquad = async (code: string) => {

@@ -4,7 +4,7 @@ import sys
 
 # Configuration
 # You can run this script with a place name argument: python generate_segments.py "Brooklyn, New York"
-PLACE_NAME = "Central Park, New York, USA" 
+PLACE_NAME = "Pune, Maharashtra, India" 
 OUTPUT_FILE = "street_segments.json"
 
 def generate_segments(place_name):
@@ -20,7 +20,8 @@ def generate_segments(place_name):
         return
 
     # 2. Convert to undirected graph to avoid duplicate segments for two-way streets
-    G_undir = ox.get_undirected(G)
+    # In OSMnx 2.0+, use convert.to_undirected
+    G_undir = ox.convert.to_undirected(G)
     
     segments = []
     
