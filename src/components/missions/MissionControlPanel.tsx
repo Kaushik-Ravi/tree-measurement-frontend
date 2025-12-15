@@ -4,9 +4,10 @@ import { X, Clock, MapPin, Users, Lock, CheckCircle } from 'lucide-react';
 interface MissionControlPanelProps {
   segment: any;
   onClose: () => void;
+  currentSquad?: any;
 }
 
-export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segment, onClose }) => {
+export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segment, onClose, currentSquad }) => {
   const { name, length_meters, status } = segment.properties;
 
   // Estimate time: 1 min per 10 meters (conservative)
@@ -61,10 +62,17 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
                 <Lock size={20} />
                 Start Patrol
               </button>
-              <button className="w-full py-3 bg-background-subtle text-content-default rounded-xl font-medium hover:bg-background-inset border border-stroke-default flex items-center justify-center gap-2 transition-colors">
-                <Users size={20} />
-                Assign to Squad
-              </button>
+              {currentSquad ? (
+                <button className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 border border-transparent flex items-center justify-center gap-2 transition-colors">
+                  <Users size={20} />
+                  Assign to {currentSquad.name}
+                </button>
+              ) : (
+                <button className="w-full py-3 bg-background-subtle text-content-default rounded-xl font-medium hover:bg-background-inset border border-stroke-default flex items-center justify-center gap-2 transition-colors opacity-50 cursor-not-allowed" title="Join a squad first">
+                  <Users size={20} />
+                  Assign to Squad
+                </button>
+              )}
             </>
           )}
 
