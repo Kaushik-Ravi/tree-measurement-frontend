@@ -34,6 +34,7 @@ import { supabase } from './supabaseClient';
 import { LeaderboardView } from './components/LeaderboardView';
 import { PermissionsCheckModal } from './components/PermissionsCheckModal';
 import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
+import { MissionsView } from './components/missions/MissionsView';
 
 // --- START: DISTANCE CORRECTION HELPERS ---
 // Helper to correct distance drift (Linear Model with Clamping)
@@ -57,7 +58,7 @@ const calculateCorrectedDistance = (rawDistance: number): number => {
 
 // --- END: DISTANCE CORRECTION HELPERS ---
 
-type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION' | 'TRAINING';
+type AppView = 'HUB' | 'SESSION' | 'COMMUNITY_GROVE' | 'LEADERBOARD' | 'CALIBRATION' | 'TRAINING' | 'MISSIONS';
 
 type AppStatus = 
   'IDLE' | 
@@ -2137,6 +2138,7 @@ function App() {
   if (currentView === 'CALIBRATION') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
   if (currentView === 'TRAINING') { return <TrainingHub onBack={() => setCurrentView('HUB')} />; }
+  if (currentView === 'MISSIONS') { return <MissionsView onBack={() => setCurrentView('HUB')} />; }
   if (currentView === 'COMMUNITY_GROVE' && !claimedTree) { return <CommunityGroveView pendingTrees={pendingTrees} isLoading={appStatus === 'COMMUNITY_GROVE_LOADING' || appStatus === 'ANALYSIS_PROCESSING'} onClaimTree={handleClaimTree} onBack={handleReturnToHub} currentUserId={user?.id} /> }
 
   const isSessionActive = currentView === 'SESSION' || (currentView === 'COMMUNITY_GROVE' && !!claimedTree);
@@ -2807,7 +2809,16 @@ function App() {
         <div className="w-full flex flex-col h-full">
             <header className="flex-shrink-0 flex justify-between items-center p-4 border-b border-stroke-default bg-background-default/80 backdrop-blur-sm sticky top-0 z-10">
                 <div className="flex items-center gap-3"><TreePine className="w-7 h-7 text-brand-primary" /><h1 className="text-xl font-semibold text-content-default">Roots</h1></div>
-                <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} />
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setCurrentView('TRAINING')}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 rounded-full text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                  >
+                    <GraduationCap size={16} />
+                    <span className="hidden sm:inline">Training</span>
+                  </button>
+                  <AuthComponent profile={userProfile} theme={theme} onThemeToggle={handleThemeToggle} />
+                </div>
             </header>
             <main className="flex-grow overflow-y-auto p-4 md:p-6 bg-background-subtle">
               <div className="max-w-4xl mx-auto text-center py-8 md:py-16">
@@ -2838,9 +2849,9 @@ function App() {
                       <div className="flex items-center gap-3"><BarChart2 className="w-7 h-7 text-brand-accent"/> <h3 className="text-lg font-semibold text-content-default">Leaderboard</h3></div>
                       <p className="text-sm text-content-subtle mt-2">See how your contributions rank. Earn Sapling Points for each tree you map and analyze.</p>
                   </button>
-                  <button onClick={() => setCurrentView('TRAINING')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-emerald-500/50 hover:shadow-xl transition-all hover:-translate-y-1">
-                      <div className="flex items-center gap-3"><GraduationCap className="w-7 h-7 text-emerald-600"/> <h3 className="text-lg font-semibold text-content-default">Training Academy</h3></div>
-                      <p className="text-sm text-content-subtle mt-2">Become a Certified Ranger. Learn the best practices for accurate tree measurement.</p>
+                  <button onClick={() => setCurrentView('MISSIONS')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-blue-500/50 hover:shadow-xl transition-all hover:-translate-y-1">
+                      <div className="flex items-center gap-3"><MapPin className="w-7 h-7 text-blue-600"/> <h3 className="text-lg font-semibold text-content-default">Field Missions</h3></div>
+                      <p className="text-sm text-content-subtle mt-2">Join a squad or patrol solo. Select street segments to map and earn rewards.</p>
                   </button>
               </div>
               
