@@ -71,6 +71,43 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
     setIsLoading(false); // Stop loading
   }, []);
 
+  // --- START: REALTIME SEGMENTS ---
+  useEffect(() => {
+    const channel = supabase
+      .channel('public:street_segments')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'street_segments' },
+        (payload) => {
+          setDemoSegments((prev: any) => {
+            if (!prev) return prev;
+            
+            const updatedSegment = payload.new;
+            const features = prev.features.map((f: any) => {
+              if (f.properties.id === updatedSegment.id) {
+                return {
+                  ...f,
+                  properties: {
+                    ...f.properties,
+                    status: updatedSegment.status
+                  }
+                };
+              }
+              return f;
+            });
+            
+            return { ...prev, features };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+  // --- END: REALTIME SEGMENTS ---
+
   // Initial load (optional, or rely on map move)
   useEffect(() => {
     // We can trigger an initial fetch if we have a default location, 
