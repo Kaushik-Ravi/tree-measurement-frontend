@@ -17,13 +17,15 @@ interface SpeciesIdentifierProps {
   co2Value: number | null;
   tolerance?: number | null;
   isCO2Loading: boolean;
+  closeupImageUrl?: string;
+  closeupOrgan?: string;
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
 type Mode = 'idle' | 'uploading' | 'cropping';
 
 // --- START: SURGICAL REPLACEMENT (THEMING) ---
-export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading }: SpeciesIdentifierProps) {
+export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading, closeupImageUrl, closeupOrgan }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,55 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   const [selectedOrgan, setSelectedOrgan] = useState<Organ | null>(null);
   const [remainingQuota, setRemainingQuota] = useState<number | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const autoIdentifyAttempted = React.useRef(false);
+
+  // --- AUTO-IDENTIFY FROM SAVED CLOSE-UP ---
+  React.useEffect(() => {
+    if (closeupImageUrl && closeupOrgan && !existingResult && !imageFile && !isLoading && !autoIdentifyAttempted.current) {
+      autoIdentifyAttempted.current = true;
+      const loadAndIdentify = async () => {
+        setIsLoading(true);
+        setMode('uploading');
+        try {
+          console.log("Auto-identifying from saved close-up:", closeupImageUrl);
+          const response = await fetch(closeupImageUrl);
+          const blob = await response.blob();
+          const file = new File([blob], "closeup.jpg", { type: blob.type });
+          
+          setImageFile(file);
+          setImagePreview(closeupImageUrl);
+          
+          // Validate organ
+          const validOrgans: Organ[] = ['leaf', 'flower', 'fruit', 'bark'];
+          const organToUse = validOrgans.includes(closeupOrgan as Organ) ? (closeupOrgan as Organ) : 'leaf';
+          setSelectedOrgan(organToUse);
+
+          // Auto identify
+          const idResponse = await identifySpecies(file, organToUse);
+          if (idResponse.bestMatch) {
+            onIdentificationComplete({
+              bestMatch: idResponse.bestMatch,
+              woodDensity: idResponse.woodDensity,
+            });
+            if (idResponse.remainingIdentificationRequests !== undefined) {
+              setRemainingQuota(idResponse.remainingIdentificationRequests);
+            }
+          } else {
+             setError("Could not identify the species from the saved close-up.");
+             onIdentificationComplete(null);
+          }
+
+        } catch (err: any) {
+          console.error("Auto-identify error:", err);
+          setError("Failed to load saved close-up: " + err.message);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadAndIdentify();
+    }
+  }, [closeupImageUrl, closeupOrgan]);
+
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

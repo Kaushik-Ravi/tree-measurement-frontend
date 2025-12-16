@@ -4,7 +4,7 @@ import { Camera, X, Check, Leaf, Flower2, Sparkles, TreeDeciduous, Image as Imag
 interface SpeciesDetailCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (file: File | null) => void;
+  onConfirm: (file: File | null, organ: Organ | null) => void;
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
@@ -12,6 +12,7 @@ type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
 export function SpeciesDetailCaptureModal({ isOpen, onClose, onConfirm }: SpeciesDetailCaptureModalProps) {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [selectedOrgan, setSelectedOrgan] = useState<Organ | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -25,12 +26,19 @@ export function SpeciesDetailCaptureModal({ isOpen, onClose, onConfirm }: Specie
   };
 
   const handleConfirm = () => {
-    onConfirm(capturedFile);
+    onConfirm(capturedFile, selectedOrgan);
   };
 
   const handleSkip = () => {
-    onConfirm(null);
+    onConfirm(null, null);
   };
+
+  const organOptions: { id: Organ; label: string; icon: React.ReactNode }[] = [
+    { id: 'leaf', label: 'Leaf', icon: <Leaf size={20} /> },
+    { id: 'bark', label: 'Bark', icon: <TreeDeciduous size={20} /> },
+    { id: 'flower', label: 'Flower', icon: <Flower2 size={20} /> },
+    { id: 'fruit', label: 'Fruit', icon: <Sparkles size={20} /> },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -58,39 +66,34 @@ export function SpeciesDetailCaptureModal({ isOpen, onClose, onConfirm }: Specie
                     <Leaf className="w-5 h-5 text-brand-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-content-default text-sm">Why add a close-up?</h3>
+                    <h3 className="font-semibold text-content-default text-sm">Select what you are capturing:</h3>
                     <p className="text-xs text-content-subtle mt-1">
-                      The main photo is great for measuring, but leaves, bark, or fruit are best for identifying the species.
+                      Please choose one option below, then take a clear photo of it.
                     </p>
                   </div>
                 </div>
               </div>
 
+              {/* Organ Selection Grid */}
               <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all group"
-                >
-                  <div className="p-3 bg-background-subtle rounded-full group-hover:bg-brand-primary/10 transition-colors">
-                    <Camera className="w-6 h-6 text-brand-primary" />
-                  </div>
-                  <span className="font-medium text-content-default">Take Photo</span>
-                </button>
-                
-                <div className="flex flex-col justify-center gap-2">
-                   <div className="flex items-center gap-2 text-xs text-content-subtle">
-                      <Leaf size={14} /> Leaf
-                   </div>
-                   <div className="flex items-center gap-2 text-xs text-content-subtle">
-                      <TreeDeciduous size={14} /> Bark
-                   </div>
-                   <div className="flex items-center gap-2 text-xs text-content-subtle">
-                      <Flower2 size={14} /> Flower
-                   </div>
-                   <div className="flex items-center gap-2 text-xs text-content-subtle">
-                      <Sparkles size={14} /> Fruit
-                   </div>
-                </div>
+                {organOptions.map((option) => (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      setSelectedOrgan(option.id);
+                      // Small delay to show selection before opening camera
+                      setTimeout(() => fileInputRef.current?.click(), 200);
+                    }}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 border rounded-xl transition-all ${
+                      selectedOrgan === option.id 
+                        ? 'border-brand-primary bg-brand-primary/10 text-brand-primary ring-2 ring-brand-primary ring-offset-2 ring-offset-background-default' 
+                        : 'border-stroke-default hover:border-brand-primary/50 hover:bg-background-subtle text-content-subtle'
+                    }`}
+                  >
+                    {option.icon}
+                    <span className="font-medium text-sm">{option.label}</span>
+                  </button>
+                ))}
               </div>
               
               <input 
@@ -107,11 +110,19 @@ export function SpeciesDetailCaptureModal({ isOpen, onClose, onConfirm }: Specie
               <div className="relative aspect-square w-full rounded-xl overflow-hidden border border-stroke-default bg-black">
                 <img src={capturedImage} alt="Detail" className="w-full h-full object-contain" />
                 <button 
-                  onClick={() => { setCapturedImage(null); setCapturedFile(null); }}
+                  onClick={() => { setCapturedImage(null); setCapturedFile(null); setSelectedOrgan(null); }}
                   className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 backdrop-blur-sm"
                 >
                   <X size={16} />
                 </button>
+                
+                {/* Organ Badge */}
+                {selectedOrgan && (
+                  <div className="absolute bottom-2 left-2 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full flex items-center gap-2 text-white text-xs font-medium border border-white/10">
+                    {organOptions.find(o => o.id === selectedOrgan)?.icon}
+                    <span className="capitalize">{selectedOrgan}</span>
+                  </div>
+                )}
               </div>
               <p className="text-center text-sm text-content-subtle">
                 Great shot! This will be saved with your tree.
@@ -131,7 +142,8 @@ export function SpeciesDetailCaptureModal({ isOpen, onClose, onConfirm }: Specie
           </button>
           <button 
             onClick={handleConfirm}
-            className="flex-1 px-4 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-primary-hover shadow-lg shadow-brand-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+            disabled={capturedImage && !selectedOrgan} // Should not happen with new flow, but safe guard
+            className="flex-1 px-4 py-3 bg-brand-primary text-white font-semibold rounded-lg hover:bg-brand-primary-hover shadow-lg shadow-brand-primary/20 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {capturedImage ? (
               <>

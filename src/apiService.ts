@@ -28,6 +28,8 @@ export interface TreeResult {
   distance_m?: number;
   scale_factor?: number;
   device_heading?: number;
+  species_detail_image_url?: string;
+  species_detail_organ?: string;
   status?: 'PENDING_ANALYSIS' | 'COMPLETE' | 'ANALYSIS_IN_PROGRESS' | 'VERIFIED'; // More specific status
   confidence?: any; // To hold the consensus data
   claimed_by_user_id?: string;
@@ -115,7 +117,8 @@ export const quickCapture = async (
   latitude: number,
   longitude: number,
   token: string,
-  closeupImage?: File // Optional close-up image
+  closeupImage?: File, // Optional close-up image
+  closeupOrgan?: string // Optional organ type
 ): Promise<any> => {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -128,6 +131,9 @@ export const quickCapture = async (
   }
   if (closeupImage) {
     formData.append('closeup_image', closeupImage);
+  }
+  if (closeupOrgan) {
+    formData.append('closeup_organ', closeupOrgan);
   }
 
   const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {

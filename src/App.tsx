@@ -1783,7 +1783,7 @@ function App() {
     setShowSpeciesDetailModal(true);
   };
 
-  const handleConfirmCommunitySubmit = async (closeupFile: File | null) => {
+  const handleConfirmCommunitySubmit = async (closeupFile: File | null, organ: string | null) => {
     setShowSpeciesDetailModal(false);
     setAppStatus('ANALYSIS_SAVING');
     setInstructionText("Submitting tree for community analysis...");
@@ -1803,7 +1803,8 @@ function App() {
         userGeoLocation!.lat,
         userGeoLocation!.lng,
         session!.access_token,
-        closeupFile || undefined
+        closeupFile || undefined,
+        organ || undefined
       );
       
       const updatedResults = await getResults(session!.access_token);
@@ -2732,6 +2733,8 @@ function App() {
                         co2Value={currentCO2}
                         tolerance={co2Tolerance}
                         isCO2Loading={isCO2Calculating}
+                        closeupImageUrl={currentView === 'COMMUNITY_GROVE' ? claimedTree?.species_detail_image_url : undefined}
+                        closeupOrgan={currentView === 'COMMUNITY_GROVE' ? claimedTree?.species_detail_organ : undefined}
                       />
                     </div>
                   )}
