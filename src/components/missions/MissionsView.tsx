@@ -20,6 +20,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const [showOpsPanel, setShowOpsPanel] = useState(false); // The side panel for chat/tasks
   const [isLoading, setIsLoading] = useState(false);
   const [demoSegments, setDemoSegments] = useState<any>(null);
+  const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   const handleSegmentSelect = (segment: any) => {
     setSelectedSegments(prev => {
@@ -200,6 +201,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
              onBoundsChange={fetchSegmentsInBounds}
              isLoading={isLoading}
              selectedSegments={selectedSegments}
+             flyToLocation={flyToLocation}
            />
         </div>
 
@@ -210,8 +212,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
                     squadId={currentSquad.id}
                     currentUserId={user?.id || ''}
                     onLocateMessage={(lat, lng) => {
-                        // TODO: Fly to location
-                        console.log('Fly to', lat, lng);
+                        setFlyToLocation({ lat, lng, zoom: 19 });
+                        // On mobile, we might want to close the panel so they see the map
+                        if (window.innerWidth < 768) {
+                            setShowOpsPanel(false);
+                        }
                     }}
                     selectedSegment={selectedSegments.length === 1 ? selectedSegments[0] : undefined}
                 />

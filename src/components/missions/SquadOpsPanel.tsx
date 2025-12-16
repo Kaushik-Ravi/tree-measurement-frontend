@@ -90,6 +90,25 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
     setNewMessage('');
   };
 
+  const handleShareLocation = () => {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            const { latitude, longitude } = position.coords;
+            await missionService.sendChatMessage(
+                squadId,
+                currentUserId,
+                "📍 Shared a location",
+                undefined,
+                { lat: latitude, lng: longitude }
+            );
+        }, (error) => {
+            alert("Could not get location: " + error.message);
+        });
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-background-default border-l border-stroke-default shadow-xl w-full pointer-events-auto">
       {/* Header Tabs */}
@@ -136,6 +155,17 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
                         <span>Linked to Street</span>
                     </div>
                   )}
+                  
+                  {/* Location Attachment */}
+                  {msg.location_lat && msg.location_lng && (
+                    <button 
+                        onClick={() => onLocateMessage(msg.location_lat, msg.location_lng)}
+                        className="mt-2 pt-2 border-t border-white/20 flex items-center gap-1 text-xs cursor-pointer hover:underline w-full text-left"
+                    >
+                        <MapPin size={12} />
+                        <span>View Location</span>
+                    </button>
+                  )}
                 </div>
                 <span className="text-[10px] text-content-subtle mt-1">
                     {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
@@ -178,6 +208,13 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
               className="p-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover disabled:opacity-50"
             >
               <Send size={18} />
+            </button>
+            <button 
+                onClick={handleShareLocation}
+                className="p-2 bg-background-subtle text-content-subtle rounded-lg hover:bg-background-default border border-stroke-default"
+                title="Share Location"
+            >
+                <MapPin size={18} />
             </button>
           </div>
         </div>

@@ -425,13 +425,28 @@ interface MissionMapProps {
   onBoundsChange?: (bounds: any) => void;
   isLoading?: boolean;
   selectedSegments?: any[];
+  flyToLocation?: { lat: number; lng: number; zoom?: number } | null;
 }
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [] }) => {
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [], flyToLocation }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
   const [activeLayer, setActiveLayer] = React.useState('Dark Mode');
   const featureGroupRef = useRef<any>(null);
+
+  // Handle FlyTo
+  const FlyToHandler = () => {
+    const map = useMap();
+    useEffect(() => {
+        if (flyToLocation) {
+            map.flyTo([flyToLocation.lat, flyToLocation.lng], flyToLocation.zoom || 18, {
+                animate: true,
+                duration: 1.5
+            });
+        }
+    }, [flyToLocation, map]);
+    return null;
+  };
 
   const handleCreated = (e: any) => {
     const layer = e.layer;
@@ -558,6 +573,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMulti
           onLayerChange={setActiveLayer}
         />
         <ThemeController activeLayer={activeLayer} />
+        <FlyToHandler />
       </MapContainer>
     </div>
   );
