@@ -101,7 +101,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
     setShowPlaceButton(true); // Immediately show place button
     setShowUndoButton(false);
     setIsScanning(false); // Don't show scanning state
-    setInstruction("Point at tree's base, then tap screen");
+    setInstruction("Point at your feet (camera location), then tap screen");
     
     // Reset visual elements
     markersRef.current.forEach(marker => marker.visible = false);
@@ -122,7 +122,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
         
         // Update UI state
         setShowUndoButton(false);
-        setInstruction("Point at tree's base, then tap screen");
+        setInstruction("Point at your feet (camera location), then tap screen");
     }
   }, []);
   
@@ -314,7 +314,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                 if (markerIndex === 0) { // First point placed
                     arStateRef.current = 'READY_TO_PLACE_SECOND';
                     setShowUndoButton(true);
-                    setInstruction("Point at your feet, then tap screen");
+                    setInstruction("Point at tree's base, then tap screen");
                 } else { // Second point placed
                     const [p1, p2] = pointsRef.current;
                     
@@ -436,7 +436,7 @@ export function ARMeasureView({ onDistanceMeasured, onCancel }: ARMeasureViewPro
                         arStateRef.current = 'READY_TO_PLACE_FIRST';
                         setIsScanning(false);
                         setShowPlaceButton(true);
-                        setInstruction("Point at tree's base, then tap screen");
+                        setInstruction("Point at your feet (camera location), then tap screen");
                     }
                 }
                 // Enhanced reticle feedback: full opacity when surface locked
