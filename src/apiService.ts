@@ -114,7 +114,8 @@ export const quickCapture = async (
   heading: number | null,
   latitude: number,
   longitude: number,
-  token: string
+  token: string,
+  closeupImage?: File // Optional close-up image
 ): Promise<any> => {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -124,6 +125,9 @@ export const quickCapture = async (
   formData.append('longitude', longitude.toString());
   if (heading !== null) {
     formData.append('device_heading', heading.toString());
+  }
+  if (closeupImage) {
+    formData.append('closeup_image', closeupImage);
   }
 
   const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {

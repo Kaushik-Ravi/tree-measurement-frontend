@@ -36,6 +36,7 @@ import { PermissionsCheckModal } from './components/PermissionsCheckModal';
 import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 import { MissionsView } from './components/missions/MissionsView';
 import { useLocationTracker } from './hooks/useLocationTracker';
+import { SpeciesDetailCaptureModal } from './components/SpeciesDetailCaptureModal';
 
 // --- START: DISTANCE CORRECTION HELPERS ---
 // Helper to correct distance drift (Linear Model with Clamping)
@@ -297,6 +298,7 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>(null);
   const [pendingTrees, setPendingTrees] = useState<PendingTree[]>([]);
   const [claimedTree, setClaimedTree] = useState<TreeResult | null>(null);
+  const [showSpeciesDetailModal, setShowSpeciesDetailModal] = useState(false);
 
   // Collapsible sections state for results panel
   const [expandedSections, setExpandedSections] = useState({
@@ -1777,6 +1779,12 @@ function App() {
       setErrorMessage("Missing required data: image, distance, or location.");
       return;
     }
+    // Show the modal instead of submitting immediately
+    setShowSpeciesDetailModal(true);
+  };
+
+  const handleConfirmCommunitySubmit = async (closeupFile: File | null) => {
+    setShowSpeciesDetailModal(false);
     setAppStatus('ANALYSIS_SAVING');
     setInstructionText("Submitting tree for community analysis...");
 
@@ -1788,16 +1796,17 @@ function App() {
     
     try {
       await quickCapture(
-        currentMeasurementFile,
+        currentMeasurementFile!,
         parseFloat(distance),
         calculatedScaleFactor,
         capturedHeading, 
-        userGeoLocation.lat,
-        userGeoLocation.lng,
-        session.access_token
+        userGeoLocation!.lat,
+        userGeoLocation!.lng,
+        session!.access_token,
+        closeupFile || undefined
       );
       
-      const updatedResults = await getResults(session.access_token);
+      const updatedResults = await getResults(session!.access_token);
       setAllResults(updatedResults);
       softReset();
 
@@ -2825,6 +2834,11 @@ function App() {
   return (
     <div className="h-screen w-screen bg-background-default font-inter flex flex-col md:flex-row overflow-hidden">
       {editingResult && ( <EditResultModal result={editingResult} onClose={() => setEditingResult(null)} onSave={handleUpdateResult} theme={theme} /> )}
+      <SpeciesDetailCaptureModal 
+        isOpen={showSpeciesDetailModal}
+        onClose={() => setShowSpeciesDetailModal(false)}
+        onConfirm={handleConfirmCommunitySubmit}
+      />
       <InstructionToast 
         message={instructionText} 
         show={showInstructionToast} 
