@@ -27,6 +27,12 @@ export const trainingModules: TrainingChapter[] = [
     icon: Settings,
     slides: [
       {
+        type: 'text',
+        title: 'Welcome to Chapter 1',
+        content: 'In this module, you will learn how to prepare your device for scientific data collection.\n\nKey Objectives:\n• Account creation\n• Essential permissions (Location, Camera)\n• Sensor calibration',
+        icon: BookOpen
+      },
+      {
         type: 'pdf',
         title: 'The Field Setup Guide',
         content: 'Please read through the official setup guide. You can view it fullscreen for better readability.',
@@ -61,6 +67,12 @@ export const trainingModules: TrainingChapter[] = [
     icon: Camera,
     slides: [
       {
+        type: 'text',
+        title: 'Welcome to Chapter 2',
+        content: 'Data quality starts with the photographer. This module covers the "Golden Rules" of tree capture.\n\nKey Objectives:\n• Proper camera angle (Perpendicular)\n• Lighting and framing\n• Stability techniques',
+        icon: BookOpen
+      },
+      {
         type: 'image',
         title: 'Best Practices Infographic',
         content: 'Study this infographic carefully. These rules ensure your data is scientifically valid.',
@@ -90,80 +102,79 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'The Measurement Goal',
-        content: 'After taking the photo, you must measure the distance from your standing position (Point A) to the tree base (Point B). \n\n• Android: Use our built-in AR Ruler.\n• iOS: Use the native "Measure" app.\n\nThe principle is identical for both.',
-        icon: Ruler
+        title: 'Welcome to Chapter 3',
+        content: 'Accurate height depends on accurate distance. Learn the "Walk-Back" technique to eliminate AR drift.\n\nKey Objectives:\n• Understanding the AR Reticle\n• The "Walk-Back" verification method\n• Handling different ground surfaces',
+        icon: BookOpen
       },
       {
-        type: 'text',
-        title: 'Understanding the Reticle',
-        content: 'The "Reticle" is the target circle on your screen.\n\n• Hollow/Dotted: Searching. Move slowly.\n• Solid/Colored: Surface detected. Ready to mark.\n\nTip: Before starting, scan the ground slowly until the reticle tracks the surface reliably.',
-        icon: ScanLine
+        type: 'image',
+        title: 'Visual Guide',
+        content: 'Study this diagram to understand the "Walk-Back" technique.',
+        src: '/assets/training/AR Distance.png',
+        icon: ImageIcon
+      },
+      {
+        type: 'video',
+        title: 'Video Tutorial',
+        content: 'Watch how to properly measure distance using AR.',
+        src: 'https://www.youtube.com/embed/9Qvo0-jp4mw',
+        icon: Youtube
       },
       {
         type: 'checklist',
         title: 'The "Walk-Back" Technique',
-        content: 'For maximum accuracy, follow this specific path:',
+        content: 'Confirm you understand the steps:',
         checklistItems: [
           '1. Stand still at the capture spot.',
           '2. Point camera at ground, wait for solid reticle.',
-          '3. Mark Point A directly below your phone (between feet).',
+          '3. Mark Point A directly below your phone.',
           '4. Walk slowly to the tree base (Point B).',
           '5. Mark Point B at the trunk.',
           '6. CRITICAL: Walk back to Point A to verify the line.',
           '7. Confirm only when back at the start.'
         ],
         icon: Footprints
-      },
-      {
-        type: 'checklist',
-        title: 'Pro Tips',
-        content: 'Ensure these conditions for best results:',
-        checklistItems: [
-          'Good lighting (avoid dark shadows).',
-          'Move phone slowly to maintain tracking.',
-          'Keep the reticle on the ground at all times.',
-          'Use the "Redo" button if the line drifts.'
-        ],
-        icon: Sun
       }
     ]
   },
   {
     id: 'manual-marking',
     title: 'Chapter 4: Manual Marking',
-    description: 'Learn to manually annotate trees for 100% precision, including complex forked trunks.',
+    description: 'Learn to manually annotate trees for 100% precision.',
     icon: MousePointer2,
     slides: [
       {
         type: 'text',
-        title: 'The Point System',
-        content: 'We use a strict 3-step marking process (H-C-G):\n\n1. Height (H): Base (H1) → Top (H2)\n2. Canopy (C): Left (C1) → Right (C2)\n3. Girth (G): Left (G1) → Right (G2)\n\nAlways follow this order for the math to work.',
-        icon: Target
+        title: 'Welcome to Chapter 4',
+        content: 'When AI needs help, you take control. Learn the scientific standard for manual tree annotation.\n\nKey Objectives:\n• The H-C-G Point System\n• Using the "Magnetic Band" for DBH\n• Marking complex/forked trees',
+        icon: BookOpen
+      },
+      {
+        type: 'image',
+        title: 'Reference Guide',
+        content: 'The H-C-G Point System explained.',
+        src: '/assets/training/Manual Marking.png',
+        icon: ImageIcon
+      },
+      {
+        type: 'video',
+        title: 'Marking Tutorial',
+        content: 'See how to mark Height, Canopy, and Girth correctly.',
+        src: 'https://www.youtube.com/embed/F4tqh3zvZY4',
+        icon: Youtube
       },
       {
         type: 'checklist',
-        title: 'Step-by-Step Guide',
-        content: 'Follow these rules for perfect annotation:',
+        title: 'Marking Rules',
+        content: 'I promise to follow these rules:',
         checklistItems: [
           'H1 (Base): Mark exactly where trunk meets ground.',
           'H2 (Top): Mark the very highest leaf tip.',
           'C1/C2: Mark the widest points of the crown.',
-          'Use the Magnifier to see through your finger.'
+          'Girth: Use the Cyan Magnetic Band at 1.3m.',
+          'Forked Trees: Mark all stems before calculating.'
         ],
-        icon: Maximize
-      },
-      {
-        type: 'text',
-        title: 'The Magnetic Band',
-        content: 'For Girth (Diameter), the app draws a Cyan Guide Zone at exactly 1.3m (Breast Height).\n\n• Aim for this band.\n• The cursor will SNAP (turn Green) when locked to the correct height.\n• This ensures your DBH measurement is scientifically valid.',
-        icon: ScanLine
-      },
-      {
-        type: 'text',
-        title: 'Advanced: Forked Trees',
-        content: 'If the tree splits below 1.3m (Multi-Stem):\n\n1. Mark the first stem (G1-G2).\n2. Do NOT click Calculate yet.\n3. Mark the second stem (G3-G4).\n4. Repeat for all stems.\n5. Click "Calculate" only when done.\n\nThe app will combine them automatically.',
-        icon: GitFork
+        icon: ListChecks
       }
     ]
   }
