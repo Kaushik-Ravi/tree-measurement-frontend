@@ -152,16 +152,6 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
                 <p className="text-xs text-blue-300 mt-1">Check Squad Ops for details</p>
              </div>
           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-                  Assign to Squad
-                </button>
-              )}
-            </>
-          )}
 
           {!isMultiple && status === 'locked' && (
             <div className="p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl text-yellow-200 text-sm">
