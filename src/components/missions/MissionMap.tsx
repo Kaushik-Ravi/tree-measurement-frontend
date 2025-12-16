@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, LayersControl, ScaleControl, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, useMapEvents, LayersControl, ScaleControl, Marker, Popup, FeatureGroup } from 'react-leaflet';
+import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
 import { Crosshair, User } from 'lucide-react';
@@ -402,10 +404,73 @@ const LiveAgentsLayer = () => {
   );
 };
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange, isLoading, selectedSegments = [] }) => {
+// Helper for point in polygon
+function isPointInPolygon(point: [number, number], vs: [number, number][]) {
+    var x = point[0], y = point[1];
+    var inside = false;
+    for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+        var xi = vs[i][0], yi = vs[i][1];
+        var xj = vs[j][0], yj = vs[j][1];
+        var intersect = ((yi > y) != (yj > y))
+            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+};
+
+interface MissionMapProps {
+  onSegmentSelect: (segment: any) => void;
+  onMultiSelect?: (segments: any[]) => void;
+  segments: any;
+  onBoundsChange?: (bounds: any) => void;
+  isLoading?: boolean;
+  selectedSegments?: any[];
+}
+
+export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [] }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
   const [activeLayer, setActiveLayer] = React.useState('Dark Mode');
+  const featureGroupRef = useRef<any>(null);
+
+  const handleCreated = (e: any) => {
+    const layer = e.layer;
+    if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
+      const latlngs = layer.getLatLngs()[0]; 
+      // @ts-ignore
+      const polygonPoints = latlngs.map((p: any) => [p.lat, p.lng]);
+
+      const found = [];
+      if (segments && segments.features) {
+        for (const feature of segments.features) {
+            const coords = feature.geometry.coordinates; 
+            // GeoJSON LineString is [[lng, lat], [lng, lat]]
+            
+            // Check midpoint
+            const p1 = coords[0];
+            const p2 = coords[coords.length - 1];
+            const midLat = (p1[1] + p2[1]) / 2;
+            const midLng = (p1[0] + p2[0]) / 2;
+            
+            // @ts-ignore
+            if (isPointInPolygon([midLat, midLng], polygonPoints)) {
+                found.push(feature);
+            }
+        }
+      }
+      
+      if (found.length > 0 && onMultiSelect) {
+          onMultiSelect(found);
+      }
+      
+      // Clear the drawn shape after a short delay so user sees what they drew
+      setTimeout(() => {
+          if (featureGroupRef.current) {
+              featureGroupRef.current.clearLayers();
+          }
+      }, 500);
+    }
+  };
 
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>
@@ -435,6 +500,21 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
         style={{ height: '100%', width: '100%', background: '#1e293b' }}
         preferCanvas={true} // CRITICAL: Use Canvas renderer for performance with many paths
       >
+        <FeatureGroup ref={featureGroupRef}>
+            <EditControl
+                position="topleft"
+                onCreated={handleCreated}
+                draw={{
+                    rectangle: true,
+                    polygon: true,
+                    circle: false,
+                    circlemarker: false,
+                    marker: false,
+                    polyline: false
+                }}
+            />
+        </FeatureGroup>
+
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Dark Mode">
             <TileLayer

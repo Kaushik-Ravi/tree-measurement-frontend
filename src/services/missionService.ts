@@ -30,14 +30,23 @@ export const missionService = {
       .from('squad_members')
       .insert([{ squad_id: data.id, user_id: userId, role: 'leader' }]);
 
-    return { data: { ...data, members: 1 }, error: null };
+    // Fetch full details from view to get accurate member count
+    const { data: squadDetails, error: viewError } = await supabase
+      .from('squad_details_view')
+      .select('*')
+      .eq('id', data.id)
+      .single();
+
+    if (viewError) return { data: { ...data, members: 1 }, error: null }; // Fallback
+
+    return { data: squadDetails, error: null };
   },
 
   async joinSquad(code: string, userId: string): Promise<{ data: Squad | null, error: any }> {
-    // 1. Find squad
+    // 1. Find squad basic info first to get ID
     const { data: squad, error: findError } = await supabase
       .from('squads')
-      .select('*')
+      .select('id')
       .eq('code', code)
       .single();
 
@@ -53,7 +62,25 @@ export const missionService = {
       if (joinError.code !== '23505') return { data: null, error: joinError };
     }
 
-    return { data: { ...squad, members: 1 }, error: null }; // Simplified member count for now
+    // 3. Fetch full details from view to get accurate member count
+    const { data: squadDetails, error: viewError } = await supabase
+      .from('squad_details_view')
+      .select('*')
+      .eq('id', squad.id)
+      .single();
+
+    if (viewError) return { data: null, error: viewError };
+
+    return { data: squadDetails, error: null };
+  },
+
+  async getSquad(squadId: string): Promise<{ data: Squad | null, error: any }> {
+    const { data, error } = await supabase
+      .from('squad_details_view')
+      .select('*')
+      .eq('id', squadId)
+      .single();
+    return { data, error };
   },
 
   async getSquadMembers(squadId: string) {

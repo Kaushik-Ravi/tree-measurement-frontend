@@ -32,6 +32,18 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
     });
   };
 
+  const handleMultiSelect = (segments: any[]) => {
+    setSelectedSegments(prev => {
+        // Create a map of existing segments for quick lookup
+        const existingMap = new Map(prev.map(s => [s.properties.id, s]));
+        
+        // Add all new segments
+        segments.forEach(s => existingMap.set(s.properties.id, s));
+        
+        return Array.from(existingMap.values());
+    });
+  };
+
   // Load real data from Supabase based on bounds
   const fetchSegmentsInBounds = useCallback(async (bounds: any) => {
     if (!bounds) return;
@@ -183,6 +195,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         <div className="flex-1 relative z-0">
            <MissionMap 
              onSegmentSelect={handleSegmentSelect} 
+             onMultiSelect={handleMultiSelect}
              segments={demoSegments} // Pass dynamic segments
              onBoundsChange={fetchSegmentsInBounds}
              isLoading={isLoading}
@@ -190,9 +203,9 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
            />
         </div>
 
-        {/* Squad Ops Panel (Right Sidebar) */}
+        {/* Squad Ops Panel (Right Sidebar / Mobile Full Screen) */}
         {currentSquad && showOpsPanel && (
-            <div className="absolute right-0 top-0 bottom-0 z-20 animate-slide-left">
+            <div className="absolute inset-0 md:left-auto md:w-80 bg-background-default border-l border-stroke-default shadow-xl z-20 animate-slide-left flex flex-col">
                 <SquadOpsPanel 
                     squadId={currentSquad.id}
                     currentUserId={user?.id || ''}
@@ -232,10 +245,18 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* Mission Control Panel (Bottom Overlay) */}
-        {/* Only show if Ops Panel is NOT covering it, or adjust layout */}
+        {/* Mission Control Panel (Bottom Sheet / Desktop Sidebar) */}
         {selectedSegments.length > 0 && !showSquadPanel && (
-          <div className={`absolute bottom-0 left-0 ${showOpsPanel ? 'right-80' : 'right-0'} md:relative md:w-96 md:border-l border-stroke-default bg-background-default shadow-xl z-10 max-h-[50vh] md:max-h-full overflow-y-auto transition-all duration-300 animate-slide-up`}>
+          <div className={`
+            absolute bottom-0 left-0 right-0 
+            md:relative md:w-96 md:border-l md:h-full
+            bg-background-default border-t md:border-t-0 border-stroke-default 
+            shadow-xl z-10 
+            max-h-[50vh] md:max-h-full 
+            overflow-y-auto 
+            transition-all duration-300 animate-slide-up
+            ${showOpsPanel ? 'hidden md:block' : ''} 
+          `}>
             <MissionControlPanel 
               segments={selectedSegments} 
               onClose={() => setSelectedSegments([])}

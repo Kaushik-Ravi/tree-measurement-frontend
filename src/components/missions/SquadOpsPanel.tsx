@@ -91,7 +91,7 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
   };
 
   return (
-    <div className="flex flex-col h-full bg-background-default border-l border-stroke-default shadow-xl w-80 pointer-events-auto">
+    <div className="flex flex-col h-full bg-background-default border-l border-stroke-default shadow-xl w-full pointer-events-auto">
       {/* Header Tabs */}
       <div className="flex border-b border-stroke-default">
         <button 
