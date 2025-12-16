@@ -1,4 +1,4 @@
-import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target } from 'lucide-react';
+import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target, Users, Lock, Clock, ShieldCheck } from 'lucide-react';
 
 export type SlideType = 'text' | 'pdf' | 'video' | 'image' | 'checklist';
 
@@ -173,6 +173,46 @@ export const trainingModules: TrainingChapter[] = [
           'C1/C2: Mark the widest points of the crown.',
           'Girth: Use the Cyan Magnetic Band at 1.3m.',
           'Forked Trees: Mark all stems before calculating.'
+        ],
+        icon: ListChecks
+      }
+    ]
+  },
+  {
+    id: 'community-grove',
+    title: 'Chapter 5: The Community Grove',
+    description: 'Join the global team of citizen scientists. Verify trees and build the database.',
+    icon: Users,
+    slides: [
+      {
+        type: 'text',
+        title: 'Citizen Science',
+        content: 'The Grove is where "Quick Capture" trees go to mature. You are not just a user; you are a Ranger helping to verify data from around the world.\n\nKey Concepts:\n• 🤝 The Power of 5: Consensus verification.\n• 🔐 The Lock: 10-minute analysis window.\n• 👑 Owner Privilege: Instant verification.',
+        icon: BookOpen
+      },
+      {
+        type: 'image',
+        title: 'The Grove Ecosystem',
+        content: 'Understand how your contributions fit into the global verification network.',
+        src: '/assets/training/Community Grove.png',
+        icon: ImageIcon
+      },
+      {
+        type: 'video',
+        title: 'Grove Tutorial',
+        content: 'Watch how to claim, analyze, and verify trees in the Community Grove.',
+        src: 'https://www.youtube.com/embed/MmNOhseAL9I',
+        icon: Youtube
+      },
+      {
+        type: 'checklist',
+        title: 'Ranger\'s Oath',
+        content: 'I accept the responsibility of the Grove:',
+        checklistItems: [
+          'I will only claim trees I intend to finish.',
+          'I understand the 10-minute timer.',
+          'I know my analysis contributes to the "Consensus of 5".',
+          'I will be precise, even with strangers\' trees.'
         ],
         icon: ListChecks
       }
