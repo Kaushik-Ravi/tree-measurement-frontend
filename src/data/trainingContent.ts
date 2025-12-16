@@ -28,8 +28,8 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'Welcome to Chapter 1',
-        content: 'In this module, you will learn how to prepare your device for scientific data collection.\n\nKey Objectives:\n• Account creation\n• Essential permissions (Location, Camera)\n• Sensor calibration',
+        title: 'Ready for Science?',
+        content: 'Your device is your scientific instrument. A proper setup ensures every measurement counts.\n\nIn this module:\n• 🔐 Permissions: Why we need Location & Camera.\n• ⚙️ Calibration: Tuning your sensors for sub-meter accuracy.\n• 👤 Account: Syncing your hard work to the cloud.',
         icon: BookOpen
       },
       {
@@ -68,8 +68,8 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'Welcome to Chapter 2',
-        content: 'Data quality starts with the photographer. This module covers the "Golden Rules" of tree capture.\n\nKey Objectives:\n• Proper camera angle (Perpendicular)\n• Lighting and framing\n• Stability techniques',
+        title: 'The Art of Capture',
+        content: 'Garbage in, garbage out. Even the best AI cannot fix a bad photo. Learn the professional field protocols.\n\nYou will master:\n• 📐 Angles: Why "Perpendicular" is non-negotiable.\n• ☀️ Lighting: Avoiding silhouettes and shadows.\n• 🦶 Stance: Stability techniques for sharp images.',
         icon: BookOpen
       },
       {
@@ -102,8 +102,8 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'Welcome to Chapter 3',
-        content: 'Accurate height depends on accurate distance. Learn the "Walk-Back" technique to eliminate AR drift.\n\nKey Objectives:\n• Understanding the AR Reticle\n• The "Walk-Back" verification method\n• Handling different ground surfaces',
+        title: 'Precision Walking',
+        content: 'Distance is the most critical variable in the height formula. A 10% error here means a 10% error in your final result.\n\nThe Workflow:\n• 🎯 The Reticle: Reading the AR feedback loop.\n• 🚶 The Walk-Back: Our unique verification technique.\n• 🛡️ Drift Control: How to spot and fix AR errors.',
         icon: BookOpen
       },
       {
@@ -145,8 +145,8 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'Welcome to Chapter 4',
-        content: 'When AI needs help, you take control. Learn the scientific standard for manual tree annotation.\n\nKey Objectives:\n• The H-C-G Point System\n• Using the "Magnetic Band" for DBH\n• Marking complex/forked trees',
+        title: 'Human-in-the-Loop',
+        content: 'AI is fast, but you are the expert. Learn the "Gold Standard" marking protocols for complex trees.\n\nSkills Covered:\n• 📍 H-C-G System: The standard annotation order.\n• 🧲 Magnetic Band: Ensuring scientifically valid DBH.\n• 🌳 Complex Trees: Handling forks and dense canopies.',
         icon: BookOpen
       },
       {
