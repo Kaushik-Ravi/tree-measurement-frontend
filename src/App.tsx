@@ -35,6 +35,7 @@ import { LeaderboardView } from './components/LeaderboardView';
 import { PermissionsCheckModal } from './components/PermissionsCheckModal';
 import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 import { MissionsView } from './components/missions/MissionsView';
+import { useLocationTracker } from './hooks/useLocationTracker';
 
 // --- START: DISTANCE CORRECTION HELPERS ---
 // Helper to correct distance drift (Linear Model with Clamping)
@@ -308,6 +309,12 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragRectRef = useRef<DOMRect | null>(null); // Optimization: Cache canvas rect during drag
+
+  // --- START: MISSION CONTROL HEARTBEAT ---
+  // This hook runs in the background and updates the user's location in Supabase
+  // It only runs if the user is logged in.
+  useLocationTracker();
+  // --- END: MISSION CONTROL HEARTBEAT ---
 
   // --- START: SESSION PERSISTENCE ---
   const { isRestoring, restoredSession, saveSession, clearSession } = useSessionPersistence();

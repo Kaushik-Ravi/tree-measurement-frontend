@@ -1,15 +1,39 @@
-import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, LayersControl, ScaleControl } from 'react-leaflet';
+import React, { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, useMap, useMapEvents, LayersControl, ScaleControl, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, User } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+// Custom Agent Icon
+const createAgentIcon = (color: string = '#3b82f6') => L.divIcon({
+  className: 'custom-agent-icon',
+  html: `<div style="
+    background-color: ${color};
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  ">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+      <circle cx="12" cy="7" r="4"></circle>
+    </svg>
+  </div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -12]
+});
 
 let DefaultIcon = L.icon({
     iconUrl: icon,
@@ -316,6 +340,68 @@ const MapController = ({ onBoundsChange, onLayerChange }: { onBoundsChange?: (bo
   return null;
 };
 
+// Live Agents Layer
+const LiveAgentsLayer = () => {
+  const [agents, setAgents] = useState<any[]>([]);
+
+  useEffect(() => {
+    // 1. Initial Fetch
+    const fetchAgents = async () => {
+      const { data } = await supabase
+        .from('user_locations')
+        .select('*')
+        .gt('last_updated', new Date(Date.now() - 1000 * 60 * 5).toISOString()); // Active in last 5 mins
+      
+      if (data) setAgents(data);
+    };
+    
+    fetchAgents();
+
+    // 2. Realtime Subscription
+    const channel = supabase
+      .channel('public:user_locations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_locations' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            setAgents(prev => {
+              const exists = prev.find(a => a.user_id === payload.new.user_id);
+              if (exists) {
+                return prev.map(a => a.user_id === payload.new.user_id ? payload.new : a);
+              } else {
+                return [...prev, payload.new];
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return (
+    <>
+      {agents.map(agent => (
+        <Marker 
+          key={agent.user_id} 
+          position={[agent.lat, agent.lng]}
+          icon={createAgentIcon()}
+          zIndexOffset={1000}
+        >
+          <Popup>
+            <div className="text-sm font-bold">Agent</div>
+            <div className="text-xs text-gray-500">Last seen: {new Date(agent.last_updated).toLocaleTimeString()}</div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  );
+};
+
 export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segments, onBoundsChange, isLoading, selectedSegments = [] }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
@@ -376,6 +462,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, segment
         <SearchControl />
         <LocateControl />
         <LiveTreeLayer />
+        <LiveAgentsLayer />
         
         {segments && (
           <StreetLayer 
