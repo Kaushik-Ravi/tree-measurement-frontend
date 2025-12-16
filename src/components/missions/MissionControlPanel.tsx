@@ -1,13 +1,17 @@
-import React from 'react';
-import { X, Clock, MapPin, Users, Lock, CheckCircle, List } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Clock, MapPin, Users, Lock, CheckCircle, List, Loader2 } from 'lucide-react';
+import { missionService } from '../../services/missionService';
 
 interface MissionControlPanelProps {
   segments: any[];
   onClose: () => void;
   currentSquad?: any;
+  currentUserId?: string;
+  onAssignComplete?: () => void;
 }
 
-export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segments, onClose, currentSquad }) => {
+export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segments, onClose, currentSquad, currentUserId, onAssignComplete }) => {
+  const [isAssigning, setIsAssigning] = useState(false);
   const totalLength = segments.reduce((acc, seg) => acc + (seg.properties.length_meters || 0), 0);
   // Estimate time: 1 min per 10 meters (conservative)
   const estTime = Math.ceil(totalLength / 10);
@@ -15,6 +19,32 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
   const isMultiple = segments.length > 1;
   const title = isMultiple ? `${segments.length} Segments Selected` : segments[0].properties.name;
   const status = isMultiple ? 'Mixed' : segments[0].properties.status;
+
+  const handleAssign = async (assigneeId: string | null) => {
+    if (!currentSquad) return;
+    setIsAssigning(true);
+    
+    const segmentIds = segments.map(s => s.properties.id);
+    // If assigneeId is null, it's assigned to the squad but unassigned to a specific user
+    // My SQL function expects a UUID for assignee_id, if I pass null it should work if the column is nullable.
+    // However, the RPC call might need explicit null handling.
+    
+    const { error } = await missionService.bulkAssignSegments(
+        segmentIds, 
+        currentSquad.id, 
+        assigneeId as any // Cast to any to allow null if the type definition is strict
+    );
+
+    setIsAssigning(false);
+
+    if (error) {
+        alert('Failed to assign: ' + error.message);
+    } else {
+        alert('Assignments created!');
+        if (onAssignComplete) onAssignComplete();
+        onClose();
+    }
+  };
 
   return (
     <div className="p-6 h-full flex flex-col">
@@ -27,6 +57,7 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
                 ${status === 'available' ? 'bg-white text-black' : ''}
                 ${status === 'locked' ? 'bg-gray-700 text-gray-300' : ''}
                 ${status === 'completed' ? 'bg-emerald-900 text-emerald-300' : ''}
+                ${status === 'assigned' ? 'bg-blue-900 text-blue-300' : ''}
                 `}>
                 {status}
                 </span>
@@ -86,18 +117,46 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
         <div className="space-y-3">
           {(status === 'available' || isMultiple) && (
             <>
-              <button className="w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-lg hover:bg-brand-primary-hover shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
-                <Lock size={20} />
-                Start Patrol ({segments.length})
-              </button>
               {currentSquad ? (
-                <button className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 border border-transparent flex items-center justify-center gap-2 transition-colors">
-                  <Users size={20} />
-                  Assign to {currentSquad.name}
-                </button>
+                <>
+                    <button 
+                        onClick={() => handleAssign(currentUserId || null)}
+                        disabled={isAssigning}
+                        className="w-full py-4 bg-brand-primary text-white rounded-xl font-bold text-lg hover:bg-brand-primary-hover shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-50"
+                    >
+                        {isAssigning ? <Loader2 className="animate-spin" /> : <Lock size={20} />}
+                        Start Patrol (Assign to Me)
+                    </button>
+                    
+                    <button 
+                        onClick={() => handleAssign(null)}
+                        disabled={isAssigning}
+                        className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 border border-transparent flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    >
+                        {isAssigning ? <Loader2 className="animate-spin" /> : <Users size={20} />}
+                        Assign to {currentSquad.name} (Pool)
+                    </button>
+                </>
               ) : (
                 <button className="w-full py-3 bg-background-subtle text-content-default rounded-xl font-medium hover:bg-background-inset border border-stroke-default flex items-center justify-center gap-2 transition-colors opacity-50 cursor-not-allowed" title="Join a squad first">
                   <Users size={20} />
+                  Join a Squad to Assign
+                </button>
+              )}
+            </>
+          )}
+          
+          {status === 'assigned' && !isMultiple && (
+             <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl text-center">
+                <p className="text-blue-200 font-bold">Currently Assigned</p>
+                <p className="text-xs text-blue-300 mt-1">Check Squad Ops for details</p>
+             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
                   Assign to Squad
                 </button>
               )}

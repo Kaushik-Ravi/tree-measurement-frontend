@@ -63,6 +63,7 @@ export const missionService = {
         user_id,
         role,
         users:user_id (
+          id,
           email
         )
       `)
@@ -72,6 +73,16 @@ export const missionService = {
   },
 
   // --- CHAT & ASSIGNMENTS ---
+
+  async bulkAssignSegments(segmentIds: string[], squadId: string, assigneeId: string, priority: string = 'normal') {
+    const { error } = await supabase.rpc('bulk_assign_segments', {
+      segment_ids: segmentIds,
+      squad_id: squadId,
+      assignee_id: assigneeId,
+      priority: priority
+    });
+    return { error };
+  },
 
   async sendChatMessage(squadId: string, userId: string, message: string, relatedSegmentId?: string, location?: {lat: number, lng: number}) {
     const payload: any = {

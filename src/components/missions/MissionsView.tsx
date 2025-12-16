@@ -203,6 +203,13 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
               segments={selectedSegments} 
               onClose={() => setSelectedSegments([])}
               currentSquad={currentSquad}
+              currentUserId={user?.id}
+              onAssignComplete={() => {
+                  // Refresh segments to show new status
+                  // We can trigger a re-fetch or just clear selection
+                  setSelectedSegments([]);
+                  // Ideally trigger fetchSegmentsInBounds(mapBounds)
+              }}
             />
           </div>
         )}
