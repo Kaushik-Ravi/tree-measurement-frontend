@@ -271,14 +271,14 @@ export const trainingModules: TrainingChapter[] = [
         type: 'image',
         title: 'Workflow Visual',
         content: 'Follow the "Analyze Myself" path.',
-        src: '/assets/training/placeholder.png', // TODO: User to update
+        src: '/assets/training/Option 2.png',
         icon: ImageIcon
       },
       {
         type: 'video',
         title: 'Field Demo',
         content: 'Watch the Full Analysis process in action.',
-        src: 'https://www.youtube.com/embed/PLACEHOLDER', // TODO: User to update
+        src: 'https://www.youtube.com/embed/HEREIbWHAPA',
         icon: Youtube
       },
       {
@@ -345,27 +345,33 @@ export const trainingModules: TrainingChapter[] = [
     slides: [
       {
         type: 'text',
-        title: 'Device & Flexibility',
-        content: 'Q: Is it necessary to only use a mobile phone?\n\nA: No.\n• Capture & Geotagging: YES (Requires Camera + GPS).\n• Analysis & Review: NO. You can use a PC, Laptop, or Tablet.\n\nTip: "Capture in the field, Analyze at your desk."',
+        title: 'Android vs. iOS',
+        content: 'Q: Do I need a specific phone?\n\nA: Both work!\n• Android: Full support.\n• iOS: If in-app AR has issues, use the native "Measure" app.\n\nThe Principle: The "Walk-Back" technique is the same regardless of the app.\n\n[Apple Measure App](https://apps.apple.com/us/app/measure/id1383426740)',
         icon: Smartphone
       },
       {
         type: 'text',
-        title: 'Mistakes & Corrections',
-        content: 'Q: Can I fix mistakes?\n\nA: Yes.\n• During Marking: Use the "Redo" button (Bottom Left).\n• Bad Record: You can DELETE the tree entirely.\n• After Submission: You can edit Details (Condition, Ownership) but NOT measurements.',
+        title: 'Workflow Flexibility',
+        content: 'Q: Do I have to do everything on my phone?\n\nA: No.\n• Field Work (Capture): YES. Requires Camera + GPS.\n• Desk Work (Analysis): NO. We recommend using a Laptop or Tablet for analysis. It is faster and easier to see details.',
+        icon: Maximize
+      },
+      {
+        type: 'text',
+        title: 'Managing Mistakes',
+        content: 'Q: I made a mistake. Now what?\n\nA: You have options:\n• During Marking: Tap "Redo" (Bottom Left).\n• Bad Record: Delete the tree entirely.\n• Post-Submission: You can edit Details (Condition, Remarks), but measurements are locked.',
         icon: AlertTriangle
       },
       {
         type: 'text',
-        title: 'App Reliability',
-        content: 'Q: What if the app gets stuck?\n\nA: Refresh the page.\n• Your data is safe.\n• The app preserves your state automatically.\n• Just reload and continue.',
-        icon: ShieldCheck
+        title: 'Pro Tips',
+        content: 'Q: How do I master the app?\n\nA: Two key tips:\n1. Stuck? Just Refresh. Your data is auto-saved.\n2. Can\'t See? Use the Master Toggles ("Show Image" vs "Show Panel") to switch views.',
+        icon: Zap
       },
       {
         type: 'text',
-        title: 'Viewing Options',
-        content: 'Q: How do I see the image better?\n\nA: Use the Master Options:\n1. "Show Panel" - Focus on controls/data.\n2. "Show Image" - Focus on the tree photo.\n\nToggle between them to get the best view.',
-        icon: Maximize
+        title: 'Support & Feedback',
+        content: 'Q: Where do I report issues?\n\nWe are here to help:\n• Email: official.kaushik.r@gmail.com\n• LinkedIn: https://www.linkedin.com/in/kaushik2002/',
+        icon: ShieldCheck
       }
     ]
   }
