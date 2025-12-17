@@ -93,15 +93,6 @@ export const GeoSearch = () => {
 
     map.fitBounds(bounds);
     
-    // Optional: Add a temporary marker
-    const marker = L.marker([lat, lng]).addTo(map);
-    marker.bindPopup(result.display_name).openPopup();
-    
-    // Remove marker after a delay or on next click
-    setTimeout(() => {
-        map.removeLayer(marker);
-    }, 10000);
-
     setQuery(result.display_name.split(',')[0]); // Keep it short
     setIsOpen(false);
   };
