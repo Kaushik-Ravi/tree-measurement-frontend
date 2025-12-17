@@ -1,4 +1,4 @@
-import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target, Users, Lock, Clock, ShieldCheck } from 'lucide-react';
+import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target, Users, Lock, Clock, ShieldCheck, Zap, Send, Home, ClipboardCheck, PenTool, Leaf, Map } from 'lucide-react';
 
 export type SlideType = 'text' | 'pdf' | 'video' | 'image' | 'checklist';
 
@@ -213,6 +213,125 @@ export const trainingModules: TrainingChapter[] = [
           'I understand the 10-minute timer.',
           'I know my analysis contributes to the "Consensus of 5".',
           'I will be precise, even with strangers\' trees.'
+        ],
+        icon: ListChecks
+      }
+    ]
+  },
+  {
+    id: 'workflow-quick',
+    title: 'Chapter 6: Workflow A - Quick Capture',
+    description: 'The "Speed Run" mode. Capture now, analyze later. Perfect for mapping large areas quickly.',
+    icon: Zap,
+    slides: [
+      {
+        type: 'text',
+        title: 'The Strategy: Speed & Volume',
+        content: 'Field time is precious. This workflow reduces time-per-tree to ~45 seconds.\n\nProcess:\n1. Capture Photo\n2. Measure Distance\n3. Submit to Community\n\nGoal: Map as many trees as possible while the light is good.',
+        icon: BookOpen
+      },
+      {
+        type: 'image',
+        title: 'Workflow Visual',
+        content: 'Follow the "Submit to Community" path.',
+        src: '/assets/training/Option 1.png',
+        icon: ImageIcon
+      },
+      {
+        type: 'video',
+        title: 'Field Demo',
+        content: 'Watch the Quick Capture process in action.',
+        src: 'https://www.youtube.com/embed/qQ2FwFCB2SE',
+        icon: Youtube
+      },
+      {
+        type: 'checklist',
+        title: 'Quick Capture Checklist',
+        content: 'Confirm the steps:',
+        checklistItems: [
+          '1. Permissions & Location ON.',
+          '2. Capture Tree (Perpendicular, Breathing Space).',
+          '3. Measure Distance (Walk-Back Technique).',
+          '4. Select "Submit for Community".',
+          '5. Capture Close-up (Leaf/Bark).',
+          '6. Submit & Move to next tree.'
+        ],
+        icon: Send
+      }
+    ]
+  },
+  {
+    id: 'workflow-full',
+    title: 'Chapter 7: Workflow B - Full Analysis',
+    description: 'The "Scientist" mode. Complete the entire data lifecycle on the spot.',
+    icon: ClipboardCheck,
+    slides: [
+      {
+        type: 'text',
+        title: 'The Strategy: Depth & Detail',
+        content: 'Zero backlog. When you leave the tree, the work is done.\n\nProcess:\n1. Capture & Distance\n2. Manual Measure (H-C-G)\n3. Species ID & Details\n\nTime: ~3 minutes per tree.',
+        icon: BookOpen
+      },
+      {
+        type: 'image',
+        title: 'Workflow Visual',
+        content: 'Follow the "Analyze Myself" path.',
+        src: '/assets/training/placeholder.png', // TODO: User to update
+        icon: ImageIcon
+      },
+      {
+        type: 'video',
+        title: 'Field Demo',
+        content: 'Watch the Full Analysis process in action.',
+        src: 'https://www.youtube.com/embed/PLACEHOLDER', // TODO: User to update
+        icon: Youtube
+      },
+      {
+        type: 'checklist',
+        title: 'Full Analysis Checklist',
+        content: 'Confirm the steps:',
+        checklistItems: [
+          '1. Capture & Distance (Standard).',
+          '2. Select "Analyze Myself" -> "Manual".',
+          '3. Mark Points (Base, Top, Canopy, Girth).',
+          '4. Identify Species (Close-up).',
+          '5. Add Details (Condition, Ownership).',
+          '6. Submit & Verify on Map.'
+        ],
+        icon: Map
+      }
+    ]
+  },
+  {
+    id: 'workflow-pending',
+    title: 'Chapter 8: Completing Pending Analysis',
+    description: 'Finish what you started. How to revisit and finalize "Quick Capture" trees.',
+    icon: Clock,
+    slides: [
+      {
+        type: 'text',
+        title: 'The Follow-Up',
+        content: 'Quick Capture gets the tree on the map. Now, someone needs to finish the job.\n\nProcess:\n1. Select "Pending" Tree\n2. Verify Existing Data\n3. Complete Manual Analysis\n\nGoal: Upgrade "Pending" records to "Verified".',
+        icon: BookOpen
+      },
+      {
+        type: 'video',
+        title: 'Tutorial: Pending Analysis',
+        content: 'Watch how to access and complete pending tree analyses.',
+        src: 'https://www.youtube.com/embed/BXXQhiJH7BY',
+        icon: Youtube
+      },
+      {
+        type: 'checklist',
+        title: 'Completion Checklist',
+        content: 'Steps to finalize a record:',
+        checklistItems: [
+          '1. Locate "Pending" tree on Map.',
+          '2. Select "Complete Analysis".',
+          '3. Verify Photo & Distance.',
+          '4. Perform Manual Marking (H-C-G).',
+          '5. Add Species & Details.',
+          '6. Final Submit.'
         ],
         icon: ListChecks
       }
