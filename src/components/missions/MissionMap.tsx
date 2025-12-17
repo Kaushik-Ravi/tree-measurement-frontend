@@ -194,27 +194,29 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
       
       if (isSelected) {
         return {
-          color: '#f59e0b', // Orange
-          weight: 12, // Thicker for selected
+          color: '#f97316', // Bright Orange (High Contrast Selection)
+          weight: 12, 
           opacity: 1
         };
       }
 
       // Dynamic color based on base layer
-      let defaultColor = '#facc15'; // Default Yellow for Dark/Satellite (High Contrast)
+      // Golden Standard: Use colors that contrast well with the map tiles
+      let defaultColor = '#22d3ee'; // Cyan/Light Blue for Dark/Satellite (Tron-like visibility)
+      
       if (activeLayer === 'OpenStreetMap') {
-        defaultColor = '#dc2626'; // Red for Light map (High Visibility)
+        defaultColor = '#7c3aed'; // Deep Purple for Light map (Distinct from roads/water/parks)
       }
 
       let color = defaultColor;
-      if (status === 'locked') color = '#94a3b8'; // Grey
-      if (status === 'completed') color = '#10b981'; // Green
-      if (status === 'assigned') color = '#3b82f6'; // Blue
+      if (status === 'locked') color = '#64748b'; // Slate Grey (Subtle)
+      if (status === 'completed') color = '#10b981'; // Emerald Green (Success)
+      if (status === 'assigned') color = '#ec4899'; // Pink/Magenta (Distinct from Blue/Purple)
 
       return {
         color: color,
         weight: 8,
-        opacity: 0.7
+        opacity: 0.8
       };
     };
 
