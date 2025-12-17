@@ -47,17 +47,17 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
   };
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-6 h-full flex flex-col bg-background-default">
       <div className="flex justify-between items-start mb-6">
         <div>
           <h2 className="text-2xl font-bold text-content-default">{title}</h2>
           <div className="flex items-center gap-2 text-content-subtle mt-1">
             {!isMultiple && (
                 <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase
-                ${status === 'available' ? 'bg-white text-black' : ''}
-                ${status === 'locked' ? 'bg-gray-700 text-gray-300' : ''}
-                ${status === 'completed' ? 'bg-emerald-900 text-emerald-300' : ''}
-                ${status === 'assigned' ? 'bg-blue-900 text-blue-300' : ''}
+                ${status === 'available' ? 'bg-background-subtle text-content-default border border-stroke-default' : ''}
+                ${status === 'locked' ? 'bg-status-warning/20 text-status-warning' : ''}
+                ${status === 'completed' ? 'bg-status-success/20 text-status-success' : ''}
+                ${status === 'assigned' ? 'bg-status-info/20 text-status-info' : ''}
                 `}>
                 {status}
                 </span>
@@ -71,7 +71,7 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
             <span>{totalLength.toFixed(0)}m Total</span>
           </div>
         </div>
-        <button onClick={onClose} className="p-3 hover:bg-background-subtle rounded-full active:bg-background-inset transition-colors">
+        <button onClick={onClose} className="p-2 hover:bg-background-subtle rounded-full">
           <X className="w-6 h-6 text-content-subtle" />
         </button>
       </div>

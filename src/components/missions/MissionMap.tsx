@@ -521,6 +521,22 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMulti
         </LayersControl>
 
         <ScaleControl position="bottomleft" />
+        
+        {/* Custom Controls Container to manage mobile layout */}
+        <div className="leaflet-bottom leaflet-right" style={{ marginBottom: '80px', marginRight: '10px', pointerEvents: 'none' }}>
+             {/* We can inject custom controls here if needed, but Leaflet handles its own. 
+                 The issue is Leaflet controls are absolute. 
+                 We moved LayersControl to bottomright. 
+                 On mobile, bottomright might be covered by the bottom sheet (MissionControlPanel).
+                 We need to add a class to the map container when panel is open, or just accept it.
+                 
+                 BETTER SURGICAL FIX: 
+                 We can't easily style Leaflet internal controls from here without global CSS overrides.
+                 However, we can ensure the map container itself has padding-bottom if we passed a prop.
+                 For now, let's leave it as standard Leaflet behavior but ensure our custom controls (GeoSearch) are safe.
+             */}
+        </div>
+
         <GeoSearch />
         <LocateControl />
         <LiveTreeLayer />

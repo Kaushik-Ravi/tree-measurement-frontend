@@ -4,8 +4,6 @@ import { MissionControlPanel } from './MissionControlPanel';
 import { SquadControl } from './SquadControl';
 import { SquadOpsPanel } from './SquadOpsPanel';
 import { ArrowLeft, Users, Map as MapIcon, X, Loader2, MessageSquare } from 'lucide-react';
-import { BottomSheet } from 'react-spring-bottom-sheet';
-import 'react-spring-bottom-sheet/dist/style.css';
 import { missionService } from '../../services/missionService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabaseClient';
@@ -160,16 +158,16 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-dvh bg-background-default">
+    <div className="flex flex-col h-screen h-safe-screen bg-background-default overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-stroke-default flex items-center justify-between bg-background-default z-10 shadow-sm">
+      <div className="flex-shrink-0 p-4 pt-safe border-b border-stroke-default flex items-center justify-between bg-background-default z-30 shadow-sm relative">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-2 hover:bg-background-subtle rounded-full transition-colors">
             <ArrowLeft className="w-6 h-6 text-content-default" />
           </button>
           <div>
             <h1 className="text-xl font-bold text-content-default">Mission Control</h1>
-            <p className="text-xs text-content-subtle">Select a street segment to begin patrol</p>
+            <p className="text-xs text-content-subtle hidden md:block">Select a street segment to begin patrol</p>
           </div>
         </div>
         
@@ -209,7 +207,12 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
 
         {/* Squad Ops Panel (Right Sidebar / Mobile Full Screen) */}
         {currentSquad && showOpsPanel && (
-            <div className="absolute inset-0 md:left-auto md:w-80 bg-background-default border-l border-stroke-default shadow-xl z-20 animate-slide-left flex flex-col">
+            <div className="absolute inset-0 md:left-auto md:w-80 bg-background-default border-l border-stroke-default shadow-xl z-20 animate-slide-left flex flex-col pb-safe">
+                <div className="md:hidden p-2 border-b border-stroke-default flex justify-end">
+                    <button onClick={() => setShowOpsPanel(false)} className="p-2">
+                        <X size={24} className="text-content-default" />
+                    </button>
+                </div>
                 <SquadOpsPanel 
                     squadId={currentSquad.id}
                     currentUserId={user?.id || ''}
@@ -228,7 +231,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         {/* Squad Management Modal */}
         {showSquadPanel && (
           <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in">
-            <div className="bg-background-default w-full md:w-[400px] md:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up">
+            <div className="bg-background-default w-full md:w-[400px] md:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col animate-slide-up pb-safe">
               <div className="p-4 border-b border-stroke-default flex items-center justify-between">
                 <h2 className="text-lg font-bold text-content-default">Squad Management</h2>
                 <button onClick={() => setShowSquadPanel(false)} className="p-2 hover:bg-background-subtle rounded-full">
@@ -252,50 +255,37 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* Mission Control Panel (Desktop Sidebar) */}
+        {/* Mission Control Panel (Bottom Sheet / Desktop Sidebar) */}
         {selectedSegments.length > 0 && !showSquadPanel && (
           <div className={`
-            hidden md:block
-            relative w-96 border-l h-full
-            bg-background-default border-stroke-default 
+            absolute bottom-0 left-0 right-0 
+            md:relative md:w-96 md:border-l md:h-full
+            bg-background-default border-t md:border-t-0 border-stroke-default 
             shadow-xl z-10 
+            max-h-[60dvh] md:max-h-full 
             overflow-y-auto 
-            transition-all duration-300 animate-slide-left
+            transition-all duration-300 animate-slide-up
+            pb-safe rounded-t-2xl md:rounded-none
+            ${showOpsPanel ? 'hidden md:block' : ''} 
           `}>
+            {/* Mobile Drag Handle */}
+            <div className="md:hidden w-full flex justify-center pt-3 pb-1 sticky top-0 bg-background-default z-10">
+                <div className="w-12 h-1.5 bg-stroke-default rounded-full"></div>
+            </div>
             <MissionControlPanel 
               segments={selectedSegments} 
               onClose={() => setSelectedSegments([])}
               currentSquad={currentSquad}
               currentUserId={user?.id}
-              onAssignComplete={() => setSelectedSegments([])}
+              onAssignComplete={() => {
+                  // Refresh segments to show new status
+                  // We can trigger a re-fetch or just clear selection
+                  setSelectedSegments([]);
+                  // Ideally trigger fetchSegmentsInBounds(mapBounds)
+              }}
             />
           </div>
         )}
-
-        {/* Mission Control Panel (Mobile Bottom Sheet) */}
-        <div className="md:hidden">
-            <BottomSheet
-                open={selectedSegments.length > 0 && !showSquadPanel}
-                onDismiss={() => setSelectedSegments([])}
-                blocking={false}
-                snapPoints={({ maxHeight }) => [maxHeight * 0.4, maxHeight * 0.85]}
-                header={
-                    <div className="flex justify-center p-2 cursor-grab active:cursor-grabbing">
-                        <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
-                    </div>
-                }
-            >
-                <div className="pb-safe px-4">
-                    <MissionControlPanel 
-                        segments={selectedSegments} 
-                        onClose={() => setSelectedSegments([])}
-                        currentSquad={currentSquad}
-                        currentUserId={user?.id}
-                        onAssignComplete={() => setSelectedSegments([])}
-                    />
-                </div>
-            </BottomSheet>
-        </div>
       </div>
     </div>
   );

@@ -37,12 +37,6 @@
     --status-warning: 234 179 8;
     --status-error: 239 68 68;
     --status-info: 59 130 246;
-
-    /* Mobile Safe Areas */
-    --safe-area-inset-top: env(safe-area-inset-top, 0px);
-    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-area-inset-left: env(safe-area-inset-left, 0px);
-    --safe-area-inset-right: env(safe-area-inset-right, 0px);
   }
 
   :root.dark {
@@ -104,6 +98,19 @@
     /* --- END: SURGICAL REPLACEMENT --- */
   }
   /* --- END: MOBILE VIEWPORT FIX (WebXR AR) --- */
+
+  /* --- START: SAFE AREA UTILITIES --- */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .h-safe-screen {
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+  /* --- END: SAFE AREA UTILITIES --- */
 
   /* --- START: SURGICAL ADDITION (BROWSER STYLE OVERRIDE) --- */
   /*
@@ -681,20 +688,5 @@ canvas {
 
 .dark-theme-map .leaflet-control-geocoder-form {
   filter: none;
-}
-
-@layer utilities {
-  .pb-safe {
-    padding-bottom: var(--safe-area-inset-bottom);
-  }
-  .pt-safe {
-    padding-top: var(--safe-area-inset-top);
-  }
-  .h-dvh {
-    height: 100dvh;
-  }
-  .min-h-dvh {
-    min-height: 100dvh;
-  }
 }
 

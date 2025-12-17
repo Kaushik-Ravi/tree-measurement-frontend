@@ -112,16 +112,16 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
   return (
     <div className="flex flex-col h-full bg-background-default border-l border-stroke-default shadow-xl w-full pointer-events-auto">
       {/* Header Tabs */}
-      <div className="flex border-b border-stroke-default">
+      <div className="flex border-b border-stroke-default bg-background-default">
         <button 
           onClick={() => setActiveTab('CHAT')}
-          className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'CHAT' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-content-subtle'}`}
+          className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'CHAT' ? 'text-brand-primary border-b-2 border-brand-primary bg-brand-primary/5' : 'text-content-subtle hover:bg-background-subtle'}`}
         >
           <MessageSquare size={16} /> Squad Chat
         </button>
         <button 
           onClick={() => setActiveTab('TASKS')}
-          className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'TASKS' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-content-subtle'}`}
+          className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'TASKS' ? 'text-brand-primary border-b-2 border-brand-primary bg-brand-primary/5' : 'text-content-subtle hover:bg-background-subtle'}`}
         >
           <ListTodo size={16} /> Tasks
         </button>
