@@ -71,7 +71,7 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
             <span>{totalLength.toFixed(0)}m Total</span>
           </div>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-background-subtle rounded-full">
+        <button onClick={onClose} className="p-3 hover:bg-background-subtle rounded-full active:bg-background-inset transition-colors">
           <X className="w-6 h-6 text-content-subtle" />
         </button>
       </div>

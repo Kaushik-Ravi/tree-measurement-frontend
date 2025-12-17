@@ -28,6 +28,8 @@
     "react-leaflet": "^4.2.1",
     "react-leaflet-cluster": "^2.1.0",
     "react-leaflet-draw": "^0.20.4",
+    "react-spring": "^10.0.3",
+    "react-spring-bottom-sheet": "^3.4.1",
     "three": "0.163.0"
   },
   "devDependencies": {

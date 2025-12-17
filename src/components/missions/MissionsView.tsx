@@ -4,6 +4,8 @@ import { MissionControlPanel } from './MissionControlPanel';
 import { SquadControl } from './SquadControl';
 import { SquadOpsPanel } from './SquadOpsPanel';
 import { ArrowLeft, Users, Map as MapIcon, X, Loader2, MessageSquare } from 'lucide-react';
+import { BottomSheet } from 'react-spring-bottom-sheet';
+import 'react-spring-bottom-sheet/dist/style.css';
 import { missionService } from '../../services/missionService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabaseClient';
@@ -158,7 +160,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background-default">
+    <div className="flex flex-col h-dvh bg-background-default">
       {/* Header */}
       <div className="flex-shrink-0 p-4 border-b border-stroke-default flex items-center justify-between bg-background-default z-10 shadow-sm">
         <div className="flex items-center gap-4">
@@ -250,32 +252,50 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
           </div>
         )}
 
-        {/* Mission Control Panel (Bottom Sheet / Desktop Sidebar) */}
+        {/* Mission Control Panel (Desktop Sidebar) */}
         {selectedSegments.length > 0 && !showSquadPanel && (
           <div className={`
-            absolute bottom-0 left-0 right-0 
-            md:relative md:w-96 md:border-l md:h-full
-            bg-background-default border-t md:border-t-0 border-stroke-default 
+            hidden md:block
+            relative w-96 border-l h-full
+            bg-background-default border-stroke-default 
             shadow-xl z-10 
-            max-h-[50vh] md:max-h-full 
             overflow-y-auto 
-            transition-all duration-300 animate-slide-up
-            ${showOpsPanel ? 'hidden md:block' : ''} 
+            transition-all duration-300 animate-slide-left
           `}>
             <MissionControlPanel 
               segments={selectedSegments} 
               onClose={() => setSelectedSegments([])}
               currentSquad={currentSquad}
               currentUserId={user?.id}
-              onAssignComplete={() => {
-                  // Refresh segments to show new status
-                  // We can trigger a re-fetch or just clear selection
-                  setSelectedSegments([]);
-                  // Ideally trigger fetchSegmentsInBounds(mapBounds)
-              }}
+              onAssignComplete={() => setSelectedSegments([])}
             />
           </div>
         )}
+
+        {/* Mission Control Panel (Mobile Bottom Sheet) */}
+        <div className="md:hidden">
+            <BottomSheet
+                open={selectedSegments.length > 0 && !showSquadPanel}
+                onDismiss={() => setSelectedSegments([])}
+                blocking={false}
+                snapPoints={({ maxHeight }) => [maxHeight * 0.4, maxHeight * 0.85]}
+                header={
+                    <div className="flex justify-center p-2 cursor-grab active:cursor-grabbing">
+                        <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+                    </div>
+                }
+            >
+                <div className="pb-safe px-4">
+                    <MissionControlPanel 
+                        segments={selectedSegments} 
+                        onClose={() => setSelectedSegments([])}
+                        currentSquad={currentSquad}
+                        currentUserId={user?.id}
+                        onAssignComplete={() => setSelectedSegments([])}
+                    />
+                </div>
+            </BottomSheet>
+        </div>
       </div>
     </div>
   );
