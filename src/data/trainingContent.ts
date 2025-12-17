@@ -1,4 +1,4 @@
-import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target, Users, Lock, Clock, ShieldCheck, Zap, Send, Home, ClipboardCheck, PenTool, Leaf, Map } from 'lucide-react';
+import { BookOpen, Camera, Ruler, Sun, Smartphone, CheckCircle, AlertTriangle, MapPin, Settings, FileText, Youtube, Image as ImageIcon, ListChecks, Footprints, ScanLine, MousePointer2, Maximize, GitFork, Target, Users, Lock, Clock, ShieldCheck, Zap, Send, Home, ClipboardCheck, PenTool, Leaf, Map, HelpCircle } from 'lucide-react';
 
 export type SlideType = 'text' | 'pdf' | 'video' | 'image' | 'checklist';
 
@@ -334,6 +334,38 @@ export const trainingModules: TrainingChapter[] = [
           'I will be precise, even with strangers\' trees.'
         ],
         icon: ListChecks
+      }
+    ]
+  },
+  {
+    id: 'faq-module',
+    title: 'Chapter 9: Frequently Asked Questions',
+    description: 'Quick answers to common questions about devices, editing, and app reliability.',
+    icon: HelpCircle,
+    slides: [
+      {
+        type: 'text',
+        title: 'Device & Flexibility',
+        content: 'Q: Is it necessary to only use a mobile phone?\n\nA: No.\n• Capture & Geotagging: YES (Requires Camera + GPS).\n• Analysis & Review: NO. You can use a PC, Laptop, or Tablet.\n\nTip: "Capture in the field, Analyze at your desk."',
+        icon: Smartphone
+      },
+      {
+        type: 'text',
+        title: 'Mistakes & Corrections',
+        content: 'Q: Can I fix mistakes?\n\nA: Yes.\n• During Marking: Use the "Redo" button (Bottom Left).\n• Bad Record: You can DELETE the tree entirely.\n• After Submission: You can edit Details (Condition, Ownership) but NOT measurements.',
+        icon: AlertTriangle
+      },
+      {
+        type: 'text',
+        title: 'App Reliability',
+        content: 'Q: What if the app gets stuck?\n\nA: Refresh the page.\n• Your data is safe.\n• The app preserves your state automatically.\n• Just reload and continue.',
+        icon: ShieldCheck
+      },
+      {
+        type: 'text',
+        title: 'Viewing Options',
+        content: 'Q: How do I see the image better?\n\nA: Use the Master Options:\n1. "Show Panel" - Focus on controls/data.\n2. "Show Image" - Focus on the tree photo.\n\nToggle between them to get the best view.',
+        icon: Maximize
       }
     ]
   }
