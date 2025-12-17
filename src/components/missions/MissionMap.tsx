@@ -201,9 +201,9 @@ const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: {
       }
 
       // Dynamic color based on base layer
-      let defaultColor = '#ffffff'; // Default white for Dark/Satellite
+      let defaultColor = '#facc15'; // Default Yellow for Dark/Satellite (High Contrast)
       if (activeLayer === 'OpenStreetMap') {
-        defaultColor = '#2563eb'; // Blue for Light map
+        defaultColor = '#dc2626'; // Red for Light map (High Visibility)
       }
 
       let color = defaultColor;
@@ -396,7 +396,7 @@ interface MissionMapProps {
 export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [], flyToLocation }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
-  const [activeLayer, setActiveLayer] = React.useState('Dark Mode');
+  const [activeLayer, setActiveLayer] = React.useState('OpenStreetMap');
   const featureGroupRef = useRef<any>(null);
 
   // Handle FlyTo
