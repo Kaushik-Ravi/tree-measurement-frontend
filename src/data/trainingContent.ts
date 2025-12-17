@@ -179,48 +179,8 @@ export const trainingModules: TrainingChapter[] = [
     ]
   },
   {
-    id: 'community-grove',
-    title: 'Chapter 5: The Community Grove',
-    description: 'Join the global team of citizen scientists. Verify trees and build the database.',
-    icon: Users,
-    slides: [
-      {
-        type: 'text',
-        title: 'Citizen Science',
-        content: 'The Grove is where "Quick Capture" trees go to mature. You are not just a user; you are a Ranger helping to verify data from around the world.\n\nKey Concepts:\n• 🤝 The Power of 5: Consensus verification.\n• 🔐 The Lock: 10-minute analysis window.\n• 👑 Owner Privilege: Instant verification.',
-        icon: BookOpen
-      },
-      {
-        type: 'image',
-        title: 'The Grove Ecosystem',
-        content: 'Understand how your contributions fit into the global verification network.',
-        src: '/assets/training/Community Grove.png',
-        icon: ImageIcon
-      },
-      {
-        type: 'video',
-        title: 'Grove Tutorial',
-        content: 'Watch how to claim, analyze, and verify trees in the Community Grove.',
-        src: 'https://www.youtube.com/embed/MmNOhseAL9I',
-        icon: Youtube
-      },
-      {
-        type: 'checklist',
-        title: 'Ranger\'s Oath',
-        content: 'I accept the responsibility of the Grove:',
-        checklistItems: [
-          'I will only claim trees I intend to finish.',
-          'I understand the 10-minute timer.',
-          'I know my analysis contributes to the "Consensus of 5".',
-          'I will be precise, even with strangers\' trees.'
-        ],
-        icon: ListChecks
-      }
-    ]
-  },
-  {
     id: 'workflow-quick',
-    title: 'Chapter 6: Workflow A - Quick Capture',
+    title: 'Chapter 5: Workflow A - Quick Capture',
     description: 'The "Speed Run" mode. Capture now, analyze later. Perfect for mapping large areas quickly.',
     icon: Zap,
     slides: [
@@ -257,6 +217,41 @@ export const trainingModules: TrainingChapter[] = [
           '6. Submit & Move to next tree.'
         ],
         icon: Send
+      }
+    ]
+  },
+  {
+    id: 'workflow-pending',
+    title: 'Chapter 6: Completing Pending Analysis',
+    description: 'Finish what you started. How to revisit and finalize "Quick Capture" trees.',
+    icon: Clock,
+    slides: [
+      {
+        type: 'text',
+        title: 'The Follow-Up',
+        content: 'Quick Capture gets the tree on the map. Now, someone needs to finish the job.\n\nProcess:\n1. Select "Pending" Tree\n2. Verify Existing Data\n3. Complete Manual Analysis\n\nGoal: Upgrade "Pending" records to "Verified".',
+        icon: BookOpen
+      },
+      {
+        type: 'video',
+        title: 'Tutorial: Pending Analysis',
+        content: 'Watch how to access and complete pending tree analyses.',
+        src: 'https://www.youtube.com/embed/BXXQhiJH7BY',
+        icon: Youtube
+      },
+      {
+        type: 'checklist',
+        title: 'Completion Checklist',
+        content: 'Steps to finalize a record:',
+        checklistItems: [
+          '1. Locate "Pending" tree on Map.',
+          '2. Select "Complete Analysis".',
+          '3. Verify Photo & Distance.',
+          '4. Perform Manual Marking (H-C-G).',
+          '5. Add Species & Details.',
+          '6. Final Submit.'
+        ],
+        icon: ListChecks
       }
     ]
   },
@@ -303,35 +298,40 @@ export const trainingModules: TrainingChapter[] = [
     ]
   },
   {
-    id: 'workflow-pending',
-    title: 'Chapter 8: Completing Pending Analysis',
-    description: 'Finish what you started. How to revisit and finalize "Quick Capture" trees.',
-    icon: Clock,
+    id: 'community-grove',
+    title: 'Chapter 8: The Community Grove',
+    description: 'Join the global team of citizen scientists. Verify trees and build the database.',
+    icon: Users,
     slides: [
       {
         type: 'text',
-        title: 'The Follow-Up',
-        content: 'Quick Capture gets the tree on the map. Now, someone needs to finish the job.\n\nProcess:\n1. Select "Pending" Tree\n2. Verify Existing Data\n3. Complete Manual Analysis\n\nGoal: Upgrade "Pending" records to "Verified".',
+        title: 'Citizen Science',
+        content: 'The Grove is where "Quick Capture" trees go to mature. You are not just a user; you are a Ranger helping to verify data from around the world.\n\nKey Concepts:\n• 🤝 The Power of 5: Consensus verification.\n• 🔐 The Lock: 10-minute analysis window.\n• 👑 Owner Privilege: Instant verification.',
         icon: BookOpen
       },
       {
+        type: 'image',
+        title: 'The Grove Ecosystem',
+        content: 'Understand how your contributions fit into the global verification network.',
+        src: '/assets/training/Community Grove.png',
+        icon: ImageIcon
+      },
+      {
         type: 'video',
-        title: 'Tutorial: Pending Analysis',
-        content: 'Watch how to access and complete pending tree analyses.',
-        src: 'https://www.youtube.com/embed/BXXQhiJH7BY',
+        title: 'Grove Tutorial',
+        content: 'Watch how to claim, analyze, and verify trees in the Community Grove.',
+        src: 'https://www.youtube.com/embed/MmNOhseAL9I',
         icon: Youtube
       },
       {
         type: 'checklist',
-        title: 'Completion Checklist',
-        content: 'Steps to finalize a record:',
+        title: 'Ranger\'s Oath',
+        content: 'I accept the responsibility of the Grove:',
         checklistItems: [
-          '1. Locate "Pending" tree on Map.',
-          '2. Select "Complete Analysis".',
-          '3. Verify Photo & Distance.',
-          '4. Perform Manual Marking (H-C-G).',
-          '5. Add Species & Details.',
-          '6. Final Submit.'
+          'I will only claim trees I intend to finish.',
+          'I understand the 10-minute timer.',
+          'I know my analysis contributes to the "Consensus of 5".',
+          'I will be precise, even with strangers\' trees.'
         ],
         icon: ListChecks
       }
