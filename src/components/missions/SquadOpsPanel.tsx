@@ -2,20 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, MapPin, CheckCircle, AlertCircle, User, MessageSquare, ListTodo } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { missionService } from '../../services/missionService';
-import { ChatMessage, StreetSegmentFeature } from '../../types/mission';
-import { useToast } from '../../contexts/ToastContext';
 
 interface SquadOpsPanelProps {
   squadId: string;
   currentUserId: string;
   onLocateMessage: (lat: number, lng: number) => void;
-  selectedSegment?: StreetSegmentFeature; // If a segment is selected on map, we can attach it to chat
+  selectedSegment?: any; // If a segment is selected on map, we can attach it to chat
 }
 
 export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUserId, onLocateMessage, selectedSegment }) => {
-  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'CHAT' | 'TASKS'>('CHAT');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [members, setMembers] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -105,10 +102,10 @@ export const SquadOpsPanel: React.FC<SquadOpsPanelProps> = ({ squadId, currentUs
                 { lat: latitude, lng: longitude }
             );
         }, (error) => {
-            showToast("Could not get location: " + error.message, 'error');
+            alert("Could not get location: " + error.message);
         });
     } else {
-        showToast("Geolocation is not supported by this browser.", 'error');
+        alert("Geolocation is not supported by this browser.");
     }
   };
 

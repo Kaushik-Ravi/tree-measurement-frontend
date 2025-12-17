@@ -8,7 +8,6 @@ import { Crosshair, User } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { GeoSearch } from './GeoSearch';
 import AnimatedAgentMarker from './AnimatedAgentMarker';
-import { StreetSegmentFeature, StreetSegmentCollection, UserLocation } from '../../types/mission';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -310,7 +309,7 @@ const MapController = ({ onBoundsChange, onLayerChange }: { onBoundsChange?: (bo
 
 // Live Agents Layer
 const LiveAgentsLayer = () => {
-  const [agents, setAgents] = useState<UserLocation[]>([]);
+  const [agents, setAgents] = useState<any[]>([]);
 
   useEffect(() => {
     // 1. Initial Fetch
@@ -379,12 +378,12 @@ function isPointInPolygon(point: [number, number], vs: [number, number][]) {
 };
 
 interface MissionMapProps {
-  onSegmentSelect: (segment: StreetSegmentFeature) => void;
-  onMultiSelect?: (segments: StreetSegmentFeature[]) => void;
-  segments: StreetSegmentCollection | null;
+  onSegmentSelect: (segment: any) => void;
+  onMultiSelect?: (segments: any[]) => void;
+  segments: any;
   onBoundsChange?: (bounds: any) => void;
   isLoading?: boolean;
-  selectedSegments?: StreetSegmentFeature[];
+  selectedSegments?: any[];
   flyToLocation?: { lat: number; lng: number; zoom?: number } | null;
 }
 

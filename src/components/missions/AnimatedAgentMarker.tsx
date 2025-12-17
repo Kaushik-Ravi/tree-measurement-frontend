@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import L from 'leaflet';
 import { Marker, Popup } from 'react-leaflet';
-import { UserLocation } from '../../types/mission';
 
 // Custom hook for smooth animation
 const useSmoothPosition = (targetLat: number, targetLng: number, duration: number = 1000) => {
@@ -46,7 +45,7 @@ const useSmoothPosition = (targetLat: number, targetLng: number, duration: numbe
   return currentPos;
 };
 
-const AnimatedAgentMarker = ({ agent, icon }: { agent: UserLocation, icon: L.DivIcon }) => {
+const AnimatedAgentMarker = ({ agent, icon }: { agent: any, icon: L.DivIcon }) => {
   const position = useSmoothPosition(agent.lat, agent.lng);
   
   return (

@@ -1,19 +1,16 @@
 import React, { useState } from 'react';
 import { X, Clock, MapPin, Users, Lock, CheckCircle, List, Loader2 } from 'lucide-react';
 import { missionService } from '../../services/missionService';
-import { Squad, StreetSegmentFeature } from '../../types/mission';
-import { useToast } from '../../contexts/ToastContext';
 
 interface MissionControlPanelProps {
-  segments: StreetSegmentFeature[];
+  segments: any[];
   onClose: () => void;
-  currentSquad?: Squad | null;
+  currentSquad?: any;
   currentUserId?: string;
   onAssignComplete?: () => void;
 }
 
 export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segments, onClose, currentSquad, currentUserId, onAssignComplete }) => {
-  const { showToast } = useToast();
   const [isAssigning, setIsAssigning] = useState(false);
   const totalLength = segments.reduce((acc, seg) => acc + (seg.properties.length_meters || 0), 0);
   // Estimate time: 1 min per 10 meters (conservative)
@@ -41,9 +38,9 @@ export const MissionControlPanel: React.FC<MissionControlPanelProps> = ({ segmen
     setIsAssigning(false);
 
     if (error) {
-        showToast('Failed to assign: ' + error.message, 'error');
+        alert('Failed to assign: ' + error.message);
     } else {
-        showToast('Assignments created!', 'success');
+        alert('Assignments created!');
         if (onAssignComplete) onAssignComplete();
         onClose();
     }

@@ -7,8 +7,6 @@ import { ArrowLeft, Users, Map as MapIcon, X, Loader2, MessageSquare } from 'luc
 import { missionService } from '../../services/missionService';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabaseClient';
-import { Squad, StreetSegmentFeature, StreetSegmentCollection } from '../../types/mission';
-import { useToast } from '../../contexts/ToastContext';
 
 interface MissionsViewProps {
   onBack: () => void;
@@ -16,16 +14,15 @@ interface MissionsViewProps {
 
 export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const { user } = useAuth();
-  const { showToast } = useToast();
-  const [selectedSegments, setSelectedSegments] = useState<StreetSegmentFeature[]>([]);
-  const [currentSquad, setCurrentSquad] = useState<Squad | null>(null);
+  const [selectedSegments, setSelectedSegments] = useState<any[]>([]);
+  const [currentSquad, setCurrentSquad] = useState<any>(null);
   const [showSquadPanel, setShowSquadPanel] = useState(false); // The modal for join/create
   const [showOpsPanel, setShowOpsPanel] = useState(false); // The side panel for chat/tasks
   const [isLoading, setIsLoading] = useState(false);
-  const [demoSegments, setDemoSegments] = useState<StreetSegmentCollection | null>(null);
+  const [demoSegments, setDemoSegments] = useState<any>(null);
   const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
-  const handleSegmentSelect = useCallback((segment: StreetSegmentFeature) => {
+  const handleSegmentSelect = useCallback((segment: any) => {
     setSelectedSegments(prev => {
       const exists = prev.find(s => s.properties.id === segment.properties.id);
       if (exists) {
@@ -36,7 +33,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
     });
   }, []);
 
-  const handleMultiSelect = useCallback((segments: StreetSegmentFeature[]) => {
+  const handleMultiSelect = useCallback((segments: any[]) => {
     setSelectedSegments(prev => {
         // Create a map of existing segments for quick lookup
         const existingMap = new Map(prev.map(s => [s.properties.id, s]));
@@ -72,7 +69,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
 
     if (data && data.length > 0) {
       console.log('Loaded segments:', data.length);
-      const features: StreetSegmentFeature[] = data.map(seg => ({
+      const features = data.map(seg => ({
         type: "Feature",
         properties: {
           id: seg.id,
@@ -95,11 +92,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'street_segments' },
         (payload) => {
-          setDemoSegments((prev) => {
+          setDemoSegments((prev: any) => {
             if (!prev) return prev;
             
             const updatedSegment = payload.new;
-            const features = prev.features.map((f) => {
+            const features = prev.features.map((f: any) => {
               if (f.properties.id === updatedSegment.id) {
                 return {
                   ...f,
@@ -137,11 +134,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
     setIsLoading(false);
     
     if (error) {
-      showToast('Error joining squad: ' + (error.message || error), 'error');
+      alert('Error joining squad: ' + (error.message || error));
     } else {
       setCurrentSquad(data);
       setShowOpsPanel(true); // Auto-open ops panel
-      showToast(`Joined ${data?.name}!`, 'success');
+      alert(`Joined ${data?.name}!`);
     }
   };
 
@@ -152,11 +149,11 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
     setIsLoading(false);
 
     if (error) {
-      showToast('Error creating squad: ' + (error.message || error), 'error');
+      alert('Error creating squad: ' + (error.message || error));
     } else {
       setCurrentSquad(data);
       setShowOpsPanel(true); // Auto-open ops panel
-      showToast(`Created ${data?.name}! Share code: ${data?.code}`, 'success');
+      alert(`Created ${data?.name}! Share code: ${data?.code}`);
     }
   };
 
