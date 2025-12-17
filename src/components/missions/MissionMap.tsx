@@ -4,10 +4,9 @@ import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
-import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
-import 'leaflet-control-geocoder';
 import { Crosshair, User } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { GeoSearch } from './GeoSearch';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -45,40 +44,6 @@ let DefaultIcon = L.icon({
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
-
-// Search Control Component
-const SearchControl = () => {
-  const map = useMap();
-
-  useEffect(() => {
-    // Use Photon for better autocomplete/suggestions
-    // @ts-ignore
-    const geocoder = L.Control.Geocoder.photon();
-    
-    // @ts-ignore
-    L.Control.geocoder({
-      query: "",
-      placeholder: "Search location (e.g. City, Hospital)...",
-      defaultMarkGeocode: false,
-      geocoder,
-      suggestMinLength: 3, // Start suggesting after 3 chars
-      suggestTimeout: 250 // Wait 250ms after typing stops
-    })
-    .on('markgeocode', function(e: any) {
-      const bbox = e.geocode.bbox;
-      const poly = L.polygon([
-        bbox.getSouthEast(),
-        bbox.getNorthEast(),
-        bbox.getNorthWest(),
-        bbox.getSouthWest()
-      ]);
-      map.fitBounds(poly.getBounds());
-    })
-    .addTo(map);
-  }, [map]);
-
-  return null;
-};
 
 // Locate Me Control Component
 const LocateControl = () => {
@@ -554,7 +519,7 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMulti
         </LayersControl>
 
         <ScaleControl position="bottomleft" />
-        <SearchControl />
+        <GeoSearch />
         <LocateControl />
         <LiveTreeLayer />
         <LiveAgentsLayer />
