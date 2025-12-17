@@ -164,117 +164,110 @@ const LiveTreeLayer = () => {
 };
 
 // Optimized Layer Component that handles updates without full re-renders
-const StreetLayer = ({ data, onSegmentSelect, activeLayer, selectedSegments }: { data: any, onSegmentSelect: (s: any) => void, activeLayer: string, selectedSegments: any[] }) => {
+const StreetLayer = React.memo(({ data, onSegmentSelect, activeLayer, selectedSegments }: { data: any, onSegmentSelect: (s: any) => void, activeLayer: string, selectedSegments: any[] }) => {
   const map = useMap();
   const layerRef = useRef<L.GeoJSON | null>(null);
-
-  // Custom renderer with high tolerance for "fat finger" touch issues
-  // tolerance: 20 increases the hit area significantly
   const myRenderer = useRef(L.canvas({ padding: 0.5, tolerance: 20 })).current;
-
+  
+  // Keep latest props in refs for event handlers to avoid stale closures
+  const propsRef = useRef({ activeLayer, selectedSegments, onSegmentSelect });
   useEffect(() => {
-    if (!data) return;
+      propsRef.current = { activeLayer, selectedSegments, onSegmentSelect };
+  }, [activeLayer, selectedSegments, onSegmentSelect]);
 
-    // SORTING FIX: Sort features by length (descending)
-    // This ensures longer streets are drawn FIRST (at the bottom)
-    // and shorter streets are drawn LAST (on top).
-    // This allows small connector streets to be clickable even when between two large selected streets.
-    const sortedFeatures = [...data.features].sort((a: any, b: any) => {
-      const lenA = a.properties.length_meters || 0;
-      const lenB = b.properties.length_meters || 0;
-      return lenB - lenA; // Descending order
-    });
-
-    const sortedData = { ...data, features: sortedFeatures };
-
-    // Style function
-    const getStyle = (feature: any) => {
+  const getStyle = React.useCallback((feature: any) => {
+      const { activeLayer, selectedSegments } = propsRef.current;
       const status = feature.properties.status;
       const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
       
       if (isSelected) {
         return {
-          color: '#f97316', // Bright Orange (High Contrast Selection)
+          color: '#f97316', // Bright Orange
           weight: 12, 
           opacity: 1
         };
       }
 
-      // Dynamic color based on base layer
-      // Golden Standard: Use colors that contrast well with the map tiles
-      let defaultColor = '#22d3ee'; // Cyan/Light Blue for Dark/Satellite (Tron-like visibility)
-      
+      let defaultColor = '#22d3ee'; // Cyan
       if (activeLayer === 'OpenStreetMap') {
-        defaultColor = '#7c3aed'; // Deep Purple for Light map (Distinct from roads/water/parks)
+        defaultColor = '#7c3aed'; // Purple
       }
 
       let color = defaultColor;
-      if (status === 'locked') color = '#64748b'; // Slate Grey (Subtle)
-      if (status === 'completed') color = '#10b981'; // Emerald Green (Success)
-      if (status === 'assigned') color = '#ec4899'; // Pink/Magenta (Distinct from Blue/Purple)
+      if (status === 'locked') color = '#64748b';
+      if (status === 'completed') color = '#10b981';
+      if (status === 'assigned') color = '#ec4899';
 
       return {
         color: color,
         weight: 8,
         opacity: 0.8
       };
-    };
+  }, []); // Stable function
 
-    // Interaction handlers
-    const onEachFeature = (feature: any, layer: L.Layer) => {
-      layer.on({
-        click: L.DomEvent.stop, // Prevent map click
-        mousedown: () => {
-           onSegmentSelect(feature);
-        },
-        mouseover: () => {
-          const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
-          if (!isSelected) {
-            (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
-            // Bring to front on hover to help with selection
-            if (L.Browser.canvas) {
-                // Canvas doesn't support bringToFront for individual paths easily without full redraw
-                // But since we sorted them, the small ones are already on top.
-            } else {
-                (layer as L.Path).bringToFront();
-            }
-          }
-        },
-        mouseout: () => {
-          // Re-apply base style on mouseout
-          const style = getStyle(feature);
-          (layer as L.Path).setStyle(style);
-        }
-      });
-    };
+  // Data Update Effect
+  useEffect(() => {
+    if (!data) return;
+
+    const sortedFeatures = [...data.features].sort((a: any, b: any) => {
+      const lenA = a.properties.length_meters || 0;
+      const lenB = b.properties.length_meters || 0;
+      return lenB - lenA;
+    });
+
+    const sortedData = { ...data, features: sortedFeatures };
 
     if (!layerRef.current) {
-      // Initialize layer
       layerRef.current = L.geoJSON(sortedData, {
         style: getStyle,
-        onEachFeature: onEachFeature,
+        onEachFeature: (feature, layer) => {
+          layer.on({
+            click: L.DomEvent.stop,
+            mousedown: () => {
+               propsRef.current.onSegmentSelect(feature);
+            },
+            mouseover: () => {
+              const { selectedSegments } = propsRef.current;
+              const isSelected = selectedSegments.some(s => s.properties.id === feature.properties.id);
+              if (!isSelected) {
+                (layer as L.Path).setStyle({ weight: 10, opacity: 1 });
+                if (!L.Browser.canvas) {
+                    (layer as L.Path).bringToFront();
+                }
+              }
+            },
+            mouseout: () => {
+              (layer as L.Path).setStyle(getStyle(feature));
+            }
+          });
+        },
         // @ts-ignore
         renderer: myRenderer
       }).addTo(map);
     } else {
-      // Update data efficiently
+      // Efficiently update data
       layerRef.current.clearLayers();
       layerRef.current.addData(sortedData);
-      // Force style update when layer changes
       layerRef.current.setStyle(getStyle);
     }
 
-    // Cleanup
     return () => {
       if (layerRef.current) {
         layerRef.current.remove();
         layerRef.current = null;
       }
     };
-  }, [data, map, onSegmentSelect, activeLayer, selectedSegments]);
+  }, [data, map, getStyle]);
+
+  // Style Update Effect
+  useEffect(() => {
+      if (layerRef.current) {
+          layerRef.current.setStyle(getStyle);
+      }
+  }, [activeLayer, selectedSegments, getStyle]);
 
   return null;
-};
+});
 
 interface MissionMapProps {
   onSegmentSelect: (segment: any) => void;
@@ -395,7 +388,7 @@ interface MissionMapProps {
   flyToLocation?: { lat: number; lng: number; zoom?: number } | null;
 }
 
-export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [], flyToLocation }) => {
+export const MissionMap: React.FC<MissionMapProps> = React.memo(({ onSegmentSelect, onMultiSelect, segments, onBoundsChange, isLoading, selectedSegments = [], flyToLocation }) => {
   // Default center (Pune) - We do NOT update this based on segments to prevent jitter
   const defaultCenter: [number, number] = [18.5204, 73.8567];
   const [activeLayer, setActiveLayer] = React.useState('OpenStreetMap');
@@ -560,4 +553,4 @@ export const MissionMap: React.FC<MissionMapProps> = ({ onSegmentSelect, onMulti
       </MapContainer>
     </div>
   );
-};
+});

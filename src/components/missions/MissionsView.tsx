@@ -22,7 +22,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
   const [demoSegments, setDemoSegments] = useState<any>(null);
   const [flyToLocation, setFlyToLocation] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
-  const handleSegmentSelect = (segment: any) => {
+  const handleSegmentSelect = useCallback((segment: any) => {
     setSelectedSegments(prev => {
       const exists = prev.find(s => s.properties.id === segment.properties.id);
       if (exists) {
@@ -31,9 +31,9 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         return [...prev, segment];
       }
     });
-  };
+  }, []);
 
-  const handleMultiSelect = (segments: any[]) => {
+  const handleMultiSelect = useCallback((segments: any[]) => {
     setSelectedSegments(prev => {
         // Create a map of existing segments for quick lookup
         const existingMap = new Map(prev.map(s => [s.properties.id, s]));
@@ -43,7 +43,7 @@ export const MissionsView: React.FC<MissionsViewProps> = ({ onBack }) => {
         
         return Array.from(existingMap.values());
     });
-  };
+  }, []);
 
   // Load real data from Supabase based on bounds
   const fetchSegmentsInBounds = useCallback(async (bounds: any) => {
