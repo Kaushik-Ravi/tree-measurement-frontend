@@ -7,6 +7,7 @@ import 'leaflet-draw/dist/leaflet.draw.css';
 import { Crosshair, User } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { GeoSearch } from './GeoSearch';
+import AnimatedAgentMarker from './AnimatedAgentMarker';
 
 // Fix for default marker icons in Leaflet
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -224,6 +225,10 @@ const StreetLayer = React.memo(({ data, onSegmentSelect, activeLayer, selectedSe
           layer.on({
             click: L.DomEvent.stop,
             mousedown: () => {
+               // Haptic Feedback (Golden Standard)
+               if (navigator.vibrate) {
+                   navigator.vibrate(50); // Short, sharp vibration
+               }
                propsRef.current.onSegmentSelect(feature);
             },
             mouseover: () => {
@@ -348,17 +353,11 @@ const LiveAgentsLayer = () => {
   return (
     <>
       {agents.map(agent => (
-        <Marker 
+        <AnimatedAgentMarker 
           key={agent.user_id} 
-          position={[agent.lat, agent.lng]}
+          agent={agent}
           icon={createAgentIcon()}
-          zIndexOffset={1000}
-        >
-          <Popup>
-            <div className="text-sm font-bold">Agent</div>
-            <div className="text-xs text-gray-500">Last seen: {new Date(agent.last_updated).toLocaleTimeString()}</div>
-          </Popup>
-        </Marker>
+        />
       ))}
     </>
   );
