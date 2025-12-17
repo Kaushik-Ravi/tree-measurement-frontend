@@ -37,6 +37,7 @@ import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 import { MissionsView } from './components/missions/MissionsView';
 import { useLocationTracker } from './hooks/useLocationTracker';
 import { SpeciesDetailCaptureModal } from './components/SpeciesDetailCaptureModal';
+import { ToastProvider } from './contexts/ToastContext';
 
 // --- START: DISTANCE CORRECTION HELPERS ---
 // Helper to correct distance drift (Linear Model with Clamping)
@@ -296,6 +297,62 @@ function App() {
   const [capturedHeading, setCapturedHeading] = useState<number | null>(null);
 
   const [userProfile, setUserProfile] = useState<UserProfile>(null);
+  // --- START: MISSION CONTROL HEARTBEAT ---
+  // This hook runs in the background and updates the user's location in Supabase
+  // It only runs if the user is logged in.
+  useLocationTracker();
+  // --- END: MISSION CONTROL HEARTBEAT ---
+
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
+  );
+};
+
+const AppContent = () => {
+  // --- START: STATE DECLARATIONS ---
+  const { user, signIn, signOut } = useAuth();
+  const [appStatus, setAppStatus] = useState<AppStatus>('idle');
+  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [instructionText, setInstructionText] = useState<string>('Upload an image to start');
+  const [currentMeasurementFile, setCurrentMeasurementFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [distance, setDistance] = useState<number | null>(null);
+  const [focalLength, setFocalLength] = useState<number | null>(null);
+  const [scaleFactor, setScaleFactor] = useState<number | null>(null);
+  const [initialPoints, setInitialPoints] = useState<Point[]>([]);
+  const [refinePoints, setRefinePoints] = useState<Point[]>([]);
+  const [manualPoints, setManualPoints] = useState<Point[]>([]);
+  const [transientPoint, setTransientPoint] = useState<Point | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [speciesData, setSpeciesData] = useState<IdentificationResponse | null>(null);
+  const [additionalData, setAdditionalData] = useState<AdditionalData | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [results, setResults] = useState<TreeResult[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSpeciesIdentifying, setIsSpeciesIdentifying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
+  const [draggedPointType, setDraggedPointType] = useState<'initial' | 'refine' | 'manual' | null>(null);
+  const [showCalibration, setShowCalibration] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [showSpeciesIdentifier, setShowSpeciesIdentifier] = useState(false);
+  const [showAdditionalDetails, setShowAdditionalDetails] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showTreeMap, setShowTreeMap] = useState(false);
+  const [showCommunityGrove, setShowCommunityGrove] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showMissions, setShowMissions] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [showProcessingQuiz, setShowProcessingQuiz] = useState(false);
+  const [selectedTree, setSelectedTree] = useState<TreeResult | null>(null);
+  const [editingResult, setEditingResult] = useState<TreeResult | null>(null);
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
+  const [capturedHeading, setCapturedHeading] = useState<number | null>(null);
+  const [fovRatio, setFovRatio] = useState<number>(1.0);
   const [pendingTrees, setPendingTrees] = useState<PendingTree[]>([]);
   const [claimedTree, setClaimedTree] = useState<TreeResult | null>(null);
   const [showSpeciesDetailModal, setShowSpeciesDetailModal] = useState(false);
@@ -311,12 +368,6 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragRectRef = useRef<DOMRect | null>(null); // Optimization: Cache canvas rect during drag
-
-  // --- START: MISSION CONTROL HEARTBEAT ---
-  // This hook runs in the background and updates the user's location in Supabase
-  // It only runs if the user is logged in.
-  useLocationTracker();
-  // --- END: MISSION CONTROL HEARTBEAT ---
 
   // --- START: SESSION PERSISTENCE ---
   const { isRestoring, restoredSession, saveSession, clearSession } = useSessionPersistence();
@@ -2888,6 +2939,11 @@ function App() {
                   <button onClick={handleNavigateToGrove} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-secondary/50 hover:shadow-xl transition-all hover:-translate-y-1">
                       <div className="flex items-center gap-3"><Users className="w-7 h-7 text-brand-secondary"/> <h3 className="text-lg font-semibold text-content-default">Community Grove</h3></div>
                       <p className="text-sm text-content-subtle mt-2">Can't do a full measurement? Help our community by analyzing trees that others have submitted.</p>
+                  </button>
+
+                  <button onClick={() => setShowMissions(true)} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-primary/50 hover:shadow-xl transition-all hover:-translate-y-1">
+                      <div className="flex items-center gap-3"><MapPin className="w-7 h-7 text-brand-primary"/> <h3 className="text-lg font-semibold text-content-default">Mission Control</h3></div>
+                      <p className="text-sm text-content-subtle mt-2">Join a squad and patrol your local streets. Map trees, verify data, and earn badges.</p>
                   </button>
                   <button onClick={() => setCurrentView('LEADERBOARD')} className="text-left p-6 bg-background-default border border-stroke-default rounded-lg hover:border-brand-accent/50 hover:shadow-xl transition-all hover:-translate-y-1">
                       <div className="flex items-center gap-3"><BarChart2 className="w-7 h-7 text-brand-accent"/> <h3 className="text-lg font-semibold text-content-default">Leaderboard</h3></div>

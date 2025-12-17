@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Users, UserPlus, LogOut, Shield, Copy, Check, Loader2 } from 'lucide-react';
+import { Squad } from '../../types/mission';
 
 interface SquadControlProps {
-  currentSquad: any | null;
+  currentSquad: Squad | null;
   onJoinSquad: (code: string) => Promise<void>;
   onCreateSquad: (name: string) => Promise<void>;
   onLeaveSquad: () => void;
