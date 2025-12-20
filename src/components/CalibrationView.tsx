@@ -1,7 +1,7 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info, User, ArrowRight } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
@@ -645,13 +645,59 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                   </div>
                   
                   {/* AR Measurement Option */}
-                  <button 
-                    onClick={() => setShowARDistanceMeasure(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2 text-sm text-brand-primary hover:bg-brand-primary/5 rounded-lg transition-colors"
-                  >
-                    <Ruler size={16} />
-                    <span>Measure distance with AR</span>
-                  </button>
+                  {(() => {
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    
+                    if (isIOS) {
+                      return (
+                        <div className="mt-4 space-y-3">
+                          <div className="flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                             {/* Visual Diagram */}
+                             <div className="flex items-center gap-4 text-blue-800 dark:text-blue-200">
+                                <User className="w-8 h-8" />
+                                <div className="flex flex-col items-center">
+                                  <ArrowRight className="w-6 h-6" />
+                                  <span className="text-xs font-mono font-bold">DISTANCE</span>
+                                </div>
+                                <Sparkles className="w-8 h-8" />
+                             </div>
+                          </div>
+                          
+                          <div className="p-3 bg-background-subtle rounded-lg border border-stroke-subtle">
+                             <h4 className="font-semibold text-content-default text-sm mb-2 flex items-center gap-2">
+                               <Info className="w-4 h-4 text-brand-primary" />
+                               iOS Measurement
+                             </h4>
+                             <ol className="text-xs text-content-default space-y-1 list-decimal ml-4">
+                               <li>Open <strong>Measure</strong> app.</li>
+                               <li>Measure distance to object.</li>
+                               <li>Enter value above.</li>
+                             </ol>
+                          </div>
+
+                          <a 
+                            href="https://apps.apple.com/us/app/measure/id1383426740" 
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full flex items-center justify-center gap-2 py-2 text-sm text-brand-primary border border-brand-primary/20 hover:bg-brand-primary/5 rounded-lg transition-colors"
+                          >
+                            <Ruler size={16} />
+                            <span>Open Measure App</span>
+                          </a>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <button 
+                        onClick={() => setShowARDistanceMeasure(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-sm text-brand-primary hover:bg-brand-primary/5 rounded-lg transition-colors"
+                      >
+                        <Ruler size={16} />
+                        <span>Measure distance with AR</span>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 <button 
