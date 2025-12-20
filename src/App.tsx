@@ -671,8 +671,23 @@ function App() {
             const { loadSavedCalibration } = await import('./utils/cameraCalibration');
             const savedCalibration = loadSavedCalibration();
             
-            if (savedCalibration && (savedCalibration.focalLength35mm || savedCalibration.fovHorizontal)) {
-              // Saved calibration found
+            // --- START: SURGICAL FIX ---
+            // Check for simple V2 calibration factor as well (The "Top Engineering" Key)
+            const savedCalibrationV2 = localStorage.getItem('device_calibration_factor_v2');
+            
+            if (savedCalibrationV2) {
+                 const fovRatioV2 = parseFloat(savedCalibrationV2);
+                 setFovRatio(fovRatioV2);
+                 console.log('[Photo Calibration] ✅ Found saved V2 calibration factor:', fovRatioV2);
+                 
+                 setPendingTreeFile(currentMeasurementFile);
+                 // PAUSE: Ask user if they want to use saved calibration or redo
+                 setAppStatus('SESSION_AWAITING_CALIBRATION_CHOICE');
+                 setIsPanelOpen(true);
+                 setInstructionText("Saved calibration found. Continue or redo?");
+            }
+            else if (savedCalibration && (savedCalibration.focalLength35mm || savedCalibration.fovHorizontal)) {
+              // Saved calibration found (Legacy/Tier 3)
               console.log('[Photo Calibration] ✅ Found saved calibration:', savedCalibration.calibrationMethod);
               console.log('[Photo Calibration] Data:', {
                 focalLength35mm: savedCalibration.focalLength35mm,
@@ -693,8 +708,10 @@ function App() {
               }
               
               setPendingTreeFile(currentMeasurementFile);
+              // PAUSE: Ask user if they want to use saved calibration or redo
               setAppStatus('SESSION_AWAITING_CALIBRATION_CHOICE');
-              setInstructionText("No camera data in photo. Use your saved calibration or create a new one.");
+              setIsPanelOpen(true);
+              setInstructionText("Saved calibration found. Continue or redo?");
             } else {
               // No saved calibration - go to manual calibration
               console.log('[Photo Calibration] ⚠️ No saved calibration found');
@@ -705,6 +722,7 @@ function App() {
               setCurrentView('CALIBRATION');
               setInstructionText("No camera calibration found. Please calibrate your camera for accurate measurements.");
             }
+            // --- END: SURGICAL FIX ---
           }
         };
       } catch (error: any) {
@@ -2557,37 +2575,45 @@ function App() {
             
             {appStatus === 'SESSION_AWAITING_CALIBRATION_CHOICE' && (
               <div className="space-y-4 pt-4 border-t border-stroke-subtle">
-                <h3 className="text-base font-semibold text-center text-content-default">Device Calibration</h3>
-                <div className="p-4 bg-background-subtle rounded-lg border border-stroke-subtle">
-                  <p className="text-sm text-content-default mb-2">
-                    For "Top Engineering" accuracy (±1%), we need to calibrate your specific phone camera once.
-                    This handles differences between Samsung, Redmi, Pixel, etc.
+                <h3 className="text-base font-semibold text-center text-content-default">Saved Calibration Found</h3>
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                  <p className="text-sm text-green-800 dark:text-green-200 mb-2">
+                    We found a saved calibration profile for this device.
                   </p>
-                  <div className="flex items-center gap-2 text-xs text-content-subtle">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span>One-time setup</span>
+                  <div className="flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
+                    <Check className="w-4 h-4" />
+                    <span>Ready to use</span>
                   </div>
                 </div>
 
                 <button 
-                  onClick={() => setCurrentView('CALIBRATION')}
-                  className="w-full text-left p-4 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover transition-all flex items-center gap-4"
+                  onClick={() => { 
+                    setAppStatus('SESSION_AWAITING_DISTANCE'); 
+                    setIsPanelOpen(true); 
+                    setInstructionText("Using saved calibration. Please enter the distance."); 
+                  }}
+                  className="w-full text-left p-4 bg-brand-primary text-white rounded-lg hover:bg-brand-primary-hover transition-all flex items-center gap-4 shadow-md"
                 >
-                  <Navigation className="w-6 h-6 flex-shrink-0" />
+                  <Check className="w-6 h-6 flex-shrink-0" />
                   <div>
-                    <p className="font-semibold">Calibrate My Device</p>
-                    <p className="text-xs opacity-80">Measure a door frame once to fix all future errors.</p>
+                    <p className="font-semibold">Continue with Saved Profile</p>
+                    <p className="text-xs opacity-80">Use your previous calibration settings.</p>
                   </div>
                 </button>
 
                 <button 
-                  onClick={() => { setAppStatus('SESSION_AWAITING_DISTANCE'); setIsPanelOpen(true); setInstructionText("Using standard settings. Please enter the distance."); }}
+                  onClick={() => {
+                    // Clear old calibration to ensure a fresh start
+                    setFovRatio(null);
+                    setFocalLength(null);
+                    setCurrentView('CALIBRATION');
+                  }}
                   className="w-full text-left p-4 bg-background-subtle text-content-default rounded-lg hover:bg-background-inset transition-all flex items-center gap-4 border border-stroke-default"
                 >
-                  <ShieldCheck className="w-6 h-6 flex-shrink-0 text-content-subtle" />
+                  <RotateCcw className="w-6 h-6 flex-shrink-0 text-content-subtle" />
                   <div>
-                    <p className="font-semibold">Skip Calibration</p>
-                    <p className="text-xs opacity-80">Use standard EXIF data (Expect ~5-10% error).</p>
+                    <p className="font-semibold">Redo Calibration</p>
+                    <p className="text-xs opacity-80">Re-calibrate if you switched devices or results are off.</p>
                   </div>
                 </button>
               </div>
