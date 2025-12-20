@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, GraduationCap, CheckCircle, Lock, PlayCircle, Award } from 'lucide-react';
-import { trainingModules } from '../../data/trainingContent';
+import { ArrowLeft, GraduationCap, CheckCircle, Lock, PlayCircle, Award, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { trainingModules, faqItems } from '../../data/trainingContent';
 import { TrainingChapter } from './TrainingChapter';
 
 interface TrainingHubProps {
@@ -10,6 +10,7 @@ interface TrainingHubProps {
 export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
   const [completedChapters, setCompletedChapters] = useState<string[]>([]);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('tree_app_training_progress');
@@ -141,6 +142,43 @@ export const TrainingHub: React.FC<TrainingHubProps> = ({ onBack }) => {
             Complete all chapters to unlock your badge.
           </div>
         )}
+
+        {/* FAQ Section */}
+        <div className="mt-12 mb-8">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+            <HelpCircle className="w-6 h-6 text-emerald-600" />
+            Frequently Asked Questions
+          </h2>
+          <div className="space-y-3">
+            {faqItems.map((item, index) => {
+              const isOpen = openFaqIndex === index;
+              const Icon = item.icon;
+              
+              return (
+                <div key={index} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                    className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className="font-semibold text-gray-800 dark:text-gray-200">{item.question}</span>
+                    </div>
+                    {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                  </button>
+                  
+                  {isOpen && (
+                    <div className="p-4 pt-0 pl-[4.5rem] text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+                      {item.answer}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
       </div>
     </div>

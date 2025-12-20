@@ -336,43 +336,38 @@ export const trainingModules: TrainingChapter[] = [
         icon: ListChecks
       }
     ]
+  }
+];
+
+export const faqItems = [
+  {
+    question: 'Do I need a specific phone (Android vs iOS)?',
+    answer: 'Both work! Android has full support. For iOS, if in-app AR has issues, use the native "Measure" app. The "Walk-Back" technique is the same regardless of the app.',
+    icon: Smartphone
   },
   {
-    id: 'faq-module',
-    title: 'Chapter 9: Frequently Asked Questions',
-    description: 'Quick answers to common questions about devices, editing, and app reliability.',
-    icon: HelpCircle,
-    slides: [
-      {
-        type: 'text',
-        title: 'Android vs. iOS',
-        content: 'Q: Do I need a specific phone?\n\nA: Both work!\n• Android: Full support.\n• iOS: If in-app AR has issues, use the native "Measure" app.\n\nThe Principle: The "Walk-Back" technique is the same regardless of the app.\n\n[Apple Measure App](https://apps.apple.com/us/app/measure/id1383426740)',
-        icon: Smartphone
-      },
-      {
-        type: 'text',
-        title: 'Workflow Flexibility',
-        content: 'Q: Do I have to do everything on my phone?\n\nA: No.\n• Field Work (Capture): YES. Requires Camera + GPS.\n• Desk Work (Analysis): NO. We recommend using a Laptop or Tablet for analysis. It is faster and easier to see details.',
-        icon: Maximize
-      },
-      {
-        type: 'text',
-        title: 'Managing Mistakes',
-        content: 'Q: I made a mistake. Now what?\n\nA: You have options:\n• During Marking: Tap "Redo" (Bottom Left).\n• Bad Record: Delete the tree entirely.\n• Post-Submission: You can edit Details (Condition, Remarks), but measurements are locked.',
-        icon: AlertTriangle
-      },
-      {
-        type: 'text',
-        title: 'Pro Tips',
-        content: 'Q: How do I master the app?\n\nA: Two key tips:\n1. Stuck? Just Refresh. Your data is auto-saved.\n2. Can\'t See? Use the Master Toggles ("Show Image" vs "Show Panel") to switch views.',
-        icon: Zap
-      },
-      {
-        type: 'text',
-        title: 'Support & Feedback',
-        content: 'Q: Where do I report issues?\n\nWe are here to help:\n• Email: official.kaushik.r@gmail.com\n• LinkedIn: https://www.linkedin.com/in/kaushik2002/',
-        icon: ShieldCheck
-      }
-    ]
+    question: 'What if my Motion Sensors are disabled?',
+    answer: 'If motion sensors are not activated or permission is denied, the app relies on GPS alone. This is fine! \n\n**The Fix:** At the end, on the Results Page, simply verify the map location. If the pin is slightly off, drag it to the correct tree location before submitting.',
+    icon: MapPin
+  },
+  {
+    question: 'Do I have to do everything on my phone?',
+    answer: 'No. You must do the Field Work (Capture) on your phone because it needs the Camera and GPS. However, for the Desk Work (Analysis), we recommend using a Laptop or Tablet. It is faster and easier to see details on a larger screen.',
+    icon: Maximize
+  },
+  {
+    question: 'I made a mistake. Now what?',
+    answer: 'You have options:\n• During Marking: Tap "Redo" (Bottom Left).\n• Bad Record: Delete the tree entirely.\n• Post-Submission: You can edit Details (Condition, Remarks), but measurements are locked.',
+    icon: AlertTriangle
+  },
+  {
+    question: 'How do I master the app (Pro Tips)?',
+    answer: 'Two key tips:\n1. Stuck? Just Refresh. Your data is auto-saved.\n2. Can\'t See? Use the Master Toggles ("Show Image" vs "Show Panel") to switch views.',
+    icon: Zap
+  },
+  {
+    question: 'Where do I report issues?',
+    answer: 'We are here to help:\n• Email: official.kaushik.r@gmail.com\n• LinkedIn: https://www.linkedin.com/in/kaushik2002/',
+    icon: ShieldCheck
   }
 ];
