@@ -2005,6 +2005,7 @@ function App() {
     setIsPanelOpen(false);
     setClaimedTree(null);
     setMaskGenerated(false);
+    setIsLocationVerified(false); // Reset verification status
     setExpandedSections({ measurements: true, species: false, location: false, additionalDetails: false });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -2188,7 +2189,13 @@ function App() {
     setInstructionText("Choose how you want to proceed with the analysis.");
   }
 
-  const handleConfirmLocation = (location: LocationData) => { setCurrentLocation(location); setIsLocationPickerActive(false); };
+  const [isLocationVerified, setIsLocationVerified] = useState(false);
+
+  const handleConfirmLocation = (location: LocationData) => { 
+    setCurrentLocation(location); 
+    setIsLocationPickerActive(false);
+    setIsLocationVerified(true); // User has manually confirmed/verified the location
+  };
   
   if (currentView === 'CALIBRATION') { return <CalibrationView onCalibrationComplete={onCalibrationComplete} />; }
   if (currentView === 'LEADERBOARD') { return <LeaderboardView onBack={() => setCurrentView('HUB')} />; }
@@ -2775,7 +2782,7 @@ function App() {
                     >
                       <div className="flex items-center gap-3">
                         {currentLocation ? (
-                          prereqStatus.compass === 'GRANTED' ? (
+                          (prereqStatus.compass === 'GRANTED' || isLocationVerified) ? (
                             <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
                           ) : (
                             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
@@ -2789,7 +2796,7 @@ function App() {
                     </button>
                     {expandedSections.location && (
                       <div className="px-4 pb-4 space-y-3">
-                        {currentLocation && prereqStatus.compass !== 'GRANTED' && (
+                        {currentLocation && prereqStatus.compass !== 'GRANTED' && !isLocationVerified && (
                            <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2">
                               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                               <div className="text-xs text-amber-800 dark:text-amber-200">
@@ -2803,9 +2810,13 @@ function App() {
                         </p>
                         <button 
                           onClick={() => setIsLocationPickerActive(true)} 
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-background-default border border-stroke-default text-content-default rounded-lg hover:bg-background-subtle"
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all shadow-sm ${
+                            currentLocation 
+                              ? 'bg-brand-secondary/10 text-brand-secondary border border-brand-secondary/20 hover:bg-brand-secondary/20' 
+                              : 'bg-background-default border border-stroke-default text-content-default hover:bg-background-subtle'
+                          }`}
                         >
-                          <MapPin className="w-5 h-5 text-brand-secondary" />
+                          <MapPin className={`w-5 h-5 ${currentLocation ? 'text-brand-secondary' : 'text-content-subtle'}`} />
                           {currentLocation ? `Location Set: ${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}` : 'Add/Edit Location'}
                         </button>
                       </div>

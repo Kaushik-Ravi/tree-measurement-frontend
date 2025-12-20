@@ -28,6 +28,7 @@ type Mode = 'idle' | 'uploading' | 'cropping';
 export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading, closeupImageUrl, closeupOrgan }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
+  const [isAutoIdentifying, setIsAutoIdentifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
@@ -42,6 +43,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       autoIdentifyAttempted.current = true;
       const loadAndIdentify = async () => {
         setIsLoading(true);
+        setIsAutoIdentifying(true);
         setMode('uploading');
         try {
           console.log("Auto-identifying from saved close-up:", closeupImageUrl);
@@ -77,6 +79,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           setError("Failed to load saved close-up: " + err.message);
         } finally {
           setIsLoading(false);
+          setIsAutoIdentifying(false);
         }
       };
       loadAndIdentify();
@@ -289,7 +292,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
             {isLoading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Identifying...
+                {isAutoIdentifying ? "Retrieving & Identifying..." : "Identifying..."}
               </>
             ) : (
               <>
