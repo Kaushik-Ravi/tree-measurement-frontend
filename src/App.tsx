@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION (AR IMPORTS) ---
-import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown, User, ArrowRight, TreeDeciduous, Sparkles, GraduationCap } from 'lucide-react';
+import { Upload, TreePine, Ruler, Zap, RotateCcw, Menu, Plus, MapPin, LogIn, LogOut, Navigation, ShieldCheck, Info, Check, Sun, Moon, Camera, Move, ArrowLeft, Users, BarChart2, GitMerge, ImageIcon, ChevronDown, User, ArrowRight, TreeDeciduous, Sparkles, GraduationCap, AlertTriangle } from 'lucide-react';
 import { ARMeasureView } from './components/ARMeasureView';
 // --- END: SURGICAL MODIFICATION (AR IMPORTS) ---
 // --- START: LIVE AR INTEGRATION ---
@@ -2766,7 +2766,7 @@ function App() {
                   )}
                 </div>
 
-                {/* Location Section - Checkmark when set */}
+                {/* Location Section - Checkmark when set, Warning if no compass */}
                 {currentView === 'SESSION' && (
                   <div className="border border-stroke-default rounded-lg overflow-hidden">
                     <button 
@@ -2775,7 +2775,11 @@ function App() {
                     >
                       <div className="flex items-center gap-3">
                         {currentLocation ? (
-                          <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          prereqStatus.compass === 'GRANTED' ? (
+                            <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          ) : (
+                            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                          )
                         ) : (
                           <div className="w-5 h-5 rounded-full border-2 border-stroke-default flex-shrink-0" />
                         )}
@@ -2785,6 +2789,15 @@ function App() {
                     </button>
                     {expandedSections.location && (
                       <div className="px-4 pb-4 space-y-3">
+                        {currentLocation && prereqStatus.compass !== 'GRANTED' && (
+                           <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                              <div className="text-xs text-amber-800 dark:text-amber-200">
+                                 <p className="font-bold">Motion Sensors Not Detected</p>
+                                 <p>Location accuracy may be lower. Please verify the pin on the map.</p>
+                              </div>
+                           </div>
+                        )}
                         <p className="text-sm text-content-subtle">
                           Location and compass heading are used for precise tree mapping.
                         </p>
