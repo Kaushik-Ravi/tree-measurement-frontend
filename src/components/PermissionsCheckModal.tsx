@@ -1,5 +1,5 @@
 // src/components/PermissionsCheckModal.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MapPin, Compass, CheckCircle2, XCircle, Loader2, ShieldQuestion, AlertCircle, Smartphone, Chrome, Apple } from 'lucide-react';
 
 // Enhanced permission states for robust error handling
@@ -67,6 +67,13 @@ export function PermissionsCheckModal({
   const [showLocationHelp, setShowLocationHelp] = useState(false);
   const [showCompassHelp, setShowCompassHelp] = useState(false);
   const deviceInfo = getDeviceInfo();
+
+  // Auto-expand help for iOS users when denied
+  useEffect(() => {
+    if (locationStatus === 'DENIED' && deviceInfo.isIOS) {
+      setShowLocationHelp(true);
+    }
+  }, [locationStatus, deviceInfo.isIOS]);
   
   const canContinue = locationStatus === 'GRANTED';
   const locationNeedsHelp = locationStatus === 'DENIED' || locationStatus === 'UNAVAILABLE' || locationStatus === 'TIMEOUT' || locationStatus === 'ERROR' || locationStatus === 'HTTPS_REQUIRED';
@@ -165,15 +172,30 @@ export function PermissionsCheckModal({
                         <>
                           <p className="font-medium text-status-warning flex items-start gap-2">
                             <Apple className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <span>iOS (Safari/Chrome):</span>
+                            <span>iOS Location Recovery:</span>
                           </p>
-                          <ol className="list-decimal list-inside space-y-1 ml-2">
-                            <li>Open iOS <strong>Settings</strong> app</li>
-                            <li>Scroll to <strong>{deviceInfo.isSafari ? 'Safari' : 'Chrome'}</strong></li>
-                            <li>Tap <strong>Location</strong></li>
-                            <li>Select <strong>"While Using the App"</strong> or <strong>"Always"</strong></li>
-                            <li>Return here and tap "Try Again" below</li>
-                          </ol>
+                          <div className="space-y-3 ml-2 mt-2">
+                            <div className="p-2 bg-background-default border border-stroke-default rounded">
+                                <p className="text-xs font-bold text-content-default mb-1">Option 1: Browser Settings (Most Common)</p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                    <li>Open <strong>Settings</strong> app ⚙️</li>
+                                    <li>Scroll down to <strong>{deviceInfo.isSafari ? 'Safari' : 'Chrome'}</strong></li>
+                                    <li>Tap <strong>Location</strong></li>
+                                    <li>Choose <strong>"Ask"</strong> or <strong>"Allow"</strong></li>
+                                </ol>
+                            </div>
+                            <div className="p-2 bg-background-default border border-stroke-default rounded">
+                                <p className="text-xs font-bold text-content-default mb-1">Option 2: System Privacy (If Option 1 fails)</p>
+                                <ol className="list-decimal list-inside space-y-1">
+                                    <li>Go to <strong>Settings</strong> &gt; <strong>Privacy & Security</strong></li>
+                                    <li>Tap <strong>Location Services</strong></li>
+                                    <li>Ensure it is <strong>ON</strong></li>
+                                    <li>Find <strong>Safari Websites</strong> in the list</li>
+                                    <li>Set to <strong>"While Using the App"</strong></li>
+                                </ol>
+                            </div>
+                            <p className="text-xs text-content-subtle italic">After changing settings, return here and tap "Try Again".</p>
+                          </div>
                         </>
                       )}
                       

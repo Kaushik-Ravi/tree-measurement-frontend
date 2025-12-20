@@ -585,10 +585,11 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                             borderRadius: '6px'
                           }}
                         >
-                          <div className="absolute -bottom-6 w-full flex items-center justify-center gap-1 text-xs text-brand-primary font-mono">
-                            <div className="h-px w-4 bg-brand-primary" />
-                            <span>WIDTH</span>
-                            <div className="h-px w-4 bg-brand-primary" />
+                          {/* Width Label - Moved to Vertical Axis (Right Side) */}
+                          <div className="absolute -right-8 h-full flex flex-col items-center justify-center gap-1 text-xs text-brand-primary font-mono">
+                            <div className="w-px h-4 bg-brand-primary" />
+                            <span style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }} className="rotate-180">WIDTH</span>
+                            <div className="w-px h-4 bg-brand-primary" />
                           </div>
                         </div>
                       </div>
