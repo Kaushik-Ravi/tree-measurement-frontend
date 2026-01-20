@@ -6,6 +6,7 @@ import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
 import { Magnifier } from './Magnifier';
+import { HelpButton } from './help';
 // --- START: STANDARD REFERENCE OBJECTS INTEGRATION ---
 import { ReferenceObjectSelector } from './ReferenceObjectSelector';
 import { 
@@ -471,6 +472,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <p className="font-bold">Instructions</p>
                     <p className="text-sm">{instruction}</p>
                 </div>
+                <div className="mb-6"><HelpButton helpId="calibration" variant="banner" label="📏 Watch calibration tutorial" animated={false} /></div>
             </header>
             <main className="space-y-8">
                 {/* STEP 1: REFERENCE OBJECT */}

@@ -37,6 +37,7 @@ import { ProcessingQuizModal } from './components/common/ProcessingQuizModal';
 import { MissionsView } from './components/missions/MissionsView';
 import { useLocationTracker } from './hooks/useLocationTracker';
 import { SpeciesDetailCaptureModal } from './components/SpeciesDetailCaptureModal';
+import { HelpButton } from './components/help';
 
 // --- START: DISTANCE CORRECTION HELPERS ---
 // Helper to correct distance drift (Linear Model with Clamping)
@@ -2439,7 +2440,7 @@ function App() {
               />
             )}
             
-            {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> </div> )}
+            {appStatus === 'SESSION_AWAITING_PHOTO' && ( <div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> <div className="mt-4"><HelpButton helpId="photo-capture" variant="banner" label="📸 Tips for the perfect shot" animated={false} /></div> </div> )}
 
             {appStatus === 'SESSION_AWAITING_DISTANCE' && ( 
               <div>
@@ -2577,6 +2578,7 @@ function App() {
                 <button onClick={() => handleDistanceEntered()} disabled={!distance} className="w-full mt-4 px-6 py-3 bg-brand-primary text-white font-semibold hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle">
                   Continue
                 </button>
+                <div className="mt-4"><HelpButton helpId="walk-back" variant="banner" label="📏 How to measure distance" animated={false} /></div>
               </div>
             )}
             
@@ -2633,6 +2635,7 @@ function App() {
                   <h3 className="text-base font-semibold text-center text-content-default mb-2">Choose Measurement Method</h3>
                   <button id="start-auto-btn" onClick={handleStartAutoMeasurement} className="w-full text-left p-4 bg-brand-primary text-content-on-brand rounded-lg hover:bg-brand-primary-hover disabled:bg-background-inset disabled:opacity-50 transition-all flex items-center gap-4"> <Zap className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Automatic Measurement</p><p className="text-xs opacity-80">Tap the trunk once for a quick analysis.</p></div> </button> 
                   <button id="start-manual-btn" onClick={handleStartManualMeasurement} className="w-full text-left p-4 bg-brand-accent text-white rounded-lg hover:bg-brand-accent-hover disabled:bg-background-inset transition-all flex items-center gap-4"> <Ruler className="w-6 h-6 flex-shrink-0" /> <div><p className="font-semibold">Manual Measurement</p><p className="text-xs opacity-80">Mark all points yourself for maximum control.</p></div> </button> 
+                  <div className="mt-4"><HelpButton helpId="manual-marking" variant="banner" label="✏️ Learn how to mark points" animated={false} /></div>
               </div>
             )}
             
@@ -2640,6 +2643,9 @@ function App() {
 
             {currentMetrics && (appStatus === 'ANALYSIS_COMPLETE') && (
               <div className="space-y-3">
+                {/* Help Button for understanding results */}
+                <HelpButton helpId="results" variant="banner" label="📊 Understanding your results" animated={false} />
+                
                 {/* Measurements Section - Open by default, always has checkmark */}
                 <div className="border border-stroke-default rounded-lg overflow-hidden">
                   <button 
