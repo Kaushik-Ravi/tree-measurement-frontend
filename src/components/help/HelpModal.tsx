@@ -2,15 +2,14 @@
  * HelpModal Component
  * 
  * A beautiful, step-by-step contextual help modal that displays
- * GIFs, images, Lottie animations, and YouTube videos.
+ * GIFs, images, and YouTube videos.
  * 
  * THEME-AWARE: Uses the app's CSS variable system for proper light/dark mode support.
- * RESPONSIVE: Works on both mobile and desktop with proper sizing.
+ * RESPONSIVE: Works on both mobile and desktop with proper sizing and scrolling.
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, Lightbulb } from 'lucide-react';
-import { LottieAnimation, type AnimationName } from '../../assets/animations';
+import { X, ChevronLeft, ChevronRight, Lightbulb, HelpCircle, Check } from 'lucide-react';
 import { getHelpContent, type HelpContent, type HelpStep } from './helpContent';
 
 interface HelpModalProps {
@@ -65,9 +64,9 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <div className="bg-background-default rounded-2xl max-w-md w-full max-h-[90vh] overflow-hidden shadow-2xl border border-stroke-default animate-fade-in">
+      <div className="bg-background-default rounded-2xl max-w-md w-full max-h-[90vh] shadow-2xl border border-stroke-default animate-fade-in flex flex-col">
         {/* Header - Uses brand primary color */}
-        <div className="bg-brand-primary px-5 py-4">
+        <div className="bg-brand-primary px-5 py-4 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-xl font-bold text-content-on-brand">{content.title}</h2>
@@ -86,7 +85,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
           
           {/* Step Indicator */}
           <div className="flex items-center gap-1.5 mt-4">
-            {content.steps.map((_, index) => (
+            {content.steps.map((_: HelpStep, index: number) => (
               <button
                 key={index}
                 onClick={() => setCurrentStepIndex(index)}
@@ -103,8 +102,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="p-5 overflow-y-auto max-h-[60vh]">
+        {/* Content Area - Scrollable */}
+        <div className="p-5 overflow-y-auto flex-1 min-h-0">
           {/* Step Title */}
           <div className="flex items-center gap-2 mb-3">
             <span className="bg-brand-primary/20 text-brand-primary text-xs font-semibold px-2 py-1 rounded-full">
@@ -133,7 +132,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
         </div>
 
         {/* Navigation Footer */}
-        <div className="px-5 py-4 border-t border-stroke-default bg-background-subtle">
+        <div className="px-5 py-4 border-t border-stroke-default bg-background-subtle flex-shrink-0 rounded-b-2xl">
           <div className="flex items-center justify-between">
             {/* Previous Button */}
             <button
@@ -169,14 +168,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
             </button>
           </div>
 
-          {/* Quick Tips Panel */}
+          {/* Quick Tips Panel - Scrollable */}
           {showQuickTips && content.quickTips && (
-            <div className="mt-4 pt-4 border-t border-stroke-default">
+            <div className="mt-4 pt-4 border-t border-stroke-default max-h-32 overflow-y-auto">
               <h4 className="text-sm font-semibold text-content-default mb-2">Quick Tips</h4>
-              <ul className="space-y-1">
-                {content.quickTips.map((tip, index) => (
-                  <li key={index} className="text-xs text-content-subtle">
-                    {tip}
+              <ul className="space-y-1.5">
+                {content.quickTips.map((tip: string, index: number) => (
+                  <li key={index} className="flex items-start gap-2 text-xs text-content-subtle">
+                    <Check className="w-3 h-3 text-brand-primary flex-shrink-0 mt-0.5" />
+                    <span>{tip}</span>
                   </li>
                 ))}
               </ul>
@@ -194,7 +194,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
  * Uses theme-aware colors for proper light/dark mode support
  */
 const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
-  const containerClass = "rounded-xl overflow-hidden bg-background-inset flex items-center justify-center min-h-[180px]";
+  const containerClass = "rounded-xl overflow-hidden bg-background-inset flex items-center justify-center min-h-[140px]";
 
   switch (step.type) {
     case 'gif':
@@ -204,20 +204,12 @@ const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
           <img 
             src={step.mediaUrl} 
             alt={step.title}
-            className="w-full h-auto max-h-[250px] object-contain"
+            className="w-full h-auto max-h-[200px] object-contain"
             loading="lazy"
-          />
-        </div>
-      );
-
-    case 'animation':
-      return (
-        <div className={`${containerClass} p-6`}>
-          <LottieAnimation 
-            name={step.animationName as AnimationName} 
-            width={150} 
-            height={150}
-            loop={true}
+            onError={(e) => {
+              // Fallback if image fails to load
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
         </div>
       );
@@ -243,14 +235,12 @@ const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
 
     case 'text':
     default:
+      // For text-only steps, show a simple icon instead of animation
       return (
         <div className={`${containerClass} p-6`}>
-          <LottieAnimation 
-            name="helpQuestion" 
-            width={100} 
-            height={100}
-            loop={true}
-          />
+          <div className="text-center">
+            <HelpCircle className="w-12 h-12 text-brand-primary mx-auto mb-2" />
+          </div>
         </div>
       );
   }

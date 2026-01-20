@@ -472,7 +472,7 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <p className="font-bold">Instructions</p>
                     <p className="text-sm">{instruction}</p>
                 </div>
-                <div className="mb-6"><HelpButton helpId="calibration" variant="banner" label="📏 Watch calibration tutorial" animated={false} /></div>
+                <div className="mb-4 text-center"><HelpButton helpId="calibration" variant="text-link" label="Watch calibration tutorial" /></div>
             </header>
             <main className="space-y-8">
                 {/* STEP 1: REFERENCE OBJECT */}
