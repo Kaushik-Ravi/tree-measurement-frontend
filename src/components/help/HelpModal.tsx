@@ -159,16 +159,6 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
               Back
             </button>
 
-            {/* Quick Tips Toggle */}
-            {content.quickTips && content.quickTips.length > 0 && (
-              <button
-                onClick={() => setShowQuickTips(!showQuickTips)}
-                className="text-xs text-brand-primary hover:text-brand-primary-hover transition-colors"
-              >
-                {showQuickTips ? 'Hide Tips' : 'Quick Tips'}
-              </button>
-            )}
-
             {/* Next/Done Button */}
             <button
               onClick={isLastStep ? onClose : handleNext}
@@ -178,21 +168,6 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
               {!isLastStep && <ChevronRight className="w-4 h-4" />}
             </button>
           </div>
-
-          {/* Quick Tips Panel - Scrollable */}
-          {showQuickTips && content.quickTips && (
-            <div className="mt-4 pt-4 border-t border-stroke-default max-h-32 overflow-y-auto">
-              <h4 className="text-sm font-semibold text-content-default mb-2">Quick Tips</h4>
-              <ul className="space-y-1.5">
-                {content.quickTips.map((tip: string, index: number) => (
-                  <li key={index} className="flex items-start gap-2 text-xs text-content-subtle">
-                    <Check className="w-3 h-3 text-brand-primary flex-shrink-0 mt-0.5" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </div>
     </div>
