@@ -58,7 +58,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
       onKeyDown={handleKeyDown}
@@ -82,20 +82,19 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
               <X className="w-5 h-5 text-content-on-brand" />
             </button>
           </div>
-          
+
           {/* Step Indicator */}
           <div className="flex items-center gap-1.5 mt-4">
             {content.steps.map((_: HelpStep, index: number) => (
               <button
                 key={index}
                 onClick={() => setCurrentStepIndex(index)}
-                className={`h-1.5 rounded-full transition-all ${
-                  index === currentStepIndex 
-                    ? 'bg-content-on-brand w-6' 
-                    : index < currentStepIndex 
-                      ? 'bg-content-on-brand/60 w-3' 
+                className={`h-1.5 rounded-full transition-all ${index === currentStepIndex
+                    ? 'bg-content-on-brand w-6'
+                    : index < currentStepIndex
+                      ? 'bg-content-on-brand/60 w-3'
                       : 'bg-content-on-brand/30 w-3'
-                }`}
+                  }`}
                 aria-label={`Go to step ${index + 1}`}
               />
             ))}
@@ -138,11 +137,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
             <button
               onClick={handlePrev}
               disabled={isFirstStep}
-              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isFirstStep 
-                  ? 'text-content-subtle/50 cursor-not-allowed' 
+              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isFirstStep
+                  ? 'text-content-subtle/50 cursor-not-allowed'
                   : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
-              }`}
+                }`}
             >
               <ChevronLeft className="w-4 h-4" />
               Back
@@ -188,26 +186,44 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
   );
 };
 
+import Lottie from 'lottie-react';
+import { useLottie } from 'lottie-react';
+
 /**
  * StepMedia Component
  * Renders the appropriate media type for each help step
  * Uses theme-aware colors for proper light/dark mode support
  */
 const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
-  const containerClass = "rounded-xl overflow-hidden bg-background-inset flex items-center justify-center min-h-[140px]";
+  const containerClass = "rounded-xl overflow-hidden bg-background-inset flex items-center justify-center min-h-[220px]";
+
+  // Lottie Animation Loader
+  const LottiePlayer = ({ url }: { url: string }) => {
+    const [animationData, setAnimationData] = useState<any>(null);
+
+    useEffect(() => {
+      fetch(url)
+        .then(response => response.json())
+        .then(data => setAnimationData(data))
+        .catch(err => console.error("Error loading Lottie:", err));
+    }, [url]);
+
+    if (!animationData) return <div className="text-content-subtle text-xs">Loading animation...</div>;
+
+    return <Lottie animationData={animationData} loop={true} className="w-full h-full p-4" />;
+  };
 
   switch (step.type) {
     case 'gif':
     case 'image':
       return (
         <div className={containerClass}>
-          <img 
-            src={step.mediaUrl} 
+          <img
+            src={step.mediaUrl}
             alt={step.title}
             className="w-full h-auto max-h-[200px] object-contain"
             loading="lazy"
             onError={(e) => {
-              // Fallback if image fails to load
               (e.target as HTMLImageElement).style.display = 'none';
             }}
           />
@@ -217,7 +233,19 @@ const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
     case 'video':
       return (
         <div className={containerClass}>
-          {step.youtubeId ? (
+          {step.videoUrl ? (
+            // Local MP4 Video
+            <video
+              src={step.videoUrl}
+              className="w-full h-full rounded-xl object-cover"
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+          ) : step.youtubeId ? (
+            // YouTube Embed
             <div className="w-full aspect-video">
               <iframe
                 src={`https://www.youtube.com/embed/${step.youtubeId}?rel=0&modestbranding=1`}
@@ -233,9 +261,21 @@ const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
         </div>
       );
 
+    case 'lottie':
+      return (
+        <div className={containerClass}>
+          {step.lottieUrl ? (
+            <div className="w-full max-w-[280px] aspect-square">
+              <LottiePlayer url={step.lottieUrl} />
+            </div>
+          ) : (
+            <div className="text-content-subtle text-sm">Animation unavailable</div>
+          )}
+        </div>
+      );
+
     case 'text':
     default:
-      // For text-only steps, show a simple icon instead of animation
       return (
         <div className={`${containerClass} p-6`}>
           <div className="text-center">

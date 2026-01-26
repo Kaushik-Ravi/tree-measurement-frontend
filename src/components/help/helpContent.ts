@@ -7,7 +7,7 @@
  * IMPORTANT: Media files are served from /public/help/ folder
  */
 
-export type HelpContentType = 'text' | 'gif' | 'image' | 'video';
+export type HelpContentType = 'text' | 'gif' | 'image' | 'video' | 'lottie';
 
 export interface HelpStep {
   title: string;
@@ -15,6 +15,8 @@ export interface HelpStep {
   type: HelpContentType;
   mediaUrl?: string;
   youtubeId?: string;
+  lottieUrl?: string; // For JSON files
+  videoUrl?: string; // For local MP4 files
   tip?: string;
 }
 
@@ -395,6 +397,55 @@ export const helpContentData: Record<string, HelpContent> = {
       'Phone held level',
       'Credit card for calibration',
       'Know your distance from tree',
+    ],
+  },
+  // ============================================
+  // MEASURE TREE INTRO (HOME SCREEN)
+  // ============================================
+  'measure-tree-intro': {
+    id: 'measure-tree-intro',
+    title: 'How it Works',
+    subtitle: '5 easy steps to measure any tree',
+    steps: [
+      {
+        title: 'Snap a Picture',
+        description: 'Frame the entire tree from base to crown. Ensure good lighting and hold your phone steady.',
+        type: 'video',
+        videoUrl: `${MEDIA_PATH}/intro-step1-photo.mp4`,
+        tip: 'Stand back to fit the whole tree'
+      },
+      {
+        title: 'Measure Distance',
+        description: 'Tell us how far you are from the tree. Use our built-in AR tool or tap "Enter Manually" if you know the distance.',
+        type: 'video',
+        videoUrl: `${MEDIA_PATH}/intro-step2-measure.mp4`,
+      },
+      {
+        title: 'Mark Key Points',
+        description: 'Tap 3 points: The base, the top, and the canopy edges. This helps us calculate the dimensions.',
+        type: 'lottie', // Using Lottie for the JSON file
+        lottieUrl: `${MEDIA_PATH}/intro-step3-points.json`,
+        tip: 'Zoom in for precision'
+      },
+      {
+        title: 'Identify Species',
+        description: 'Our AI will analyze the bark or leaves to identify the tree species automatically.',
+        type: 'video',
+        videoUrl: `${MEDIA_PATH}/intro-step4-species.mp4`,
+      },
+      {
+        title: 'Get Results',
+        description: 'Instantly see the height, width, and carbon sequestration impact of your tree.',
+        type: 'video',
+        videoUrl: `${MEDIA_PATH}/intro-step5-results.mp4`,
+        tip: 'Save results to track your impact'
+      },
+    ],
+    quickTips: [
+      'Takes less than 1 minute',
+      'No special hardware needed',
+      'Works on any tree',
+      'Contribute to science',
     ],
   },
 };
