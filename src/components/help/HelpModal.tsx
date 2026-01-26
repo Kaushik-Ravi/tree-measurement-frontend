@@ -68,10 +68,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
         {/* Header - Uses brand primary color */}
         <div className="bg-brand-primary px-5 py-4 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-content-on-brand">{content.title}</h2>
+            <div className="text-left">
+              <h2 className="text-xl font-bold text-content-on-brand text-left">{content.title}</h2>
               {content.subtitle && (
-                <p className="text-content-on-brand/80 text-sm mt-1">{content.subtitle}</p>
+                <p className="text-content-on-brand/80 text-sm mt-1 text-left">{content.subtitle}</p>
               )}
             </div>
             <button
@@ -129,15 +129,15 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
                 <p className="text-content-default text-sm font-semibold">Tips</p>
               </div>
               {currentStep.tips ? (
-                <ul className="space-y-1.5 ml-6">
+                <ul className="space-y-1.5 pl-6 list-disc">
                   {currentStep.tips.map((tipItem, index) => (
-                    <li key={index} className="text-content-default text-xs leading-relaxed list-disc">
+                    <li key={index} className="text-content-default text-xs leading-relaxed">
                       {tipItem}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-content-default text-sm ml-6">{currentStep.tip}</p>
+                <p className="text-content-default text-sm pl-6">{currentStep.tip}</p>
               )}
             </div>
           )}
