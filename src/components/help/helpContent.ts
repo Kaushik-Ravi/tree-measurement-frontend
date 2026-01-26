@@ -412,33 +412,35 @@ export const helpContentData: Record<string, HelpContent> = {
         description: 'Frame the entire tree from base to crown. Ensure good lighting and hold your phone steady.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step1-photo.mp4`,
-        tip: 'Stand back to fit the whole tree'
+        tip: 'Best results: Stand 10-20m away for a clear view.'
       },
       {
         title: 'Measure Distance',
         description: 'Tell us how far you are from the tree. Use our built-in AR tool or tap "Enter Manually" if you know the distance.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step2-measure.mp4`,
+        tip: 'AR requires good light and flat ground.'
       },
       {
         title: 'Mark Key Points',
         description: 'Tap 3 points: The base, the top, and the canopy edges. This helps us calculate the dimensions.',
         type: 'lottie', // Using Lottie for the JSON file
         lottieUrl: `${MEDIA_PATH}/intro-step3-points.json`,
-        tip: 'Zoom in for precision'
+        tip: 'Use the magnifier (long press) for pixel-perfect accuracy.'
       },
       {
         title: 'Identify Species',
         description: 'Our AI will analyze the bark or leaves to identify the tree species automatically.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step4-species.mp4`,
+        tip: 'You can also search by name if the AI is unsure.'
       },
       {
         title: 'Get Results',
         description: 'Instantly see the height, width, and carbon sequestration impact of your tree.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step5-results.mp4`,
-        tip: 'Save results to track your impact'
+        tip: 'Earn "Sapling Points" for every verified measurement!'
       },
     ],
     quickTips: [

@@ -90,10 +90,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
                 key={index}
                 onClick={() => setCurrentStepIndex(index)}
                 className={`h-1.5 rounded-full transition-all ${index === currentStepIndex
-                    ? 'bg-content-on-brand w-6'
-                    : index < currentStepIndex
-                      ? 'bg-content-on-brand/60 w-3'
-                      : 'bg-content-on-brand/30 w-3'
+                  ? 'bg-content-on-brand w-6'
+                  : index < currentStepIndex
+                    ? 'bg-content-on-brand/60 w-3'
+                    : 'bg-content-on-brand/30 w-3'
                   }`}
                 aria-label={`Go to step ${index + 1}`}
               />
@@ -138,8 +138,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
               onClick={handlePrev}
               disabled={isFirstStep}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isFirstStep
-                  ? 'text-content-subtle/50 cursor-not-allowed'
-                  : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
+                ? 'text-content-subtle/50 cursor-not-allowed'
+                : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
                 }`}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -237,8 +237,7 @@ const StepMedia: React.FC<{ step: HelpStep }> = ({ step }) => {
             // Local MP4 Video
             <video
               src={step.videoUrl}
-              className="w-full h-full rounded-xl object-cover"
-              controls
+              className="w-full h-full rounded-xl object-cover pointer-events-none"
               autoPlay
               loop
               muted
