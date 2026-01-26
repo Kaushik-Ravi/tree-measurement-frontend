@@ -18,7 +18,6 @@ export interface HelpStep {
   lottieUrl?: string; // For JSON files
   videoUrl?: string; // For local MP4 files
   tip?: string;
-  quickTips?: string[];
 }
 
 export interface HelpContent {
@@ -413,65 +412,35 @@ export const helpContentData: Record<string, HelpContent> = {
         description: 'Frame the entire tree from base to crown. Ensure good lighting and hold your phone steady.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step1-photo.mp4`,
-        tip: 'Best results: Stand 10-20m away for a clear view.',
-        quickTips: [
-          'Hold phone vertical (no tilting)',
-          'Avoid backlighting (sun behind you)',
-          'Ensure whole tree is visible',
-          'Stability = Sharp Image'
-        ]
+        tip: 'Sun behind you. Get close to fill the frame (no need for 10-20m distance).'
       },
       {
         title: 'Measure Distance',
         description: 'Tell us how far you are from the tree. Use our built-in AR tool or tap "Enter Manually" if you know the distance.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step2-measure.mp4`,
-        tip: 'AR requires good light and flat ground.',
-        quickTips: [
-          'Walk-Back Method is most accurate',
-          'Point camera at ground to start',
-          'Walk in a straight line',
-          'Verify by walking back to start'
-        ]
+        tip: 'AR: Tap feet → Walk to tree → Tap → Walk back to start line.'
       },
       {
         title: 'Mark Key Points',
         description: 'Tap 3 points: The base, the top, and the canopy edges. This helps us calculate the dimensions.',
         type: 'lottie', // Using Lottie for the JSON file
         lottieUrl: `${MEDIA_PATH}/intro-step3-points.json`,
-        tip: 'Use the magnifier (long press) for pixel-perfect accuracy.',
-        quickTips: [
-          'H1: Where trunk meets ground',
-          'H2: Highest leaf tip',
-          'C1/C2: Widest crown points',
-          'Zoom in for precision'
-        ]
+        tip: 'Long-press for magnifier. Follow the top bar instructions.'
       },
       {
         title: 'Identify Species',
         description: 'Our AI will analyze the bark or leaves to identify the tree species automatically.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step4-species.mp4`,
-        tip: 'You can also search by name if the AI is unsure.',
-        quickTips: [
-          'Close-ups of bark/leaves work best',
-          'Search by common name',
-          'Select "Unknown" if unsure',
-          'Leaf shape is key'
-        ]
+        tip: 'Crop leaves, fruit, or bark. Close-ups work best for AI.'
       },
       {
         title: 'Get Results',
         description: 'Instantly see the height, width, and carbon sequestration impact of your tree.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step5-results.mp4`,
-        tip: 'Earn "Sapling Points" for every verified measurement!',
-        quickTips: [
-          'Save to history to earn points',
-          'Submit to community for verification',
-          'Metrics locked after submission',
-          'Share your impact!'
-        ]
+        tip: 'Edit location/comments and check your CO₂ score!'
       },
     ],
     quickTips: [

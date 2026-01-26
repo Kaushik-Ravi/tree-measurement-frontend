@@ -67,33 +67,32 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
       <div className="bg-background-default rounded-2xl max-w-md w-full max-h-[90vh] shadow-2xl border border-stroke-default animate-fade-in flex flex-col">
         {/* Header - Uses brand primary color */}
         <div className="bg-brand-primary px-5 py-4 flex-shrink-0 rounded-t-2xl relative">
-          <div className="flex items-center justify-center text-center">
-            <div>
-              <h2 className="text-xl font-bold text-content-on-brand">{content.title}</h2>
-              {content.subtitle && (
-                <p className="text-content-on-brand/80 text-sm mt-1">{content.subtitle}</p>
-              )}
-            </div>
-          </div>
           <button
             onClick={onClose}
-            className="absolute right-4 top-4 p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+            className="absolute right-4 top-4 p-1.5 hover:bg-white/20 rounded-lg transition-colors z-10"
             aria-label="Close help"
           >
             <X className="w-5 h-5 text-content-on-brand" />
           </button>
 
+          <div className="flex flex-col items-center text-center w-full">
+            <h2 className="text-xl font-bold text-content-on-brand">{content.title}</h2>
+            {content.subtitle && (
+              <p className="text-content-on-brand/80 text-sm mt-1">{content.subtitle}</p>
+            )}
+          </div>
+
           {/* Step Indicator */}
-          <div className="flex items-center justify-center gap-1.5 mt-4">
+          <div className="flex items-center gap-1.5 mt-4">
             {content.steps.map((_: HelpStep, index: number) => (
               <button
                 key={index}
                 onClick={() => setCurrentStepIndex(index)}
                 className={`h-1.5 rounded-full transition-all ${index === currentStepIndex
-                    ? 'bg-content-on-brand w-6'
-                    : index < currentStepIndex
-                      ? 'bg-content-on-brand/60 w-3'
-                      : 'bg-content-on-brand/30 w-3'
+                  ? 'bg-content-on-brand w-6'
+                  : index < currentStepIndex
+                    ? 'bg-content-on-brand/60 w-3'
+                    : 'bg-content-on-brand/30 w-3'
                   }`}
                 aria-label={`Go to step ${index + 1}`}
               />
@@ -138,8 +137,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
               onClick={handlePrev}
               disabled={isFirstStep}
               className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isFirstStep
-                  ? 'text-content-subtle/50 cursor-not-allowed'
-                  : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
+                ? 'text-content-subtle/50 cursor-not-allowed'
+                : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
                 }`}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -147,7 +146,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
             </button>
 
             {/* Quick Tips Toggle */}
-            {(currentStep.quickTips || content.quickTips) && (currentStep.quickTips?.length || content.quickTips?.length) && (
+            {content.quickTips && content.quickTips.length > 0 && (
               <button
                 onClick={() => setShowQuickTips(!showQuickTips)}
                 className="text-xs text-brand-primary hover:text-brand-primary-hover transition-colors"
@@ -167,13 +166,11 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
           </div>
 
           {/* Quick Tips Panel - Scrollable */}
-          {showQuickTips && (currentStep.quickTips || content.quickTips) && (
+          {showQuickTips && content.quickTips && (
             <div className="mt-4 pt-4 border-t border-stroke-default max-h-32 overflow-y-auto">
-              <h4 className="text-sm font-semibold text-content-default mb-2">
-                {currentStep.quickTips ? 'Step Tips' : 'Quick Tips'}
-              </h4>
+              <h4 className="text-sm font-semibold text-content-default mb-2">Quick Tips</h4>
               <ul className="space-y-1.5">
-                {(currentStep.quickTips || content.quickTips || []).map((tip: string, index: number) => (
+                {content.quickTips.map((tip: string, index: number) => (
                   <li key={index} className="flex items-start gap-2 text-xs text-content-subtle">
                     <Check className="w-3 h-3 text-brand-primary flex-shrink-0 mt-0.5" />
                     <span>{tip}</span>
