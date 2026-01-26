@@ -17,7 +17,8 @@ export interface HelpStep {
   youtubeId?: string;
   lottieUrl?: string; // For JSON files
   videoUrl?: string; // For local MP4 files
-  tip?: string;
+  tip?: string; // Single tip (legacy)
+  tips?: string[]; // Multiple tips as bullet points
 }
 
 export interface HelpContent {
@@ -409,38 +410,59 @@ export const helpContentData: Record<string, HelpContent> = {
     steps: [
       {
         title: 'Snap a Picture',
-        description: 'Frame the entire tree from base to crown. Ensure good lighting and hold your phone steady.',
+        description: 'Frame the entire tree from base to crown in good lighting.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step1-photo.mp4`,
-        tip: 'Ensure the full tree is in frame and the sun is behind you. Stand as close as possible while keeping the whole tree visible.'
+        tips: [
+          'Keep the tree centered and fully visible',
+          'Hold your phone level (don\'t tilt)',
+          'Stand with the sun behind you for best lighting'
+        ]
       },
       {
         title: 'Measure Distance',
-        description: 'Tell us how far you are from the tree. Use our built-in AR tool or tap "Enter Manually" if you know the distance.',
+        description: 'Tell us the distance from your position to the tree base.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step2-measure.mp4`,
-        tip: 'For AR: Tap pink reticle at feet → Walk to tree base → Tap → Walk BACK to start. Ensure good daylight.'
+        tips: [
+          'Manual: Enter the distance if you already know it',
+          'AR (good light required): Tap the pink circle at your feet',
+          'Walk slowly to the tree base and tap the second point',
+          'Walk back along the line to realign the measurement'
+        ]
       },
       {
         title: 'Mark Key Points',
-        description: 'Tap 3 points: The base, the top, and the canopy edges. This helps us calculate the dimensions.',
-        type: 'lottie', // Using Lottie for the JSON file
+        description: 'Tap tree points to calculate dimensions.',
+        type: 'lottie',
         lottieUrl: `${MEDIA_PATH}/intro-step3-points.json`,
-        tip: 'Long-press to use the magnifier for precision. Follow the top bar instructions for the correct order.'
+        tips: [
+          'Long-press anywhere to activate the magnifier',
+          'Follow the instruction bar at the top',
+          'Mark in H-C-G order: Height → Canopy → Girth'
+        ]
       },
       {
         title: 'Identify Species',
-        description: 'Our AI will analyze the bark or leaves to identify the tree species automatically.',
+        description: 'Crop any tree part for AI identification.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step4-species.mp4`,
-        tip: 'Take a close-up of leaves, fruit, flower, or bark for the AI to analyze.'
+        tips: [
+          'Works with leaves, bark, flowers, or fruit',
+          'AI identifies automatically after cropping',
+          'You can search manually if AI is uncertain'
+        ]
       },
       {
         title: 'Get Results',
-        description: 'Instantly see the height, width, and carbon sequestration impact of your tree.',
+        description: 'View your tree\'s measurements and carbon impact.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step5-results.mp4`,
-        tip: 'You can edit location/comments here. Check your CO₂ sequestration impact!'
+        tips: [
+          'See CO₂ sequestration data instantly',
+          'Edit location or add notes before saving',
+          'Earn Sapling Points for verified measurements'
+        ]
       },
     ],
     quickTips: [
