@@ -67,121 +67,121 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, helpId })
       <div className="bg-background-default rounded-2xl max-w-md w-full max-h-[90vh] shadow-2xl border border-stroke-default animate-fade-in flex flex-col">
         {/* Header - Uses brand primary color */}
         <div className="bg-brand-primary px-5 py-4 flex-shrink-0 rounded-t-2xl relative">
-          <button
-            onClick={onClose}
-            className="absolute right-4 top-4 p-1.5 hover:bg-white/20 rounded-lg transition-colors z-10"
-            aria-label="Close help"
-          >
-            <X className="w-5 h-5 text-content-on-brand" />
-          </button>
-
-          <div className="flex flex-col items-center text-center w-full">
+          <div className="flex flex-col items-center justify-center text-center">
             <h2 className="text-xl font-bold text-content-on-brand">{content.title}</h2>
             {content.subtitle && (
               <p className="text-content-on-brand/80 text-sm mt-1">{content.subtitle}</p>
             )}
           </div>
-
-          {/* Step Indicator */}
-          <div className="flex items-center gap-1.5 mt-4">
-            {content.steps.map((_: HelpStep, index: number) => (
-              <button
-                key={index}
-                onClick={() => setCurrentStepIndex(index)}
-                className={`h-1.5 rounded-full transition-all ${index === currentStepIndex
-                  ? 'bg-content-on-brand w-6'
-                  : index < currentStepIndex
-                    ? 'bg-content-on-brand/60 w-3'
-                    : 'bg-content-on-brand/30 w-3'
-                  }`}
-                aria-label={`Go to step ${index + 1}`}
-              />
-            ))}
-          </div>
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+            aria-label="Close help"
+          >
+            <X className="w-5 h-5 text-content-on-brand" />
+          </button>
         </div>
 
-        {/* Content Area - Scrollable */}
-        <div className="p-5 overflow-y-auto flex-1 min-h-0">
-          {/* Step Title */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="bg-brand-primary/20 text-brand-primary text-xs font-semibold px-2 py-1 rounded-full">
-              Step {currentStepIndex + 1}/{totalSteps}
-            </span>
-            <h3 className="text-lg font-semibold text-content-default">{currentStep.title}</h3>
-          </div>
-
-          {/* Media Content */}
-          <div className="mb-4">
-            <StepMedia step={currentStep} />
-          </div>
-
-          {/* Description */}
-          <p className="text-content-subtle text-sm leading-relaxed mb-3">
-            {currentStep.description}
-          </p>
-
-          {/* Tip Box */}
-          {currentStep.tip && (
-            <div className="flex items-start gap-2 bg-brand-accent/10 border border-brand-accent/30 rounded-lg p-3">
-              <Lightbulb className="w-4 h-4 text-brand-accent flex-shrink-0 mt-0.5" />
-              <p className="text-content-default text-sm">{currentStep.tip}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Navigation Footer */}
-        <div className="px-5 py-4 border-t border-stroke-default bg-background-subtle flex-shrink-0 rounded-b-2xl">
-          <div className="flex items-center justify-between">
-            {/* Previous Button */}
+        {/* Step Indicator */}
+        <div className="flex items-center gap-1.5 mt-4">
+          {content.steps.map((_: HelpStep, index: number) => (
             <button
-              onClick={handlePrev}
-              disabled={isFirstStep}
-              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isFirstStep
-                ? 'text-content-subtle/50 cursor-not-allowed'
-                : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
+              key={index}
+              onClick={() => setCurrentStepIndex(index)}
+              className={`h-1.5 rounded-full transition-all ${index === currentStepIndex
+                ? 'bg-content-on-brand w-6'
+                : index < currentStepIndex
+                  ? 'bg-content-on-brand/60 w-3'
+                  : 'bg-content-on-brand/30 w-3'
                 }`}
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Back
-            </button>
-
-            {/* Quick Tips Toggle */}
-            {content.quickTips && content.quickTips.length > 0 && (
-              <button
-                onClick={() => setShowQuickTips(!showQuickTips)}
-                className="text-xs text-brand-primary hover:text-brand-primary-hover transition-colors"
-              >
-                {showQuickTips ? 'Hide Tips' : 'Quick Tips'}
-              </button>
-            )}
-
-            {/* Next/Done Button */}
-            <button
-              onClick={isLastStep ? onClose : handleNext}
-              className="flex items-center gap-1 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-content-on-brand rounded-lg text-sm font-medium transition-colors"
-            >
-              {isLastStep ? 'Got it!' : 'Next'}
-              {!isLastStep && <ChevronRight className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* Quick Tips Panel - Scrollable */}
-          {showQuickTips && content.quickTips && (
-            <div className="mt-4 pt-4 border-t border-stroke-default max-h-32 overflow-y-auto">
-              <h4 className="text-sm font-semibold text-content-default mb-2">Quick Tips</h4>
-              <ul className="space-y-1.5">
-                {content.quickTips.map((tip: string, index: number) => (
-                  <li key={index} className="flex items-start gap-2 text-xs text-content-subtle">
-                    <Check className="w-3 h-3 text-brand-primary flex-shrink-0 mt-0.5" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+              aria-label={`Go to step ${index + 1}`}
+            />
+          ))}
         </div>
       </div>
+
+      {/* Content Area - Scrollable */}
+      <div className="p-5 overflow-y-auto flex-1 min-h-0">
+        {/* Step Title */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="bg-brand-primary/20 text-brand-primary text-xs font-semibold px-2 py-1 rounded-full">
+            Step {currentStepIndex + 1}/{totalSteps}
+          </span>
+          <h3 className="text-lg font-semibold text-content-default">{currentStep.title}</h3>
+        </div>
+
+        {/* Media Content */}
+        <div className="mb-4">
+          <StepMedia step={currentStep} />
+        </div>
+
+        {/* Description */}
+        <p className="text-content-subtle text-sm leading-relaxed mb-3">
+          {currentStep.description}
+        </p>
+
+        {/* Tip Box */}
+        {currentStep.tip && (
+          <div className="flex items-start gap-2 bg-brand-accent/10 border border-brand-accent/30 rounded-lg p-3">
+            <Lightbulb className="w-4 h-4 text-brand-accent flex-shrink-0 mt-0.5" />
+            <p className="text-content-default text-sm">{currentStep.tip}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Navigation Footer */}
+      <div className="px-5 py-4 border-t border-stroke-default bg-background-subtle flex-shrink-0 rounded-b-2xl">
+        <div className="flex items-center justify-between">
+          {/* Previous Button */}
+          <button
+            onClick={handlePrev}
+            disabled={isFirstStep}
+            className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isFirstStep
+              ? 'text-content-subtle/50 cursor-not-allowed'
+              : 'text-content-subtle hover:bg-background-inset hover:text-content-default'
+              }`}
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back
+          </button>
+
+          {/* Quick Tips Toggle */}
+          {content.quickTips && content.quickTips.length > 0 && (
+            <button
+              onClick={() => setShowQuickTips(!showQuickTips)}
+              className="text-xs text-brand-primary hover:text-brand-primary-hover transition-colors"
+            >
+              {showQuickTips ? 'Hide Tips' : 'Quick Tips'}
+            </button>
+          )}
+
+          {/* Next/Done Button */}
+          <button
+            onClick={isLastStep ? onClose : handleNext}
+            className="flex items-center gap-1 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-content-on-brand rounded-lg text-sm font-medium transition-colors"
+          >
+            {isLastStep ? 'Got it!' : 'Next'}
+            {!isLastStep && <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Quick Tips Panel - Scrollable */}
+        {showQuickTips && content.quickTips && (
+          <div className="mt-4 pt-4 border-t border-stroke-default max-h-32 overflow-y-auto">
+            <h4 className="text-sm font-semibold text-content-default mb-2">Quick Tips</h4>
+            <ul className="space-y-1.5">
+              {content.quickTips.map((tip: string, index: number) => (
+                <li key={index} className="flex items-start gap-2 text-xs text-content-subtle">
+                  <Check className="w-3 h-3 text-brand-primary flex-shrink-0 mt-0.5" />
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
+    </div >
   );
 };
 

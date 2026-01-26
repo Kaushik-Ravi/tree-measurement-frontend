@@ -412,35 +412,35 @@ export const helpContentData: Record<string, HelpContent> = {
         description: 'Frame the entire tree from base to crown. Ensure good lighting and hold your phone steady.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step1-photo.mp4`,
-        tip: 'Sun behind you. Get close to fill the frame (no need for 10-20m distance).'
+        tip: 'Ensure the full tree is in frame and the sun is behind you. Stand as close as possible while keeping the whole tree visible.'
       },
       {
         title: 'Measure Distance',
         description: 'Tell us how far you are from the tree. Use our built-in AR tool or tap "Enter Manually" if you know the distance.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step2-measure.mp4`,
-        tip: 'AR: Tap feet → Walk to tree → Tap → Walk back to start line.'
+        tip: 'For AR: Tap pink reticle at feet → Walk to tree base → Tap → Walk BACK to start. Ensure good daylight.'
       },
       {
         title: 'Mark Key Points',
         description: 'Tap 3 points: The base, the top, and the canopy edges. This helps us calculate the dimensions.',
         type: 'lottie', // Using Lottie for the JSON file
         lottieUrl: `${MEDIA_PATH}/intro-step3-points.json`,
-        tip: 'Long-press for magnifier. Follow the top bar instructions.'
+        tip: 'Long-press to use the magnifier for precision. Follow the top bar instructions for the correct order.'
       },
       {
         title: 'Identify Species',
         description: 'Our AI will analyze the bark or leaves to identify the tree species automatically.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step4-species.mp4`,
-        tip: 'Crop leaves, fruit, or bark. Close-ups work best for AI.'
+        tip: 'Take a close-up of leaves, fruit, flower, or bark for the AI to analyze.'
       },
       {
         title: 'Get Results',
         description: 'Instantly see the height, width, and carbon sequestration impact of your tree.',
         type: 'video',
         videoUrl: `${MEDIA_PATH}/intro-step5-results.mp4`,
-        tip: 'Edit location/comments and check your CO₂ score!'
+        tip: 'You can edit location/comments here. Check your CO₂ sequestration impact!'
       },
     ],
     quickTips: [
