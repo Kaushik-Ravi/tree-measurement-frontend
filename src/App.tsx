@@ -1349,7 +1349,7 @@ function App() {
 
       // Check for snap immediately on down
       let isSnapped = false;
-      if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
+      if ((appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION') && dbhGuideRect && imageDimensions) {
         const canvas = e.currentTarget;
         // Use cached rect
         const scaleY = canvas.height / rect.height;
@@ -1372,7 +1372,7 @@ function App() {
     if (isDragging) {
       // Check for snap during drag
       let isSnapped = false;
-      if (appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' && dbhGuideRect && imageDimensions) {
+      if ((appStatus === 'ANALYSIS_MANUAL_AWAITING_GIRTH_POINTS' || appStatus === 'ANALYSIS_MANUAL_AWAITING_CONFIRMATION') && dbhGuideRect && imageDimensions) {
         const canvas = e.currentTarget;
         // Use cached rect if available, else fallback (should be available during drag)
         const rect = dragRectRef.current || canvas.getBoundingClientRect();
@@ -2817,8 +2817,8 @@ function App() {
                           <button
                             onClick={() => setIsLocationPickerActive(true)}
                             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all shadow-sm ${currentLocation
-                                ? 'bg-brand-secondary/10 text-brand-secondary border border-brand-secondary/20 hover:bg-brand-secondary/20'
-                                : 'bg-background-default border border-stroke-default text-content-default hover:bg-background-subtle'
+                              ? 'bg-brand-secondary/10 text-brand-secondary border border-brand-secondary/20 hover:bg-brand-secondary/20'
+                              : 'bg-background-default border border-stroke-default text-content-default hover:bg-background-subtle'
                               }`}
                           >
                             <MapPin className={`w-5 h-5 ${currentLocation ? 'text-brand-secondary' : 'text-content-subtle'}`} />
