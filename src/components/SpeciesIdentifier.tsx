@@ -22,7 +22,7 @@ interface SpeciesIdentifierProps {
 }
 
 type Organ = 'leaf' | 'flower' | 'fruit' | 'bark';
-type Mode = 'idle' | 'uploading' | 'cropping';
+type Mode = 'idle' | 'uploading' | 'cropping' | 'manual';
 
 // --- START: SURGICAL REPLACEMENT (THEMING) ---
 export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading, closeupImageUrl, closeupOrgan }: SpeciesIdentifierProps) {
@@ -34,6 +34,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   const [imagePreview, setImagePreview] = useState<string>('');
   const [selectedOrgan, setSelectedOrgan] = useState<Organ | null>(null);
   const [remainingQuota, setRemainingQuota] = useState<number | null>(null);
+  const [manualSpeciesName, setManualSpeciesName] = useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const autoIdentifyAttempted = React.useRef(false);
 
@@ -135,8 +136,30 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     setImageFile(null);
     setImagePreview('');
     setSelectedOrgan(null);
+    setManualSpeciesName('');
     setMode('idle'); // Reset mode to the initial choice screen
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleManualSubmit = () => {
+    if (!manualSpeciesName.trim()) {
+      setError("Please enter a species name.");
+      return;
+    }
+    
+    // Create a manual result with the generic wood density fallback
+    onIdentificationComplete({
+      bestMatch: {
+        scientificName: manualSpeciesName.trim(),
+        commonNames: ['Manual Entry'],
+        score: 1.0
+      },
+      woodDensity: {
+        value: 0.6, // Generic fallback as per researcher data
+        unit: 'g/cm³',
+        sourceRegion: 'Generic Wood Database (Fallback)'
+      }
+    });
   };
 
   const organOptions: { name: Organ; icon: React.ReactNode }[] = [
@@ -197,8 +220,8 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
 
       <div className="flex justify-between items-center">
         <p className="text-sm font-medium text-content-default">Identify Species (Required to Save)</p>
-        {(mode === 'uploading' || selectedOrgan) && mode !== 'cropping' && (
-           <button onClick={() => { setImageFile(null); setImagePreview(''); setSelectedOrgan(null); setMode('idle'); }} className="text-xs text-brand-secondary hover:underline">Start over</button>
+        {(mode === 'uploading' || selectedOrgan || mode === 'manual') && mode !== 'cropping' && (
+           <button onClick={() => { setImageFile(null); setImagePreview(''); setSelectedOrgan(null); setManualSpeciesName(''); setMode('idle'); }} className="text-xs text-brand-secondary hover:underline">Start over</button>
         )}
       </div>
 
@@ -229,6 +252,18 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
               </button>
             ))}
           </div>
+          
+          <div className="flex items-center justify-center gap-2 mt-4">
+             <div className="h-px bg-stroke-default flex-1"></div>
+             <span className="text-xs text-content-subtle font-medium px-2">OR</span>
+             <div className="h-px bg-stroke-default flex-1"></div>
+          </div>
+          <button 
+            onClick={() => setMode('manual')}
+            className="w-full mt-2 px-4 py-3 bg-background-inset border border-stroke-default rounded-lg hover:border-brand-secondary text-sm font-medium text-content-default transition-all"
+          >
+             Skip Auto-ID / Manual Entry
+          </button>
         </div>
       )}
 
@@ -303,6 +338,37 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           </button>
           {error && <div className="text-xs text-status-error text-center pt-1">{error}</div>}
         </>
+      )}
+
+      {/* Manual Entry Interface */}
+      {mode === 'manual' && (
+        <div className="space-y-4">
+          <div className="bg-brand-secondary/5 border border-brand-secondary/20 rounded-lg p-3">
+            <p className="text-sm font-medium text-content-default">Manual Species Entry</p>
+            <p className="text-xs text-content-subtle mt-1">If the species is not in our wood database, it will default to a generic fallback density (0.6 g/cm³).</p>
+          </div>
+          
+          <div>
+             <label className="block text-xs font-medium text-content-default mb-1">Scientific Name / Species</label>
+             <input 
+               type="text" 
+               placeholder="e.g. Mangifera indica"
+               value={manualSpeciesName}
+               onChange={(e) => { setManualSpeciesName(e.target.value); setError(null); }}
+               className="w-full px-3 py-2 bg-background-default border border-stroke-default rounded-lg text-sm focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+               autoFocus
+             />
+             {error && <p className="text-xs text-status-error mt-1">{error}</p>}
+          </div>
+
+          <button 
+             onClick={handleManualSubmit}
+             className="w-full py-3 bg-brand-primary text-white rounded-lg font-medium hover:bg-brand-primary-hover transition-all flex items-center justify-center gap-2"
+          >
+             <Check className="w-5 h-5" />
+             Submit Species
+          </button>
+        </div>
       )}
     </div>
   );

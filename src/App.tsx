@@ -1814,6 +1814,26 @@ function App() {
     }
 
     try {
+      let speciesJsonStr: string | undefined = undefined;
+      let woodDensityJsonStr: string | undefined = undefined;
+
+      // Identify in RAM and discard image
+      if (closeupFile && organ) {
+        setInstructionText("Identifying species before submission...");
+        try {
+          const idResponse = await identifySpecies(closeupFile, organ);
+          if (idResponse.bestMatch) {
+            speciesJsonStr = JSON.stringify(idResponse.bestMatch);
+          }
+          if (idResponse.woodDensity) {
+            woodDensityJsonStr = JSON.stringify(idResponse.woodDensity);
+          }
+        } catch (e) {
+          console.warn("Auto-identification failed:", e);
+        }
+      }
+
+      setInstructionText("Saving to Community Grove...");
       await quickCapture(
         currentMeasurementFile!,
         parseFloat(distance),
@@ -1822,8 +1842,8 @@ function App() {
         userGeoLocation!.lat,
         userGeoLocation!.lng,
         session!.access_token,
-        closeupFile || undefined,
-        organ || undefined
+        speciesJsonStr,
+        woodDensityJsonStr
       );
 
       const updatedResults = await getResults(session!.access_token);
@@ -2440,7 +2460,7 @@ function App() {
                 />
               )}
 
-              {appStatus === 'SESSION_AWAITING_PHOTO' && (<div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> <div className="mt-3 text-center"><HelpButton helpId="photo-capture" variant="text-link" label="Tips for the perfect shot" /></div> </div>)}
+              {appStatus === 'SESSION_AWAITING_PHOTO' && (<div> <label className="block text-sm font-medium text-content-default mb-2">1. Select Photo</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-background-default border-2 border-dashed border-stroke-default rounded-lg hover:border-brand-primary hover:bg-brand-primary/10"> <Upload className="w-5 h-5 text-content-subtle" /> <span className="text-content-subtle">Choose Image File</span> </button> <div className="mt-3 text-center"><HelpButton helpId="photo-capture" variant="text-link" label="Tips for the perfect shot" /></div> </div>)}
 
               {appStatus === 'SESSION_AWAITING_DISTANCE' && (
                 <div>

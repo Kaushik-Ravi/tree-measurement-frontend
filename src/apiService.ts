@@ -117,8 +117,8 @@ export const quickCapture = async (
   latitude: number,
   longitude: number,
   token: string,
-  closeupImage?: File, // Optional close-up image
-  closeupOrgan?: string // Optional organ type
+  speciesJson?: string,
+  woodDensityJson?: string
 ): Promise<any> => {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -129,11 +129,11 @@ export const quickCapture = async (
   if (heading !== null) {
     formData.append('device_heading', heading.toString());
   }
-  if (closeupImage) {
-    formData.append('closeup_image', closeupImage);
+  if (speciesJson) {
+    formData.append('species_json', speciesJson);
   }
-  if (closeupOrgan) {
-    formData.append('closeup_organ', closeupOrgan);
+  if (woodDensityJson) {
+    formData.append('wood_density_json', woodDensityJson);
   }
 
   const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {
