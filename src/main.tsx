@@ -6,12 +6,14 @@ import './index.css';
 import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
 import { Loader2, TreePine } from 'lucide-react';
 
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+
 const LoginPrompt = () => {
     const { signInWithGoogle } = useAuth();
     return (
       <div className="w-screen h-screen flex flex-col items-center justify-center text-center bg-gray-50 p-6">
         <TreePine className="w-16 h-16 text-green-600 mb-4" />
-        <h1 className="text-3xl font-bold text-gray-800">Welcome to the Tree Measurement Tool</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Welcome to the Tree Measurement Tool</h1>
         <p className="mt-2 max-w-md text-gray-600">
           Sign in to begin measuring trees, identifying species, and tracking your results in a persistent measurement history.
         </p>
@@ -46,8 +48,10 @@ const AppGate = () => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <AppGate />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppGate />
+      </AuthProvider>
+    </ErrorBoundary>
   </StrictMode>
 );

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, TreePine, Check, Camera } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
+import { compressImage } from '../utils/imageCompression';
 import { ImageCropper } from './ImageCropper';
 import { CO2ResultCard } from './CO2ResultCard';
 
@@ -109,7 +110,13 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     setIsLoading(true);
     setError(null);
     try {
-      const response = await identifySpecies(imageFile, selectedOrgan);
+      // --- START: SURGICAL JIT COMPRESSION ---
+      // Compress the raw species photo to 1280px / 90% specifically for PlantNet API 
+      // to prevent 24MB uploads freezing the app on mobile devices.
+      const compressedImage = await compressImage(imageFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+      
+      const response = await identifySpecies(compressedImage, selectedOrgan);
+      // --- END: SURGICAL JIT COMPRESSION ---
       if (response.bestMatch) {
         onIdentificationComplete({
           bestMatch: response.bestMatch,
@@ -178,7 +185,9 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
               <p className="text-xs font-semibold text-status-success uppercase tracking-wide">Species Identified</p>
               <p className="font-bold text-content-default text-lg">{existingResult.bestMatch.scientificName}</p>
               {existingResult.bestMatch.commonNames && existingResult.bestMatch.commonNames.length > 0 && (
-                   <p className="text-sm text-content-subtle capitalize">{existingResult.bestMatch.commonNames.join(', ')}</p>
+                <p className="text-sm text-content-subtle mt-1">
+                  Also known as: {existingResult.bestMatch.commonNames?.join(', ') || 'N/A'}
+                </p>
               )}
               <div className="mt-2 space-y-1">
                 {existingResult.woodDensity ? (

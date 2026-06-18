@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <io.github.sceneview.ar.ARSceneView
+        android:id="@+id/sceneView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ImageView
+        android:id="@+id/frozenImageView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:scaleType="fitXY" />
+
+    <com.elitetree.app.ReticleOverlayView
+        android:id="@+id/reticleOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Top Glassmorphic Instruction Pill -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/instructionCard"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="64dp"
+        app:cardBackgroundColor="#CC121212"
+        app:cardCornerRadius="32dp"
+        app:cardElevation="8dp"
+        app:strokeWidth="1dp"
+        app:strokeColor="#44FFFFFF"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="14dp">
+            
+            <TextView
+                android:id="@+id/instructionText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Point camera at floor and move slowly"
+                android:textColor="#FFFFFF"
+                android:fontFamily="sans-serif-medium"
+                android:textSize="16sp"
+                android:letterSpacing="0.01"
+                android:textAlignment="center"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Bottom Actions Container: Perfectly Centered & Balanced -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="48dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/cancelButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#333333"
+            app:cornerRadius="28dp"
+            app:elevation="4dp"
+            android:layout_marginEnd="8dp"/>
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/redoButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Redo Base"
+            android:textColor="#000000"
+            app:backgroundTint="#FFC107"
+            android:visibility="gone"
+            app:cornerRadius="28dp"
+            app:elevation="4dp"
+            android:layout_marginEnd="8dp"/>
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/actionButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Save"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#D500F9"
+            android:visibility="gone"
+            app:cornerRadius="28dp"
+            app:elevation="8dp"/>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

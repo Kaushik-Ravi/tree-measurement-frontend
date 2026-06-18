@@ -1572,9 +1572,16 @@ export const LiveARMeasureView: React.FC<LiveARMeasureViewProps> = ({
       console.log('  - Location:', userLocation);
       console.log('  - Compass:', compassHeading);
 
+      // --- START: SURGICAL JIT COMPRESSION ---
+      // AR snapshots can also be massive on high-res screens. 
+      // Lightly compress (1600px, 90%) to preserve AR fidelity for community review while respecting storage limits.
+      const { compressImage } = await import('../../utils/imageCompression');
+      const compressedARImage = await compressImage(capturedImageFile, { maxWidthOrHeight: 1600, quality: 0.9, type: 'image/jpeg' });
+      // --- END: SURGICAL JIT COMPRESSION ---
+
       // Call Quick Capture API (same as Photo Method)
       await quickCapture(
-        capturedImageFile,
+        compressedARImage,
         currentDistance,
         finalScaleFactor!,
         compassHeading,

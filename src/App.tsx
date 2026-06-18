@@ -250,6 +250,23 @@ function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  // --- START: PREVENT ACCIDENTAL REFRESH (DATA LOSS) ---
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // If we are actively in a session, warn the user before they leave
+      if (appStatus !== 'IDLE' && appStatus !== 'SESSION_AWAITING_PHOTO' && appStatus !== 'ANALYSIS_COMPLETE') {
+        e.preventDefault();
+        e.returnValue = ''; // Standard way to trigger the browser's warning dialog
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [appStatus]);
+  // --- END: PREVENT ACCIDENTAL REFRESH ---
+
   const handleThemeToggle = () => {
     setTheme(prevTheme => prevTheme === 'dark' ? 'light' : 'dark');
   };
@@ -1743,7 +1760,14 @@ function App() {
     setIsPanelOpen(true);
 
     try {
-      const uploadResponse = await uploadImage(currentMeasurementFile, session.access_token);
+      // --- START: SURGICAL JIT COMPRESSION ---
+      // Compress the 24MB raw tree photo to 1280px / 90% right before saving to Supabase.
+      // This preserves 95% of your 1GB free tier storage bucket!
+      const { compressImage } = await import('./utils/imageCompression');
+      const compressedTreeImage = await compressImage(currentMeasurementFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+      // --- END: SURGICAL JIT COMPRESSION ---
+
+      const uploadResponse = await uploadImage(compressedTreeImage, session.access_token);
       const imageUrl = uploadResponse.image_url;
 
       const newResultPayload = {
@@ -1817,11 +1841,20 @@ function App() {
       let speciesJsonStr: string | undefined = undefined;
       let woodDensityJsonStr: string | undefined = undefined;
 
-      // Identify in RAM and discard image
+      // --- START: LIGHT JIT COMPRESSION FOR GROVE ---
+      // We lightly compress the tree photo (1600px, 90%) so the community has enough detail 
+      // to do manual analysis later, while still protecting the 1GB DB limit from 24MB raw files.
+      const { compressImage } = await import('./utils/imageCompression');
+      const compressedTreeImage = await compressImage(currentMeasurementFile!, { maxWidthOrHeight: 1600, quality: 0.9, type: 'image/jpeg' });
+      // --- END: LIGHT JIT COMPRESSION FOR GROVE ---
+
+      // Identify in RAM and discard image (if auto-identifying)
       if (closeupFile && organ) {
         setInstructionText("Identifying species before submission...");
         try {
-          const idResponse = await identifySpecies(closeupFile, organ);
+          // Compress the close-up specifically for PlantNet API and potential upload
+          const compressedCloseup = await compressImage(closeupFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+          const idResponse = await identifySpecies(compressedCloseup, organ);
           if (idResponse.bestMatch) {
             speciesJsonStr = JSON.stringify(idResponse.bestMatch);
           }
@@ -1835,7 +1868,7 @@ function App() {
 
       setInstructionText("Saving to Community Grove...");
       await quickCapture(
-        currentMeasurementFile!,
+        compressedTreeImage,
         parseFloat(distance),
         calculatedScaleFactor,
         capturedHeading,
