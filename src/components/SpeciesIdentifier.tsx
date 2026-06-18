@@ -1,6 +1,6 @@
 // src/components/SpeciesIdentifier.tsx
 import React, { useState } from 'react';
-import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, TreePine, Check } from 'lucide-react';
+import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, TreePine, Check, Camera } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
 import { ImageCropper } from './ImageCropper';
 import { CO2ResultCard } from './CO2ResultCard';
@@ -303,7 +303,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           <div className="bg-status-success/5 border border-status-success/20 rounded-lg p-3 flex items-center gap-2">
             <Check className="w-4 h-4 text-status-success flex-shrink-0" />
             <p className="text-sm text-content-default">
-              Upload a close-up photo of the <span className="font-medium capitalize">{selectedOrgan}</span>
+              Take a close-up photo of the <span className="font-medium capitalize">{selectedOrgan}</span>
             </p>
           </div>
           <div>
@@ -312,12 +312,12 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
                 {imagePreview ? (
                   <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" />
                 ) : (
-                  <UploadCloud className="mx-auto h-12 w-12 text-content-subtle" />
+                  <Camera className="mx-auto h-12 w-12 text-content-subtle" />
                 )}
                 <div className="flex text-sm text-content-subtle">
                   <label htmlFor="species-file-upload" className="relative cursor-pointer bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover">
-                    <span>{imageFile ? 'Change image' : 'Upload a close-up'}</span>
-                    <input ref={fileInputRef} id="species-file-upload" type="file" className="sr-only" onChange={handleImageUpload} accept="image/*" />
+                    <span>{imageFile ? 'Retake image' : 'Take a close-up'}</span>
+                    <input ref={fileInputRef} id="species-file-upload" type="file" capture="environment" className="sr-only" onChange={handleImageUpload} accept="image/*" />
                   </label>
                 </div>
               </div>

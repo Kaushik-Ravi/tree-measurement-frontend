@@ -1,7 +1,7 @@
 // src/components/CalibrationView.tsx
 import React, { useState, useRef, useEffect } from 'react';
 // --- START: SURGICAL MODIFICATION ---
-import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info, User, ArrowRight } from 'lucide-react';
+import { Settings, Upload, X, Zap, RotateCcw, Ruler, Sparkles, Menu, Check, Info, User, ArrowRight, Camera } from 'lucide-react';
 // --- END: SURGICAL MODIFICATION ---
 import { InstructionToast } from './InstructionToast';
 import { ARMeasureView } from './ARMeasureView';
@@ -603,12 +603,12 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-brand-primary font-semibold">
                     <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-primary text-white text-xs">{selectedObject && selectedObject.id !== 'custom' ? '3' : '2'}</span>
-                    <h3>Upload Photo</h3>
+                    <h3>Acquire Calibration Photo</h3>
                   </div>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-4 bg-background-default border-2 border-dashed border-stroke-default rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all">
-                    <Upload className="w-5 h-5 text-content-subtle" />
-                    <span className="text-content-default font-medium">{calibFile ? 'Change Photo' : 'Choose Photo'}</span>
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-4 bg-brand-primary text-content-inverse rounded-xl hover:bg-brand-secondary shadow-md active:scale-95 transition-transform">
+                    <Camera className="w-5 h-5 text-content-inverse" />
+                    <span className="font-semibold">{calibFile ? 'Retake Photo' : 'Take Photo'}</span>
                   </button>
                 </div>
 
