@@ -307,21 +307,21 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
             </p>
           </div>
           <div>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stroke-default border-dashed rounded-md hover:border-brand-primary transition-colors">
-              <div className="space-y-1 text-center">
+            <label htmlFor="species-file-upload" className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stroke-default border-dashed rounded-md hover:border-brand-primary transition-colors cursor-pointer block w-full">
+              <div className="space-y-1 text-center w-full">
                 {imagePreview ? (
                   <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" />
                 ) : (
                   <Camera className="mx-auto h-12 w-12 text-content-subtle" />
                 )}
-                <div className="flex text-sm text-content-subtle">
-                  <label htmlFor="species-file-upload" className="relative cursor-pointer bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover">
+                <div className="flex text-sm text-content-subtle justify-center">
+                  <div className="relative bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover">
                     <span>{imageFile ? 'Retake image' : 'Take a close-up'}</span>
                     <input ref={fileInputRef} id="species-file-upload" type="file" capture="environment" className="sr-only" onChange={handleImageUpload} accept="image/*" />
-                  </label>
+                  </div>
                 </div>
               </div>
-            </div>
+            </label>
           </div>
           <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle transition-all">
             {isLoading ? (

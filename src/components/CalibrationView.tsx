@@ -606,8 +606,8 @@ export function CalibrationView({ onCalibrationComplete }: CalibrationViewProps)
                     <h3>Acquire Calibration Photo</h3>
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-4 bg-brand-primary text-content-inverse rounded-xl hover:bg-brand-secondary shadow-md active:scale-95 transition-transform">
-                    <Camera className="w-5 h-5 text-content-inverse" />
+                  <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-3 px-4 py-4 bg-brand-primary text-white rounded-xl hover:bg-brand-secondary shadow-md active:scale-95 transition-transform">
+                    <Camera className="w-5 h-5 text-white" />
                     <span className="font-semibold">{calibFile ? 'Retake Photo' : 'Take Photo'}</span>
                   </button>
                 </div>

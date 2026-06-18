@@ -2460,7 +2460,7 @@ function App() {
                 />
               )}
 
-              {appStatus === 'SESSION_AWAITING_PHOTO' && (<div> <label className="block text-sm font-medium text-content-default mb-2">1. Acquire Tree Image</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full max-w-sm mx-auto flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-inverse rounded-lg hover:bg-brand-secondary shadow-md active:scale-95 transition-transform"> <Camera className="w-5 h-5 text-content-inverse" /> <span className="font-semibold">Take Photo</span> </button> <div className="mt-3 text-center"><HelpButton helpId="photo-capture" variant="text-link" label="Tips for the perfect shot" /></div> </div>)}
+              {appStatus === 'SESSION_AWAITING_PHOTO' && (<div> <label className="block text-sm font-medium text-content-default mb-2">1. Acquire Tree Image</label> <input ref={fileInputRef} type="file" id="image-upload" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /> <button onClick={() => fileInputRef.current?.click()} className="w-full max-w-sm mx-auto flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-secondary shadow-md active:scale-95 transition-transform"> <Camera className="w-5 h-5 text-white" /> <span className="font-semibold">Take Photo</span> </button> <div className="mt-3 text-center"><HelpButton helpId="photo-capture" variant="text-link" label="Tips for the perfect shot" /></div> </div>)}
 
               {appStatus === 'SESSION_AWAITING_DISTANCE' && (
                 <div>
