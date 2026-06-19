@@ -662,9 +662,6 @@ function App() {
         const { compressImage } = await import('./utils/imageCompression');
         const compressedFile = await compressImage(currentMeasurementFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
         
-        // Update the state so the REST of the app (including Supabase uploads) uses the lightweight file
-        setCurrentMeasurementFile(compressedFile);
-
         // --- UI PREVIEW ---
         // Mount the *compressed* image to the DOM instead of the 50MP raw file
         const tempImage = new Image();
