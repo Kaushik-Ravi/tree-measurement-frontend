@@ -118,7 +118,8 @@ export const quickCapture = async (
   longitude: number,
   token: string,
   speciesJson?: string,
-  woodDensityJson?: string
+  woodDensityJson?: string,
+  speciesDetailImageUrl?: string
 ): Promise<any> => {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -134,6 +135,9 @@ export const quickCapture = async (
   }
   if (woodDensityJson) {
     formData.append('wood_density_json', woodDensityJson);
+  }
+  if (speciesDetailImageUrl) {
+    formData.append('species_detail_image_url', speciesDetailImageUrl);
   }
 
   const response = await fetch(`${API_BASE_URL}/api/quick-capture`, {

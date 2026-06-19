@@ -636,33 +636,44 @@ function App() {
       setInstructionText("Analyzing image metadata...");
 
       try {
+        // --- TIER 1: EXIF EXTRACTION (Memory-Safe First Step) ---
+        // ExifReader only parses the binary headers, avoiding a 400MB+ memory spike
+        console.log('[Photo Calibration Tier 1] 📸 Attempting EXIF extraction...');
+        const tags = await ExifReader.load(currentMeasurementFile);
+
+        let focalLengthValue: number | null = null;
+        const focalLengthIn35mm = tags['FocalLengthIn35mmFilm']?.value;
+        const rawFocalLength = tags['FocalLength']?.value;
+        const scaleFactor35 = tags['ScaleFactor35efl']?.value;
+
+        if (typeof focalLengthIn35mm === 'number') {
+          focalLengthValue = focalLengthIn35mm;
+          console.log('[Photo Calibration Tier 1] ✅ SUCCESS - FocalLengthIn35mmFilm:', focalLengthValue, 'mm');
+        } else if (typeof rawFocalLength === 'number' && typeof scaleFactor35 === 'number') {
+          focalLengthValue = rawFocalLength * scaleFactor35;
+          console.log('[Photo Calibration Tier 1] ✅ SUCCESS - Calculated from raw focal length:', focalLengthValue, 'mm');
+        } else {
+          console.log('[Photo Calibration Tier 1] ⚠️ FAILED - No EXIF focal length data found');
+        }
+
+        // --- SAFE COMPRESSION ---
+        // Now that EXIF is safely extracted, we compress the 50MP file down to a web-safe 1280px.
+        // This relies on the memory-safe createImageBitmap implementation in imageCompression.ts
+        const { compressImage } = await import('./utils/imageCompression');
+        const compressedFile = await compressImage(currentMeasurementFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+        
+        // Update the state so the REST of the app (including Supabase uploads) uses the lightweight file
+        setCurrentMeasurementFile(compressedFile);
+
+        // --- UI PREVIEW ---
+        // Mount the *compressed* image to the DOM instead of the 50MP raw file
         const tempImage = new Image();
-        const objectURL = URL.createObjectURL(currentMeasurementFile);
+        const objectURL = URL.createObjectURL(compressedFile);
         tempImage.src = objectURL;
 
         tempImage.onload = async () => {
           setImageDimensions({ w: tempImage.naturalWidth, h: tempImage.naturalHeight });
-          console.log('[Photo Calibration] Image dimensions:', tempImage.naturalWidth, 'x', tempImage.naturalHeight);
-
-          // --- TIER 1: EXIF EXTRACTION (Best Accuracy) ---
-          console.log('[Photo Calibration Tier 1] 📸 Attempting EXIF extraction...');
-          const tags = await ExifReader.load(currentMeasurementFile);
-
-          let focalLengthValue: number | null = null;
-          const focalLengthIn35mm = tags['FocalLengthIn35mmFilm']?.value;
-          const rawFocalLength = tags['FocalLength']?.value;
-          const scaleFactor35 = tags['ScaleFactor35efl']?.value;
-
-          if (typeof focalLengthIn35mm === 'number') {
-            focalLengthValue = focalLengthIn35mm;
-            console.log('[Photo Calibration Tier 1] ✅ SUCCESS - FocalLengthIn35mmFilm:', focalLengthValue, 'mm');
-          } else if (typeof rawFocalLength === 'number' && typeof scaleFactor35 === 'number') {
-            focalLengthValue = rawFocalLength * scaleFactor35;
-            console.log('[Photo Calibration Tier 1] ✅ SUCCESS - Calculated from raw focal length:', focalLengthValue, 'mm');
-          } else {
-            console.log('[Photo Calibration Tier 1] ⚠️ FAILED - No EXIF focal length data found');
-            console.log('[Photo Calibration Tier 1] Available tags:', Object.keys(tags).join(', '));
-          }
+          console.log('[Photo Calibration] Image dimensions (compressed):', tempImage.naturalWidth, 'x', tempImage.naturalHeight);
 
           setOriginalImageSrc(objectURL);
           setResultImageSrc(objectURL);
@@ -1760,11 +1771,11 @@ function App() {
     setIsPanelOpen(true);
 
     try {
-      // --- START: SURGICAL JIT COMPRESSION ---
-      // Compress the 24MB raw tree photo to 1280px / 90% right before saving to Supabase.
-      // This preserves 95% of your 1GB free tier storage bucket!
+      // --- START: SURGICAL JIT COMPRESSION (ARCHIVAL) ---
+      // Since this tree is COMPLETE, this photo is only needed as a historical thumbnail.
+      // Top 1% Industry Standard: Aggressive WebP/JPEG compression (800px, 70% quality).
       const { compressImage } = await import('./utils/imageCompression');
-      const compressedTreeImage = await compressImage(currentMeasurementFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+      const compressedTreeImage = await compressImage(currentMeasurementFile, { maxWidthOrHeight: 800, quality: 0.7, type: 'image/jpeg' });
       // --- END: SURGICAL JIT COMPRESSION ---
 
       const uploadResponse = await uploadImage(compressedTreeImage, session.access_token);
@@ -1848,13 +1859,22 @@ function App() {
       const compressedTreeImage = await compressImage(currentMeasurementFile!, { maxWidthOrHeight: 1600, quality: 0.9, type: 'image/jpeg' });
       // --- END: LIGHT JIT COMPRESSION FOR GROVE ---
 
+      let closeupUploadUrl: string | undefined = undefined;
+
+      if (closeupFile) {
+        // --- SURGICAL PATCH: DO NOT COMPRESS CLOSEUP ---
+        // The user explicitly requested to keep the species closeup photo 
+        // highly detailed for Community Grove identification.
+        console.log('[Community Grove] Uploading pristine uncompressed closeup photo');
+        const closeupUploadRes = await uploadImage(closeupFile, session!.access_token);
+        closeupUploadUrl = closeupUploadRes.image_url;
+      }
+
       // Identify in RAM and discard image (if auto-identifying)
       if (closeupFile && organ) {
         setInstructionText("Identifying species before submission...");
         try {
-          // Compress the close-up specifically for PlantNet API and potential upload
-          const compressedCloseup = await compressImage(closeupFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
-          const idResponse = await identifySpecies(compressedCloseup, organ);
+          const idResponse = await identifySpecies(closeupFile, organ);
           if (idResponse.bestMatch) {
             speciesJsonStr = JSON.stringify(idResponse.bestMatch);
           }
@@ -1876,7 +1896,8 @@ function App() {
         userGeoLocation!.lng,
         session!.access_token,
         speciesJsonStr,
-        woodDensityJsonStr
+        woodDensityJsonStr,
+        closeupUploadUrl
       );
 
       const updatedResults = await getResults(session!.access_token);

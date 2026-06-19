@@ -89,12 +89,27 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   }, [closeupImageUrl, closeupOrgan]);
 
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-      setError(null);
+      try {
+        setIsLoading(true);
+        // --- PREVENT THUMBNAIL FREEZE ---
+        // Compress the image *immediately* upon selection.
+        // If we just use URL.createObjectURL on the raw 50MP file, the browser will decode 
+        // the massive 400MB+ bitmap into RAM just to render the tiny thumbnail preview, freezing the app.
+        const compressedImage = await compressImage(file, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+        setImageFile(compressedImage);
+        setImagePreview(URL.createObjectURL(compressedImage));
+        setError(null);
+      } catch (e: any) {
+        console.error("Compression failed:", e);
+        // Fallback to original if compression utterly fails
+        setImageFile(file);
+        setImagePreview(URL.createObjectURL(file));
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -110,13 +125,8 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     setIsLoading(true);
     setError(null);
     try {
-      // --- START: SURGICAL JIT COMPRESSION ---
-      // Compress the raw species photo to 1280px / 90% specifically for PlantNet API 
-      // to prevent 24MB uploads freezing the app on mobile devices.
-      const compressedImage = await compressImage(imageFile, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
-      
-      const response = await identifySpecies(compressedImage, selectedOrgan);
-      // --- END: SURGICAL JIT COMPRESSION ---
+      // The image is already compressed via handleImageUpload!
+      const response = await identifySpecies(imageFile, selectedOrgan);
       if (response.bestMatch) {
         onIdentificationComplete({
           bestMatch: response.bestMatch,
