@@ -115,10 +115,10 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete, onAnalyze }: 
           {tree.co2_sequestered_kg && (
             <div className="bg-brand-primary/5 border border-brand-primary/20 rounded-lg p-4">
               <p className="text-xs font-semibold text-brand-primary uppercase tracking-wide">
-                Annual CO₂ Sequestration
+                Lifetime CO₂ Sequestration
               </p>
               <p className="text-2xl font-bold text-content-default mt-1">
-                {tree.co2_sequestered_kg.toFixed(2)} <span className="text-sm font-normal text-content-subtle">kg/year</span>
+                {tree.co2_sequestered_kg.toFixed(2)} <span className="text-sm font-normal text-content-subtle">kg CO₂e</span>
               </p>
             </div>
           )}

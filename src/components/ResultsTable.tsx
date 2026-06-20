@@ -33,6 +33,10 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
         <p className="font-semibold text-content-default">Ownership</p>
         <p className="text-content-subtle">{result.ownership || 'N/A'}</p>
       </div>
+      <div>
+        <p className="font-semibold text-content-default">CO₂ Sequestered</p>
+        <p className="text-content-subtle">{result.co2_sequestered_kg ? `${result.co2_sequestered_kg.toFixed(2)} kg CO₂e` : 'N/A'}</p>
+      </div>
       {result.status === 'VERIFIED' && result.confidence && (
         <div className="col-span-2 sm:col-span-1">
             <p className="font-semibold text-content-default">Community Verified</p>
