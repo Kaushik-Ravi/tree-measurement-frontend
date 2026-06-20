@@ -32,7 +32,6 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   const [isAutoIdentifying, setIsAutoIdentifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
   const [selectedOrgan, setSelectedOrgan] = useState<Organ | null>(null);
   const [remainingQuota, setRemainingQuota] = useState<number | null>(null);
   const [manualSpeciesName, setManualSpeciesName] = useState('');
@@ -54,7 +53,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           const file = new File([blob], "closeup.jpg", { type: blob.type });
           
           setImageFile(file);
-          setImagePreview(closeupImageUrl);
+          // Thumbnail bypassed to prevent UI lock
           
           // Validate organ
           const validOrgans: Organ[] = ['leaf', 'flower', 'fruit', 'bark'];
@@ -92,41 +91,33 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      try {
-        setIsLoading(true);
-        // --- PREVENT THUMBNAIL FREEZE ---
-        // Compress the image *immediately* upon selection.
-        // If we just use URL.createObjectURL on the raw 50MP file, the browser will decode 
-        // the massive 400MB+ bitmap into RAM just to render the tiny thumbnail preview, freezing the app.
-        const compressedImage = await compressImage(file, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
-        setImageFile(compressedImage);
-        setImagePreview(URL.createObjectURL(compressedImage));
-        setError(null);
-      } catch (e: any) {
-        console.error("Compression failed:", e);
-        // Fallback to original if compression utterly fails
-        setImageFile(file);
-        setImagePreview(URL.createObjectURL(file));
-      } finally {
-        setIsLoading(false);
-      }
+      setImageFile(file);
+      // 🔥 THE USER'S BRILLIANT FIX: Bypass thumbnail entirely to prevent DOM freeze!
+      // setImagePreview(URL.createObjectURL(file)); 
+      
+      // Directly trigger identification to save clicks and prevent DOM lockup!
+      await performIdentification(file);
     }
   };
 
   const handleCropComplete = (croppedFile: File) => {
     setImageFile(croppedFile);
-    setImagePreview(URL.createObjectURL(croppedFile));
-    setMode('uploading'); // Transition to organ selection after cropping
+    // Bypass thumbnail here as well for consistency
+    // setImagePreview(URL.createObjectURL(croppedFile));
+    setMode('uploading'); 
     setError(null);
+    
+    // Auto-identify after crop
+    performIdentification(croppedFile);
   };
 
-  const handleIdentify = async () => {
-    if (!imageFile || !selectedOrgan) return;
+  const performIdentification = async (fileToIdentify: File) => {
+    if (!selectedOrgan) return;
     setIsLoading(true);
     setError(null);
     try {
-      // The image is already compressed via handleImageUpload!
-      const response = await identifySpecies(imageFile, selectedOrgan);
+      // The user explicitly requested RAW uncompressed files for maximum PlantNet API quality
+      const response = await identifySpecies(fileToIdentify, selectedOrgan);
       if (response.bestMatch) {
         onIdentificationComplete({
           bestMatch: response.bestMatch,
@@ -143,6 +134,12 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       setError(err.message || "An unknown error occurred.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleIdentify = async () => {
+    if (imageFile) {
+        await performIdentification(imageFile);
     }
   };
   
@@ -325,37 +322,30 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
               Take a close-up photo of the <span className="font-medium capitalize">{selectedOrgan}</span>
             </p>
           </div>
-          <div>
-            <label htmlFor="species-file-upload" className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stroke-default border-dashed rounded-md hover:border-brand-primary transition-colors cursor-pointer block w-full">
-              <div className="space-y-1 text-center w-full">
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Preview" className="mx-auto h-24 w-auto rounded-md" />
-                ) : (
+          
+          {isLoading ? (
+            <div className="mt-1 flex flex-col items-center justify-center px-6 py-10 border-2 border-brand-primary/30 bg-brand-primary/5 rounded-md">
+              <Loader2 className="h-10 w-10 text-brand-primary animate-spin mb-3" />
+              <p className="text-sm font-medium text-brand-primary">Uploading & Identifying...</p>
+              <p className="text-xs text-content-subtle mt-1 text-center">Processing high-res photo directly to preserve quality.</p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="species-file-upload" className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-stroke-default border-dashed rounded-md hover:border-brand-primary transition-colors cursor-pointer block w-full">
+                <div className="space-y-1 text-center w-full">
                   <Camera className="mx-auto h-12 w-12 text-content-subtle" />
-                )}
-                <div className="flex text-sm text-content-subtle justify-center">
-                  <div className="relative bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover">
-                    <span>{imageFile ? 'Retake image' : 'Take a close-up'}</span>
-                    <input ref={fileInputRef} id="species-file-upload" type="file" capture="environment" className="sr-only" onChange={handleImageUpload} accept="image/*" />
+                  <div className="flex text-sm text-content-subtle justify-center">
+                    <div className="relative bg-background-default rounded-md font-medium text-brand-secondary hover:text-brand-secondary-hover mt-2">
+                      <span>Take a close-up</span>
+                      <input ref={fileInputRef} id="species-file-upload" type="file" capture="environment" className="sr-only" onChange={handleImageUpload} accept="image/*" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            </label>
-          </div>
-          <button onClick={handleIdentify} disabled={!imageFile || !selectedOrgan || isLoading} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-primary text-content-on-brand rounded-lg font-medium hover:bg-brand-primary-hover disabled:bg-background-inset disabled:text-content-subtle transition-all">
-            {isLoading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {isAutoIdentifying ? "Retrieving & Identifying..." : "Identifying..."}
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5" />
-                Identify Species
-              </>
-            )}
-          </button>
-          {error && <div className="text-xs text-status-error text-center pt-1">{error}</div>}
+              </label>
+            </div>
+          )}
+
+          {error && <div className="text-xs text-status-error text-center pt-2 font-medium">{error}</div>}
         </>
       )}
 
