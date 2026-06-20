@@ -37,6 +37,10 @@ const DetailRow = ({ result }: { result: TreeResult }) => (
         <p className="font-semibold text-content-default">CO₂ Sequestered</p>
         <p className="text-content-subtle">{result.co2_sequestered_kg ? `${result.co2_sequestered_kg.toFixed(2)} kg CO₂e` : 'N/A'}</p>
       </div>
+      <div>
+        <p className="font-semibold text-content-default">Net Oxygen Produced</p>
+        <p className="text-content-subtle">{result.co2_sequestered_kg ? `${(result.co2_sequestered_kg * 0.727).toFixed(2)} kg O₂` : 'N/A'}</p>
+      </div>
       {result.status === 'VERIFIED' && result.confidence && (
         <div className="col-span-2 sm:col-span-1">
             <p className="font-semibold text-content-default">Community Verified</p>
@@ -156,6 +160,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, onAnalyzeT
               <th scope="col" className="w-24 px-4 py-3 text-right">Canopy (m)</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">DBH (cm)</th>
               <th scope="col" className="w-24 px-4 py-3 text-right">CO₂ (kg)</th>
+              <th scope="col" className="w-24 px-4 py-3 text-right">Net O₂ (kg)</th>
               <th scope="col" className="w-28 px-4 py-3 text-center">Status</th>
               <th scope="col" className="w-28 px-4 py-3 text-right">Actions</th>
             </tr>
@@ -195,6 +200,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, onAnalyzeT
                   <td className="px-4 py-3 text-right font-mono text-content-default">{result.metrics ? result.metrics.canopy_m.toFixed(2) : '-'}</td>
                   <td className="px-4 py-3 text-right font-mono text-content-default">{result.metrics ? result.metrics.dbh_cm.toFixed(2) : '-'}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-sky-600 dark:text-sky-400">{result.co2_sequestered_kg ? result.co2_sequestered_kg.toFixed(2) : <span className="text-content-subtle">N/A</span>}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-teal-600 dark:text-teal-400">{result.co2_sequestered_kg ? (result.co2_sequestered_kg * 0.727).toFixed(2) : <span className="text-content-subtle">N/A</span>}</td>
                   <td className="px-4 py-3 text-center"><StatusBadge status={result.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end items-center gap-2">
@@ -215,7 +221,7 @@ export function ResultsTable({ results, onDeleteResult, onEditResult, onAnalyzeT
                 </tr>
                 {expandedRowId === result.id && (
                   <tr>
-                    <td colSpan={9} className="p-0"><DetailRow result={result} /></td>
+                    <td colSpan={10} className="p-0"><DetailRow result={result} /></td>
                   </tr>
                 )}
               </React.Fragment>

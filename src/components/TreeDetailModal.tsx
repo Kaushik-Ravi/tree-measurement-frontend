@@ -113,12 +113,24 @@ export function TreeDetailModal({ tree, onClose, onEdit, onDelete, onAnalyze }: 
 
           {/* CO2 Sequestration */}
           {tree.co2_sequestered_kg && (
-            <div className="bg-brand-primary/5 border border-brand-primary/20 rounded-lg p-4">
+            <div className="bg-brand-primary/5 border border-brand-primary/20 rounded-lg p-4 mb-3">
               <p className="text-xs font-semibold text-brand-primary uppercase tracking-wide">
                 Lifetime CO₂ Sequestration
               </p>
               <p className="text-2xl font-bold text-content-default mt-1">
                 {tree.co2_sequestered_kg.toFixed(2)} <span className="text-sm font-normal text-content-subtle">kg CO₂e</span>
+              </p>
+            </div>
+          )}
+
+          {/* Net Oxygen Produced */}
+          {tree.co2_sequestered_kg && (
+            <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/50 rounded-lg p-4 mb-4">
+              <p className="text-xs font-semibold text-teal-600 dark:text-teal-400 uppercase tracking-wide">
+                Net Oxygen Produced
+              </p>
+              <p className="text-2xl font-bold text-content-default mt-1">
+                {(tree.co2_sequestered_kg * 0.727).toFixed(2)} <span className="text-sm font-normal text-content-subtle">kg O₂</span>
               </p>
             </div>
           )}
