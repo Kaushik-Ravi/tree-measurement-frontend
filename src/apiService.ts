@@ -1,6 +1,7 @@
 // src/apiService.ts
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const PLANTNET_PROXY_URL = import.meta.env.VITE_PLANTNET_PROXY_URL || 'https://plantnet-proxy.gautamravi2002.workers.dev';
 
 export interface Point { x: number; y: number; }
 export interface Metrics { height_m: number; canopy_m: number; dbh_cm: number; }
@@ -267,7 +268,7 @@ export const identifySpecies = async (imageFile: File, organ: string): Promise<I
   const formData = new FormData();
   formData.append('image', imageFile);
   formData.append('organ', organ);
-  const response = await fetch(`${API_BASE_URL}/api/plantnet/identify`, { method: 'POST', body: formData, });
+  const response = await fetch(`${PLANTNET_PROXY_URL}/identify`, { method: 'POST', body: formData, });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
     throw new Error(errorData.error || `API error! status: ${response.status}`);
