@@ -1,6 +1,6 @@
 // src/components/SpeciesIdentifier.tsx
 import React, { useState } from 'react';
-import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, TreePine, Check, Camera } from 'lucide-react';
+import { Leaf, UploadCloud, Flower2, TreeDeciduous, RotateCcw, Loader2, AlertTriangle, Sparkles, MapPin, CropIcon, Check, Camera } from 'lucide-react';
 import { identifySpecies, IdentificationResponse } from '../apiService';
 import { compressImage } from '../utils/imageCompression';
 import { ImageCropper } from './ImageCropper';
@@ -29,7 +29,6 @@ type Mode = 'idle' | 'uploading' | 'cropping' | 'manual';
 export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingResult, mainImageFile, mainImageSrc, analysisMode, co2Value, tolerance, isCO2Loading, closeupImageUrl, closeupOrgan }: SpeciesIdentifierProps) {
   const [mode, setMode] = useState<Mode>('idle');
   const [isLoading, setIsLoading] = useState(false);
-  const [isAutoIdentifying, setIsAutoIdentifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [selectedOrgan, setSelectedOrgan] = useState<Organ | null>(null);
@@ -38,13 +37,21 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const autoIdentifyAttempted = React.useRef(false);
 
+  const preparePlantNetImage = async (file: File): Promise<File> => {
+    try {
+      return await compressImage(file, { maxWidthOrHeight: 1280, quality: 0.9, type: 'image/jpeg' });
+    } catch (compressionError) {
+      console.warn('PlantNet image compression failed, falling back to original file:', compressionError);
+      return file;
+    }
+  };
+
   // --- AUTO-IDENTIFY FROM SAVED CLOSE-UP ---
   React.useEffect(() => {
     if (closeupImageUrl && closeupOrgan && !existingResult && !imageFile && !isLoading && !autoIdentifyAttempted.current) {
       autoIdentifyAttempted.current = true;
       const loadAndIdentify = async () => {
         setIsLoading(true);
-        setIsAutoIdentifying(true);
         setMode('uploading');
         try {
           console.log("Auto-identifying from saved close-up:", closeupImageUrl);
@@ -60,8 +67,8 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           const organToUse = validOrgans.includes(closeupOrgan as Organ) ? (closeupOrgan as Organ) : 'leaf';
           setSelectedOrgan(organToUse);
 
-          // Auto identify
-          const idResponse = await identifySpecies(file, organToUse);
+          const fileForIdentification = await preparePlantNetImage(file);
+          const idResponse = await identifySpecies(fileForIdentification, organToUse);
           if (idResponse.bestMatch) {
             onIdentificationComplete({
               bestMatch: idResponse.bestMatch,
@@ -80,7 +87,6 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
           setError("Failed to load saved close-up: " + err.message);
         } finally {
           setIsLoading(false);
-          setIsAutoIdentifying(false);
         }
       };
       loadAndIdentify();
@@ -116,8 +122,8 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     setIsLoading(true);
     setError(null);
     try {
-      // The user explicitly requested RAW uncompressed files for maximum PlantNet API quality
-      const response = await identifySpecies(fileToIdentify, selectedOrgan);
+      const fileForIdentification = await preparePlantNetImage(fileToIdentify);
+      const response = await identifySpecies(fileForIdentification, selectedOrgan);
       if (response.bestMatch) {
         onIdentificationComplete({
           bestMatch: response.bestMatch,
@@ -137,18 +143,11 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
     }
   };
 
-  const handleIdentify = async () => {
-    if (imageFile) {
-        await performIdentification(imageFile);
-    }
-  };
-  
   const handleReset = () => {
     onClear();
     setIsLoading(false);
     setError(null);
     setImageFile(null);
-    setImagePreview('');
     setSelectedOrgan(null);
     setManualSpeciesName('');
     setMode('idle'); // Reset mode to the initial choice screen
@@ -171,6 +170,8 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       woodDensity: {
         value: 0.6, // Generic fallback as per researcher data
         unit: 'g/cm³',
+        sourceSpecies: manualSpeciesName.trim(),
+        matchScore: 0,
         sourceRegion: 'Generic Wood Database (Fallback)'
       }
     });
@@ -237,7 +238,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
       <div className="flex justify-between items-center">
         <p className="text-sm font-medium text-content-default">Identify Species (Required to Save)</p>
         {(mode === 'uploading' || selectedOrgan || mode === 'manual') && mode !== 'cropping' && (
-           <button onClick={() => { setImageFile(null); setImagePreview(''); setSelectedOrgan(null); setManualSpeciesName(''); setMode('idle'); }} className="text-xs text-brand-secondary hover:underline">Start over</button>
+           <button onClick={() => { setImageFile(null); setSelectedOrgan(null); setManualSpeciesName(''); setMode('idle'); }} className="text-xs text-brand-secondary hover:underline">Start over</button>
         )}
       </div>
 
@@ -327,7 +328,7 @@ export function SpeciesIdentifier({ onIdentificationComplete, onClear, existingR
             <div className="mt-1 flex flex-col items-center justify-center px-6 py-10 border-2 border-brand-primary/30 bg-brand-primary/5 rounded-md">
               <Loader2 className="h-10 w-10 text-brand-primary animate-spin mb-3" />
               <p className="text-sm font-medium text-brand-primary">Uploading & Identifying...</p>
-              <p className="text-xs text-content-subtle mt-1 text-center">Processing high-res photo directly to preserve quality.</p>
+              <p className="text-xs text-content-subtle mt-1 text-center">Optimizing the close-up before PlantNet identification.</p>
             </div>
           ) : (
             <div>
