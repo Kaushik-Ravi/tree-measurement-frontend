@@ -264,6 +264,20 @@ export const calculateCO2 = async (metrics: Metrics, woodDensity: number): Promi
   return response.json();
 };
 
+export const lookupWoodDensity = async (speciesName: string): Promise<WoodDensityInfo | null> => {
+  const response = await fetch(`${API_BASE_URL}/api/wood-density/lookup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ species_name: speciesName }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
+    throw new Error(errorData.error || `API error! status: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.woodDensity ?? null;
+};
+
 export const identifySpecies = async (imageFile: File, organ: string): Promise<IdentificationResponse> => {
   const formData = new FormData();
   formData.append('image', imageFile);
@@ -273,7 +287,18 @@ export const identifySpecies = async (imageFile: File, organ: string): Promise<I
     const errorData = await response.json().catch(() => ({ error: 'An unknown API error occurred.' }));
     throw new Error(errorData.error || `API error! status: ${response.status}`);
   }
-  return response.json();
+  const identification = await response.json();
+  if (!identification.bestMatch?.scientificName || identification.woodDensity) {
+    return identification;
+  }
+
+  try {
+    const woodDensity = await lookupWoodDensity(identification.bestMatch.scientificName);
+    return { ...identification, woodDensity };
+  } catch (error) {
+    console.warn('Wood density lookup failed:', error);
+    return identification;
+  }
 };
 
 export const samAutoSegment = async (imageFile: File, distanceM: number, scaleFactor: number, clickPoint: Point) => {
